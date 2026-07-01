@@ -42,7 +42,14 @@ MEMOWEFT_WRITE_LLM_MODEL=your-small-fast-model
 MEMOWEFT_EMBED_BASE_URL=https://your-cloud-endpoint/v1
 MEMOWEFT_EMBED_API_KEY=sk-xxxx
 MEMOWEFT_EMBED_MODEL=your-embedding-model
+
+# Optional deployment switch, read by the bundled testbench/experience server only:
+#   off = run MemoWeft as a library, no web UI;
+#   any other value (or unset) = start the experience UI.
+MEMOWEFT_EXPERIENCE_UI=on
 ```
+
+> **Legacy names:** every `MEMOWEFT_*` model var falls back to its old `DLA_*` name (e.g. `DLA_LLM_BASE_URL`, `DLA_EMBED_MODEL`), so existing `.env` files keep working unchanged. New setups should use the `MEMOWEFT_*` names.
 
 Best for:
 
@@ -86,25 +93,29 @@ Trade-off:
 
 Use this for privacy-sensitive deployments.
 
-Possible routing:
+**Implementation status (today):** MemoWeft currently has a *single* write-path model tier (`chat` / `write`, selected by purpose) and a *single* global embedder. Per-evidence local/cloud model routing and per-memory embedder selection are planned but **not implemented yet** (see the notes in `src/llm/pool.ts` and `src/evidence/privacy.ts`). Two consequences:
 
-| Purpose | Suggested route |
+- "Sensitive observation → local model" is not available yet. Sensitive evidence (`allowCloudRead=false`) is **excluded from the write-path prompt entirely** — `filterCloudReadable` runs before every write-path LLM call (distill / consolidate / attribute), even if the write model points at a local endpoint, so a local model does not yet receive the filtered-out evidence.
+- Embeddings use one endpoint (`MEMOWEFT_EMBED_*`); you choose local *or* cloud for the whole deployment, not per memory. To keep embeddings on-device, point that single embedder at a local endpoint.
+
+Routes available today:
+
+| Purpose | Route |
 | --- | --- |
 | Chat quality | cloud chat model |
-| Write path for non-sensitive evidence | cloud small/fast model |
-| Write path for sensitive observations | local model or skipped cloud processing |
-| Embeddings for sensitive memory | local embedder |
-| Embeddings for low-risk memory | cloud or local embedder |
+| Write path, non-sensitive evidence | cloud small/fast model (`MEMOWEFT_WRITE_LLM_*`) |
+| Write path, sensitive observations | excluded from the cloud prompt (local-model routing is planned, not built) |
+| Embeddings | one embedder for the whole deployment — point it at a local endpoint to keep memory on-device |
 
 Best for:
 
-- local-first desktop assistants;
+- local-first desktop assistants (local embedder + conservative evidence defaults);
 - users who want behavior data to remain on-device;
-- future hosts that mix cloud reasoning with local perception.
+- teams planning ahead for future per-evidence local/cloud routing.
 
 Trade-off:
 
-- more setup burden: local model services, local embedding endpoints, and more explicit routing rules.
+- true per-evidence local/cloud model routing is not built yet; today "keep it private" means "kept out of cloud prompts", not "processed by a local model".
 
 ---
 
