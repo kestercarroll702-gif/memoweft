@@ -11,7 +11,7 @@
  *
  * ⚠️ 本版只做摄入口闭环 + 验证；真采集器留骨架（collectors/activeWindow.ts）。
  */
-import { config } from '../config.ts';
+import { config, type MemoWeftConfig } from '../config.ts';
 import type { EvidenceStore } from '../evidence/store.ts';
 import type { Evidence } from '../evidence/model.ts';
 
@@ -37,6 +37,8 @@ export interface IngestDeps {
   evidenceStore: EvidenceStore;
   /** 落库归属的宿主标识；默认 config.identity.hostId。 */
   hostId?: string;
+  /** 可注入配置（P2-5 config 去单例）：不传 = 用全局单例（identity.hostId / observedDefaults）。 */
+  config?: MemoWeftConfig;
 }
 
 export interface IngestResult {
@@ -55,8 +57,9 @@ export function ingestObservations(
   observations: Observation[],
   deps: IngestDeps,
 ): IngestResult {
-  const hostId = deps.hostId ?? config.identity.hostId;
-  const def = config.observedDefaults;
+  const cfg = deps.config ?? config; // 可注入配置（缺省=单例）
+  const hostId = deps.hostId ?? cfg.identity.hostId;
+  const def = cfg.observedDefaults;
   const stored: Evidence[] = [];
   let skipped = 0;
 

@@ -8,7 +8,7 @@
  */
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
-import { config, cloudReadDefault } from '../config.ts';
+import { config, cloudReadDefault, type MemoWeftConfig } from '../config.ts';
 import type { Evidence, EvidenceInput, SourceKind } from './model.ts';
 
 const SCHEMA = `
@@ -104,14 +104,18 @@ export interface EvidenceStore {
 export class SqliteEvidenceStore implements EvidenceStore {
   private readonly db: DatabaseSync;
   private readonly ownsDb: boolean;
+  /** 本 store 的配置（put 补默认授权位用）；可注入（P2-5），缺省=全局单例。 */
+  private readonly cfg: MemoWeftConfig;
 
   /**
    * @param db SQLite 文件路径（自开连接，默认 './dla.db'；测试传 ':memory:'），
    *   或一个【已打开的共享 DatabaseSync】——多个 store 共用一条连接时才能跨表事务（见 store/openStores.ts）。
+   * @param cfg 可注入配置（P2-5 config 去单例）：不传 = 用全局单例；put 补授权默认（evidenceDefaults / privacyMode）按这份。
    */
-  constructor(db: string | DatabaseSync = './dla.db') {
+  constructor(db: string | DatabaseSync = './dla.db', cfg: MemoWeftConfig = config) {
     this.ownsDb = typeof db === 'string';
     this.db = typeof db === 'string' ? new DatabaseSync(db) : db;
+    this.cfg = cfg;
     this.db.exec(SCHEMA);
   }
 
@@ -133,9 +137,9 @@ export class SqliteEvidenceStore implements EvidenceStore {
       recordedAt,
       rawContent: input.rawContent,
       summary: input.summary ?? input.rawContent, // v1：摘要先等于原文
-      allowLocalRead: input.allowLocalRead ?? config.evidenceDefaults.allowLocalRead,
-      allowCloudRead: input.allowCloudRead ?? cloudReadDefault(), // 跟随配置
-      allowInference: input.allowInference ?? config.evidenceDefaults.allowInference,
+      allowLocalRead: input.allowLocalRead ?? this.cfg.evidenceDefaults.allowLocalRead,
+      allowCloudRead: input.allowCloudRead ?? cloudReadDefault(this.cfg), // 跟随（注入的）配置
+      allowInference: input.allowInference ?? this.cfg.evidenceDefaults.allowInference,
       correctsEvidenceId: input.correctsEvidenceId ?? null,
     };
 
