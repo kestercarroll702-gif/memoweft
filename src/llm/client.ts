@@ -76,14 +76,27 @@ export class OpenAICompatClient implements LLMClient {
   async chat(messages: ChatMessage[]): Promise<string> {
     this._callCount++;
     const url = `${this.config.baseUrl.replace(/\/$/, '')}/chat/completions`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({ model: this.config.model, messages, temperature: 0.3 }),
-    });
+    // 超时中断：端点挂起时别无限占住 per-subject 锁（本地慢模型高发）。
+    // 毫秒从 env 读、宽松默认 120000（本地 consolidate~47s/attribute~30s，别误杀）；双前缀兼容旧名。
+    const timeoutMs = Number(readEnvWithFallback('LLM_TIMEOUT_MS')) || 120000;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({ model: this.config.model, messages, temperature: 0.3 }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err) {
+      // 超时（TimeoutError）给清楚 message，让其走既有降级链（错误往上抛）。
+      if (err instanceof Error && err.name === 'TimeoutError') {
+        throw new Error(`LLM 请求超时（超过 ${timeoutMs}ms）`);
+      }
+      throw err;
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`LLM 请求失败 ${res.status}: ${text.slice(0, 500)}`);
