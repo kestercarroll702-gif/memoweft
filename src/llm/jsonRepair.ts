@@ -44,7 +44,12 @@ export function parseJsonObject<T = Record<string, unknown>>(raw: string): T | n
 export interface ParseWithRepairDeps {
   llm: LLMClient;
   messages: ChatMessage[];
-  /** 解析失败时落日志（默认 console.warn，带 `[memoweft/jsonRepair]` 前缀）。宿主可换成落盘 logger。 */
+  /**
+   * 解析失败时落日志（默认 console.warn，带 `[memoweft/jsonRepair]` 前缀）。
+   * 默认 sink【只记结构特征】（长度、是否含代码围栏 / 花括号），【不记模型原文】——
+   * 模型输出基于用户原话、可能回显隐私（隐私优先）。宿主若想记更多原文，是宿主的选择：
+   * 注入自己的 log 即可。
+   */
   log?: (msg: string) => void;
 }
 
@@ -65,12 +70,16 @@ export async function parseJsonObjectWithRepair<T = Record<string, unknown>>(
   const parsed = parseJsonObject<T>(first);
   if (parsed !== null) return parsed;
 
-  log(`首次输出非合法 JSON，重试一次。原始输出前 300 字：${first.slice(0, 300)}`);
+  log(
+    `首次输出非合法 JSON，重试一次。解析失败：长度=${first.length}、含代码围栏=${/```/.test(first)}、含花括号=${first.includes('{')}`,
+  );
   const retryMessages: ChatMessage[] = [...deps.messages, { role: 'user', content: JSON_ONLY_NUDGE }];
   const second = await deps.llm.chat(retryMessages);
   const reparsed = parseJsonObject<T>(second);
   if (reparsed !== null) return reparsed;
 
-  log(`重试后仍非合法 JSON，放弃本轮。重试输出前 300 字：${second.slice(0, 300)}`);
+  log(
+    `重试后仍非合法 JSON，放弃本轮。解析失败：长度=${second.length}、含代码围栏=${/```/.test(second)}、含花括号=${second.includes('{')}`,
+  );
   return null;
 }
