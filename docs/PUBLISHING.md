@@ -50,7 +50,7 @@
 
 ```bash
 npm run typecheck   # 类型全绿
-npm test            # 66 个测试全过
+npm test            # 67 个测试全过
 npm run build       # 重新产出 dist/（务必重跑，覆盖旧产物！）
 ```
 
@@ -133,7 +133,7 @@ node --input-type=module -e "import { MEMOWEFT_VERSION } from 'memoweft'; consol
 - **`.gitignore` / `.npmignore`**：转 git 前务必忽略 `.env`、`*.db`、`dist/`、`logs/`、`node_modules/`。`files` 白名单已兜住 npm 侧，但 git 侧要单独防。
 - **`repository` / `homepage` / `bugs` 字段**：填 GitHub 地址，npm 页面会显示仓库链接。
 - **`keywords` 字段**：如 `["memory", "cognition", "llm", "agent", "user-model"]`，利于 npm 搜索。
-- **CI（GitHub Actions）**：push / PR 触发 `typecheck + test + build` 三绿作为合并门。这样 README 的 “tests 66 passing” 徽章才名副其实（首版无 CI 前先用 shields.io 静态徽章，别挂假动态徽章）。
+- **CI（GitHub Actions）**：push / PR 触发 `typecheck + test + build` 三绿作为合并门。这样 README 的 “tests 67 passing” 徽章才名副其实（首版无 CI 前先用 shields.io 静态徽章，别挂假动态徽章）。
 - **`bin` 字段**：**目前不需要**——MemoWeft 是库、无 CLI 命令。`testbench` 是 `npm run` 脚本、不是对外可执行入口，无需 `bin`。将来若要出 CLI 再加。
 
 ---
