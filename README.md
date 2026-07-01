@@ -148,20 +148,22 @@ Configure a model and, optionally, an embedder in `.env`. Then wire the three st
 import {
   openStores,
   VectorRetriever,
+  NullRetriever,
   OpenAICompatEmbedder,
   loadEmbedConfig,
   loadLLMPool,
   updateProfile,
   Conversation,
+  type Retriever,
 } from 'memoweft';
 
 const { evidenceStore, eventStore, cognitionStore, transaction } = openStores('./memoweft.db');
 
 const pool = loadLLMPool();
 const embedConfig = loadEmbedConfig();
-const retriever = embedConfig
+const retriever: Retriever = embedConfig
   ? new VectorRetriever('./memoweft-vectors.db', new OpenAICompatEmbedder(embedConfig))
-  : undefined;
+  : new NullRetriever();
 
 const subjectId = 'user-42';
 
