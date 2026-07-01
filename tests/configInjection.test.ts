@@ -8,6 +8,8 @@ import { config } from '../src/config.ts';
 import { computeConfidence } from '../src/consolidation/confidence.ts';
 import { openStores } from '../src/store/openStores.ts';
 import { consolidate } from '../src/consolidation/consolidate.ts';
+import { perceive } from '../src/pipeline/perceive.ts';
+import { SqliteEvidenceStore } from '../src/evidence/store.ts';
 import type { ChatMessage, LLMClient } from '../src/llm/client.ts';
 
 test('config 注入 · 纯函数：同输入不同 cfg → 不同结果；不传=单例；单例不被改', () => {
@@ -51,5 +53,34 @@ test('config 注入 · 端到端：同进程两套配置跑 consolidate，把握
   } finally {
     A.s.close();
     B.s.close();
+  }
+});
+
+test('config 注入 · perceive 用注入的 identity（缺省=单例的 owner/testbench）', () => {
+  assert.equal(perceive('hi').subjectId, config.identity.subjectId, '缺省走单例 identity');
+  const cfg = structuredClone(config);
+  cfg.identity.subjectId = 'alice';
+  cfg.identity.hostId = 'app-x';
+  const injected = perceive('hi', {}, cfg);
+  assert.equal(injected.subjectId, 'alice');
+  assert.equal(injected.hostId, 'app-x');
+  assert.equal(config.identity.subjectId, 'owner', '全局单例 identity 不被改');
+});
+
+test('config 注入 · evidence store 按注入配置补授权默认：同进程两套 privacyMode 互不干扰', () => {
+  const openCfg = structuredClone(config);
+  openCfg.privacyMode = false; // 默认可上云
+  const privCfg = structuredClone(config);
+  privCfg.privacyMode = true; // 隐私模式默认不上云
+  const openStore = new SqliteEvidenceStore(':memory:', openCfg);
+  const privStore = new SqliteEvidenceStore(':memory:', privCfg);
+  try {
+    const e1 = openStore.put({ subjectId: 'u', sourceKind: 'spoken', hostId: 't', rawContent: 'x' });
+    const e2 = privStore.put({ subjectId: 'u', sourceKind: 'spoken', hostId: 't', rawContent: 'x' });
+    assert.equal(e1.allowCloudRead, true, '非隐私配置 → 默认可上云');
+    assert.equal(e2.allowCloudRead, false, '隐私配置 → 默认不上云（同进程两套配置互不干扰）');
+  } finally {
+    openStore.close();
+    privStore.close();
   }
 });

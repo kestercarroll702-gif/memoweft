@@ -14,6 +14,7 @@ import { SqliteEvidenceStore, type EvidenceStore } from '../evidence/store.ts';
 import { SqliteEventStore, type EventStore } from '../event/store.ts';
 import { SqliteCognitionStore, type CognitionStore } from '../cognition/store.ts';
 import type { Transaction } from './transaction.ts';
+import type { MemoWeftConfig } from '../config.ts';
 
 export interface StoreBundle {
   /** 三个 store 共用的这条连接（一般不用直接碰；关它用 close()）。 */
@@ -27,11 +28,15 @@ export interface StoreBundle {
   close(): void;
 }
 
-/** 开一条连接，装好三个 store 与事务器。dbPath 传文件路径或 ':memory:'。 */
-export function openStores(dbPath: string): StoreBundle {
+/**
+ * 开一条连接，装好三个 store 与事务器。dbPath 传文件路径或 ':memory:'。
+ * @param cfg 可注入配置（P2-5 config 去单例）：不传 = 用全局单例；透给 evidence store 作 put 补授权默认。
+ */
+export function openStores(dbPath: string, cfg?: MemoWeftConfig): StoreBundle {
   const db = new DatabaseSync(dbPath);
   // 三个 store 都接同一条连接（构造里会各自 CREATE TABLE IF NOT EXISTS + 迁移，幂等）。
-  const evidenceStore = new SqliteEvidenceStore(db);
+  // 只有 evidence store 的 put 会读 config 补授权默认，故只把 cfg 透给它（event/cognition 不读 config）。
+  const evidenceStore = new SqliteEvidenceStore(db, cfg);
   const eventStore = new SqliteEventStore(db);
   const cognitionStore = new SqliteCognitionStore(db);
 

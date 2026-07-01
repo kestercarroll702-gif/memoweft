@@ -54,7 +54,7 @@ export class Conversation {
     const cfg = this.deps.config ?? config; // 可注入配置（缺省=单例）
 
     // 1) 感知 → 存证据（只存用户的，亲口）。先存，后答。
-    const stored = store.put(perceive(userMsg, opts));
+    const stored = store.put(perceive(userMsg, opts, cfg));
 
     // 2) 召回相关认知（阶段 1b）。失败不挡回话。
     const recall: RecalledCognition[] = [];
