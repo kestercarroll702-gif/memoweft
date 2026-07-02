@@ -136,9 +136,11 @@
     .modebtn.active { background:var(--accent-soft); color:var(--accent); border-color:transparent; box-shadow:inset 0 0 0 1px var(--accent-ring); }
     .modebtn.active:hover { background:var(--accent-soft); color:var(--accent); }
     /* 空占位容器（配置向导 / 用户体验）默认藏起，靠 body 模式类亮出——后续块填内容。 */
-    #mode-wizard, #mode-user { display:none; }
+    #mode-wizard { display:none; }
     body.mode-wizard #mode-wizard { display:block; }
-    body.mode-user   #mode-user   { display:block; }
+    /* S0 首屏归位：用户正门 = 一屏聊天。#mode-user 不再平铺 hero+认知卡——那些内容搬进右侧「记忆抽屉」(#memPanel)。
+       #mode-user 容器只剩一个空壳（占位，不显任何东西），真正的首屏主体是下方 .wrap 的聊天列。 */
+    #mode-user { display:none; }
     /* .wrap（聊天列 + 开发者透视列）：只在"用户体验/开发者"两模式出现；"配置向导"里藏起。
        这样聊天区在 user/dev 都可见，不用把聊天列从 .wrap 里搬出去（最不破坏原布局）。 */
     body.mode-wizard .wrap { display:none; }
@@ -146,6 +148,11 @@
     body:not(.mode-dev) #mode-dev { display:none; }
     body.mode-user .wrap { grid-template-columns:1fr; }
     body.mode-dev  .wrap { grid-template-columns:1fr 380px; }
+    /* S0：用户模式下聊天区留出更舒适的居中宽度（正门体验，聊天不贴满屏）。 */
+    body.mode-user .wrap { max-width:820px; margin-left:auto; margin-right:auto; }
+    /* S0：用户模式隐藏系统信号——灌数据进度条 seedbar 在正门不出现（开发者模式仍显）。
+       pollSeed 用内联 display 强制 block，故这里用 !important 压过它（只在 user 模式）。 */
+    body.mode-user #seedbar { display:none !important; }
     /* 顶栏「⚙设置」齿轮：只在开发者模式露出（参数/危险操作收在设置抽屉里，别在别的模式出现）。 */
     #btnSettings { display:none; }
     body.mode-dev #btnSettings { display:inline-flex; }
@@ -172,6 +179,56 @@
     .cfg-saved { margin-left:6px; font-size:var(--fs-xs); font-weight:600; color:var(--ok); }
 
     /* —— seedbar（灌数据进度条）样式移到文件末尾「体验层阶段二」区统一美化，此处不再定义 —— */
+
+    /* ══════════════════════════════════════════════════════════════════
+       S0 首屏归位（方案A·第一波）：用户正门 = 一屏聊天。
+       · 右上「它记住我 N 件事 ›」安静胶囊入口 → 开合右侧「记忆抽屉」。
+       · 抽屉里装原来平铺在首屏的 hero + 友好认知/事件卡（复用 .ux-* 样式）。
+       · 助手侧「思考中…」三点起伏气泡（纯 CSS 动画）。
+       ══════════════════════════════════════════════════════════════════ */
+    /* 右上胶囊入口：只在用户模式露出（开发者有自己的透视区，不需要这个）。安静低调，不抢聊天。 */
+    #memPill { display:none; align-items:center; gap:6px; padding:6px 13px; border-radius:var(--radius-pill);
+      font-size:var(--fs-sm); color:var(--muted); background:var(--panel); border:1px solid var(--line); cursor:pointer;
+      transition:background .15s ease, border-color .15s ease, color .15s ease; }
+    body.mode-user #memPill { display:inline-flex; }
+    #memPill:hover { color:var(--accent); border-color:var(--accent-ring); background:var(--accent-soft); }
+    #memPill .chev { font-size:12px; line-height:1; opacity:.7; }
+
+    /* 记忆抽屉（右侧滑出，复用 settings 抽屉的遮罩+滑入模式）。 */
+    #memMask { position:fixed; inset:0; z-index:55; display:none; background:rgba(43,39,36,.38); backdrop-filter:blur(2px); animation:maskIn .18s ease; }
+    #memMask.show { display:block; }
+    #memPanel { position:fixed; top:0; right:0; z-index:56; height:100vh; width:min(520px,94vw); background:var(--bg); box-shadow:var(--shadow-lg); border-left:1px solid var(--line); display:flex; flex-direction:column; transform:translateX(100%); transition:transform .24s cubic-bezier(.4,0,.2,1); }
+    #memMask.show ~ #memPanel, #memPanel.show { transform:translateX(0); }
+    #memPanel .sp-body { padding-top:var(--sp-4); }
+
+    /* 「思考中…」气泡：三个点做起伏动画（助手侧，回复到了原位替换）。纯 CSS，无依赖。 */
+    .msg.thinking .bubble { background:var(--panel-2); border:1px solid var(--line); border-radius:14px 14px 14px 4px; display:inline-flex; align-items:center; gap:5px; padding:12px 15px; }
+    .thinking-dots { display:inline-flex; gap:4px; }
+    .thinking-dots span { width:6px; height:6px; border-radius:50%; background:var(--muted); opacity:.4; animation:thinkbob 1.2s ease-in-out infinite; }
+    .thinking-dots span:nth-child(2) { animation-delay:.18s; }
+    .thinking-dots span:nth-child(3) { animation-delay:.36s; }
+    @keyframes thinkbob { 0%,60%,100% { transform:translateY(0); opacity:.4; } 30% { transform:translateY(-4px); opacity:.9; } }
+
+    /* 就地软编辑一条认知：整条变成可编辑输入行（回车即存 / Esc 取消）。 */
+    .ux-item .ux-edit { display:flex; gap:var(--sp-2); align-items:center; margin-top:2px; }
+    .ux-item .ux-edit input { flex:1; font:inherit; font-size:var(--fs-body); padding:7px 11px; border:1px solid var(--accent); border-radius:10px; background:var(--panel); box-shadow:0 0 0 3px var(--accent-ring); }
+    .ux-item .ux-edit .hint { font-size:var(--fs-xs); color:var(--muted); flex:0 0 auto; }
+
+    /* 聊天流里「记忆气泡」（S1）：淡色、居中细行，织进消息流表示"后台刚记住了什么"。 */
+    .mem-note { margin:var(--sp-3) 0; display:flex; justify-content:center; }
+    .mem-note .inner { max-width:88%; display:flex; align-items:flex-start; gap:8px; padding:8px 13px; font-size:var(--fs-sm);
+      color:var(--muted); background:var(--accent-soft); border:1px solid var(--accent-ring); border-radius:var(--radius); line-height:1.55; }
+    .mem-note .ic { flex:0 0 auto; color:var(--accent); font-size:13px; line-height:1.5; }
+    .mem-note .body { flex:1; }
+    .mem-note .lead { color:var(--accent); font-weight:600; }
+    .mem-note .txt { color:var(--fg); }
+    .mem-note .tag-unconfirmed { display:inline-block; font-size:var(--fs-xs); padding:1px 8px; margin-left:6px; border-radius:var(--radius-pill); background:var(--panel-2); border:1px solid var(--line); color:var(--muted); }
+    .mem-note .acts { margin-top:5px; display:flex; gap:4px; }
+    .mem-note .acts button { padding:2px 10px; font-size:var(--fs-xs); color:var(--muted); border-color:transparent; background:transparent; }
+    .mem-note .acts button:hover { background:var(--panel); border-color:var(--line); color:var(--fg); }
+    .mem-note .acts button.del:hover { color:var(--danger); border-color:var(--danger-soft); background:var(--danger-soft); }
+    .mem-note .ux-edit { margin-top:6px; display:flex; gap:6px; align-items:center; }
+    .mem-note .ux-edit input { flex:1; font:inherit; font-size:var(--fs-sm); padding:5px 9px; border:1px solid var(--accent); border-radius:8px; background:var(--panel); }
 
     /* ══════════════════════════════════════════════════════════════════
        配置向导（#mode-wizard）· 体验层阶段二 · 温暖清爽现代风
@@ -494,6 +551,8 @@
     <span class="sub">以"用户"身份用，右侧透视 MemoWeft 内部</span>
     <span class="spacer"></span>
     <span id="bgstatus" class="sub" title="它对你的了解在后台慢慢整理：聊完停手几秒就开始，要调模型、可能需要一会儿，但不挡你聊">后台：空闲</span>
+    <!-- S0 用户正门入口：安静胶囊「它记住我 N 件事 ›」。只在用户模式露出，点开右侧记忆抽屉。 -->
+    <button id="memPill" onclick="openMem()" title="看看它目前记住了我哪些事——可以随时改或删"><span id="memPillN">它记住我的事</span><span class="chev">›</span></button>
     <!-- 设置齿轮：仅开发者模式显示（CSS 控显隐）。点开右侧「设置」抽屉——参数旋钮/危险操作都收在里面。 -->
     <button id="btnSettings" class="icon-btn" onclick="openSettings()" title="设置：参数旋钮、恢复默认、恢复出厂都收在这里"><span class="gear">⚙</span>设置</button>
     <button class="accent-outline" onclick="resetSession()" title="开一段新对话；之前存下的记忆线索 / 经历 / 对你的了解都还在，只是清空当前对话窗口">＋ 新会话</button>
@@ -682,14 +741,25 @@
     </div>
   </div>
 
-  <!-- 用户体验模式：给普通人的门面（叙事 + 两张友好只读卡片）。聊天区本身在下方 .wrap 里，user/dev 两模式都可见。 -->
-  <div id="mode-user">
-    <div class="ux" style="position:relative;">
-      <!-- 不显眼的小齿轮：点开只有一件事——「清空它对我的了解·重新开始」。软文案，复用 factory-reset。 -->
-      <button class="icon-btn ghost" style="position:absolute;top:0;right:var(--sp-5);" onclick="userSoftReset()" title="重新开始：让它忘掉目前对我的全部了解"><span class="gear">⚙</span></button>
-      <div class="ux-hero">
-        <h2>MemoWeft · 会慢慢记住你的那一层</h2>
-        <p>你像平时一样<span class="accent">聊天、随口提一点自己</span>，它就在旁边顺手一句句记下来、慢慢把这些拼成「它对你的了解」。不用填表、不用打标签——<span class="accent">聊着聊着，它就更接得上你说过的话</span>。</p>
+  <!-- 用户体验模式（S0 首屏归位）：正门 = 一屏聊天（下方 .wrap 聊天列）。
+       原来平铺首屏的 hero + 友好认知/事件卡，已移进右上「它记住我 N 件事 ›」入口开合的记忆抽屉（#memPanel）。
+       #mode-user 容器本身留空（CSS display:none），只作模式占位。 -->
+  <div id="mode-user"></div>
+
+  <!-- S0 记忆抽屉：右侧滑出，装「它对我的了解」（友好认知/事件卡）。由 #memPill 开、叉/Esc/点遮罩关。 -->
+  <div id="memMask" onclick="closeMem()"></div>
+  <aside id="memPanel" role="dialog" aria-modal="true" aria-label="它对我的了解">
+    <div class="sp-head">
+      <div>
+        <div class="sp-ttl"><span class="dot" style="width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);display:inline-block;"></span>它对我的了解</div>
+        <div class="sp-sub">聊着聊着顺手记下的——说得不对可以随时改或删</div>
+      </div>
+      <span class="spacer"></span>
+      <button class="sp-close" onclick="closeMem()" title="关闭">✕</button>
+    </div>
+    <div class="sp-body">
+      <div class="ux-hero" style="margin-bottom:var(--sp-5);">
+        <p style="text-align:left;max-width:none;">你像平时一样<span class="accent">聊天、随口提一点自己</span>，它就在旁边顺手一句句记下来、慢慢把这些拼成「它对你的了解」。不用填表、不用打标签——<span class="accent">聊着聊着，它就更接得上你说过的话</span>。</p>
       </div>
 
       <!-- 卡片一：MemoWeft 目前对我的了解（友好只读版画像） -->
@@ -700,7 +770,7 @@
         </div>
         <p class="ux-card-sub">这些是它从你说过的话里慢慢体会出来的。说得不对可以随时改，或者删掉。</p>
         <div id="uxCogList" class="ux-list">
-          <div class="ux-empty"><span class="big">🫧</span>还没攒下什么——先在下面聊几句，它会慢慢记下你说的、开始拼出对你的了解。</div>
+          <div class="ux-empty"><span class="big">🫧</span>还没攒下什么——先聊几句，它会慢慢记下你说的、开始拼出对你的了解。</div>
         </div>
       </div>
 
@@ -715,8 +785,13 @@
           <div class="ux-empty"><span class="big">🌱</span>还没有片段——聊上几句，这里就会长出内容。</div>
         </div>
       </div>
+
+      <!-- 抽屉底部：不显眼的「重新开始」（复用 factory-reset 的软文案入口）。 -->
+      <div class="sp-danger">
+        <button class="icon-btn ghost" onclick="userSoftReset()" title="重新开始：让它忘掉目前对我的全部了解"><span class="gear">⚙</span>重新开始 · 让它忘掉目前对我的全部了解</button>
+      </div>
     </div>
-  </div>
+  </aside>
 
   <!-- ══════════════════════════════════════════════════════════════════
        记忆管理模式（Phase 6-A）：让用户真正能管理记忆，而不是只能看开发者 JSON。
@@ -1261,6 +1336,72 @@ function applyUserHide(on){
   if (xray) xray.style.display = on ? 'none' : '';
 }
 
+// ── S0 记忆抽屉：右上「它记住我 N 件事 ›」入口开合（复用 settings 抽屉的滑入模式）──
+function openMem(){
+  const mask = $('memMask'), panel = $('memPanel');
+  if (!mask || !panel) return;
+  mask.classList.add('show'); panel.classList.add('show');
+  // 打开时补拉一次友好版画像/事件，保证抽屉里是最新的（首屏不再自动铺，改成打开时确保有内容）。
+  if (typeof loadCognitionFriendly === 'function') loadCognitionFriendly();
+  if (typeof loadEventsFriendly === 'function') loadEventsFriendly();
+}
+function closeMem(){
+  const mask = $('memMask'), panel = $('memPanel');
+  if (mask) mask.classList.remove('show');
+  if (panel) panel.classList.remove('show');
+}
+// 更新胶囊上的计数「它记住我 N 件事」：N = 当前有效认知条数（已失效不算）。_cog 由 loadCognitionFriendly/loadCognition 填。
+function updateMemPillCount(){
+  const el = $('memPillN'); if (!el) return;
+  const n = (_cog || []).filter(c => !c.invalidAt).length;
+  el.textContent = n > 0 ? ('它记住我 ' + n + ' 件事') : '它还没记住什么';
+}
+
+// ── 友好版·就地软编辑一条认知（替代浏览器 prompt）：只把 .txt 换成输入框，回车存 / Esc / 点走取消 ──
+// btnEl 用来定位所在卡片（.ux-item 友好卡 或 .mem-note 记忆气泡，两者都有 .txt）。
+function softEditCog(id, btnEl){
+  const host = btnEl && btnEl.closest('.ux-item, .mem-note'); if (!host) return;
+  const txtEl = host.querySelector('.txt'); if (!txtEl) return;
+  const orig = txtEl.textContent;
+  let finished = false;
+  txtEl.innerHTML = '';
+  const inp = document.createElement('input');
+  inp.value = orig;
+  inp.style.cssText = 'width:100%;font:inherit;padding:5px 9px;border:1px solid var(--accent);border-radius:8px;background:var(--panel);box-shadow:0 0 0 3px var(--accent-ring);';
+  txtEl.appendChild(inp); inp.focus(); inp.select();
+  const restore = () => { if (finished) return; finished = true; txtEl.textContent = orig; };
+  inp.addEventListener('blur', restore);
+  inp.addEventListener('keydown', async (e) => {
+    if (e.key === 'Escape') { restore(); return; }
+    if (e.key !== 'Enter') return;
+    const v = inp.value.trim();
+    if (!v) { toast('内容不能为空，未修改', 'warn'); restore(); return; }
+    if (v === orig) { restore(); return; }
+    finished = true; // 抢在 blur 前占位，避免保存后 blur 又把内容还原
+    try {
+      const r = await fetch('/api/cognition/update', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, content: v }) }).then(x => x.json());
+      if (r.error || !r.updated) { toast('改失败：' + (r.error || '这条已不存在'), 'danger'); txtEl.textContent = orig; return; }
+    } catch(err) { toast('改失败：' + String(err), 'danger'); txtEl.textContent = orig; return; }
+    txtEl.textContent = v; toast('已改', 'ok'); updateMemPillCount(); refreshCognition();
+  });
+}
+
+// 友好版·软删一条认知（替代浏览器 confirm，用现有 showConfirm 温柔弹层）。
+function softDelCog(id){
+  showConfirm({
+    icon: '🗑', title: '删掉这条？', okText: '删掉', okKind: 'danger',
+    bodyHtml: '删了就没了。其实想让它别再算数的话不必删——<b>聊天里纠正一句，它会自己更新</b>。',
+    onOk: async () => {
+      try {
+        const r = await fetch('/api/cognition/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }).then(x => x.json());
+        if (r.error || !r.removed) { toast('删失败：' + (r.error || '这条已不存在'), 'danger'); }
+        else toast('已删掉', 'ok');
+      } catch(e) { toast('删失败：' + String(e), 'danger'); }
+      refreshCognition(); updateMemPillCount();
+    },
+  });
+}
+
 // 按当前模式刷新画像：user→友好只读版，dev→开发者原版。
 // 改/删认知后统一走这里，避免在 user 模式误调 loadCognition 渲染进开发者的 #coglist。
 function refreshCognition(){
@@ -1279,9 +1420,10 @@ async function loadCognitionFriendly(){
     list = (await fetch('/api/cognition').then(x=>x.json())).cognition || [];
   } catch(e){ /* 拉取失败：保持现状，不弹错吓用户 */ return; }
   _cog = list; // 与开发者版共用 _cog（editCog/delCog 靠它按 id 找当前 content）
+  updateMemPillCount(); // 刷右上胶囊「它记住我 N 件事」（空列表/正常两条路径都覆盖）
   const live = list.filter(c => !c.invalidAt); // 已失效的不给普通用户看
   if (!live.length){
-    box.innerHTML = '<div class="ux-empty"><span class="big">🫧</span>还没攒下什么——先在下面聊几句，它会慢慢记下你说的、开始拼出对你的了解。</div>';
+    box.innerHTML = '<div class="ux-empty"><span class="big">🫧</span>还没攒下什么——先聊几句，它会慢慢记下你说的、开始拼出对你的了解。</div>';
     return;
   }
   box.innerHTML = live.map(c =>
@@ -1290,8 +1432,8 @@ async function loadCognitionFriendly(){
       '<div class="foot">'+
         '<span class="ux-tag">'+esc(TYPE_CN[c.contentType]||c.contentType||'')+'</span>'+
         '<span class="spacer"></span>'+
-        '<button onclick="editCog(\''+c.id+'\')">这条说得不对，改一下</button>'+
-        '<button class="del" onclick="delCog(\''+c.id+'\')">删掉这条</button>'+
+        '<button onclick="softEditCog(\''+c.id+'\', this)">这条说得不对，改一下</button>'+
+        '<button class="del" onclick="softDelCog(\''+c.id+'\')">删掉这条</button>'+
       '</div>'+
     '</div>'
   ).join('');
@@ -1485,17 +1627,23 @@ async function send(){
   if (!text) return;
   el.value = ''; el.disabled = true; _sending = true;
   addMsg('user', text);
+  // 「思考中…」：立刻冒一个助手侧三点起伏气泡占位，回复到了原位替换（别让人对着空白猜它死没死）。
+  const thinking = document.createElement('div');
+  thinking.className = 'msg dla thinking';
+  thinking.innerHTML = '<div class="bubble"><span class="thinking-dots"><span></span><span></span><span></span></span></div>';
+  $('chat').appendChild(thinking); $('chat').scrollTop = $('chat').scrollHeight;
+  const settle = (html) => { thinking.classList.remove('thinking'); thinking.innerHTML = '<div class="bubble">' + html + '</div>'; $('chat').scrollTop = $('chat').scrollHeight; };
   try {
     const res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
     const d = await res.json();
-    if (d.error){ addMsg('dla', '出错：' + d.error); }
+    if (d.error){ settle(esc('出错：' + d.error)); }
     else {
-      addMsg('dla', d.record.reply);
+      settle(esc(d.record.reply));
       if (d.record && d.record.turn != null) _renderedTurns.add(d.record.turn); // 手动发的记下 turn，避免 pollChat 重复渲染
       renderXray(d.record);
       if (d.logFile) $('logfile').textContent = d.logFile;
     }
-  } catch(e){ addMsg('dla', '请求失败：' + String(e)); }
+  } catch(e){ settle(esc('没连上，你的话已经存下了，稍后再试试。')); }
   finally { el.disabled = false; el.focus(); _sending = false; }
 }
 
@@ -2497,7 +2645,7 @@ setInterval(pollChat, 2000);
 pollSeed(); pollChat();
 
 // 默认进"开发者"模式（方便联调：透视区所有面板可见）。
-applyMode('developer');
+applyMode('user'); // 方案A：正门 = 用户房间（原默认是 developer）。首启门（无模型→向导）在 initGate 里再调整。
 </script>
 </body>
 </html>
