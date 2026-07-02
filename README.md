@@ -7,7 +7,7 @@
 *Scattered memory cues are woven, thread by thread, into a picture of who the user is — without pretending every thread is equally trustworthy.*
 
 ![status](https://img.shields.io/badge/status-alpha-orange)
-![tests](https://img.shields.io/badge/tests-87%20passing-brightgreen)
+[![CI](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml/badge.svg)](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)
 ![Node](https://img.shields.io/badge/Node-%E2%89%A524-339933)
 ![deps](https://img.shields.io/badge/runtime%20deps-zero-success)
@@ -19,7 +19,7 @@
 
 ---
 
-> ⚠️ **Experimental · early alpha.** The core works and is tested (**87 passing**), but interfaces may still change — not production-ready yet.
+> ⚠️ **Experimental · early alpha.** The core works and is tested (**all tests green in CI**), but interfaces may still change — not production-ready yet.
 
 ## 🧭 What it is
 
@@ -276,18 +276,25 @@ Main exports are listed in [`src/index.ts`](./src/index.ts) and explained in [`d
 
 **Done**
 
-- Phases 0–4B: evidence layer, profile + recall, correction loop, attribution + proactive asking, periodic background.
+- Phases 0–4B: evidence layer, profile + recall, correction loop, attribution + proactive asking, periodic background (decay, typed expiry, recall gating, conflict revisit, trends).
 - Phase 4-A tier 1: behavior-observation intake (`ingestObservations` + active-window → `observed` evidence).
 - Batched profile updates + configurable independent write-path model.
-- Framework closure Phase 5-A: portable memory bundle (`exportBundle` / `validateBundle` / `importBundle`, faithful + idempotent + migratable).
-- Verified end-to-end against a cloud model, dogfooded, and **87 tests passing**.
+- Phase 5-A: portable memory bundle (`exportBundle` / `validateBundle` / `importBundle`, faithful + idempotent + migratable).
+- Phase 5-B: testbench import/export (`/api/export-bundle`, `/api/import-bundle?mode=dryRun|merge`) + backup/migration panel.
+- Phase 6-A: memory-management page (filter, detail, edit/delete, invalidate, authorization toggles).
+- Phase 6-B G1: memory-graph backend (`buildMemoryGraph` payload).
+- Phase 7-A: Cloud Guard (cloud-read filtering added on the trends/ask paths).
+- Phase 8-A (= 4-A tier 2): real active-window collector (Win32 foreground-window sampling loop + `npm run collector` runner).
+- Verified end-to-end against a cloud model, dogfooded, and all tests green in CI.
 
 **Not yet**
 
-- Phase 4-A tier 2: real behavior collectors.
-- Recall similarity-threshold gating and further recall refinement.
-- Testbench import/export buttons + backup/restore API (Phase 5-B).
-- A polished user-facing memory manager + graph view.
+- Phase 6-B G2: memory-graph front-end (the backend payload is ready).
+- Phase 9-A: minimal Xingyao (星瑶) host — the first real host app.
+- Phase 10-A: plugin contract.
+- Phase 11-A: stability / migration hardening.
+- Phase 12-A: npm publishing.
+- Recall-refinement follow-ups (e.g. similarity-threshold gating).
 
 Status is derived from [`STATE.md`](./STATE.md).
 

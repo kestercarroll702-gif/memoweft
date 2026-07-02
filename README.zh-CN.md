@@ -7,7 +7,7 @@
 *它不是聊天机器人本身，而是套在 AI 助手外面的一层：人设、语气、桌宠、工具调用都留给宿主；它只负责把「对用户的了解」备好、需要时递过去。*
 
 ![status](https://img.shields.io/badge/status-alpha-orange)
-![tests](https://img.shields.io/badge/tests-87%20passing-brightgreen)
+[![CI](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml/badge.svg)](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)
 ![Node](https://img.shields.io/badge/Node-%E2%89%A524-339933)
 ![deps](https://img.shields.io/badge/runtime%20deps-zero-success)
@@ -19,7 +19,7 @@
 
 ---
 
-> ⚠️ **实验性 · 早期 alpha。** 核心已成、有测试（**87 全过**），但接口可能还会变——尚未到生产级。
+> ⚠️ **实验性 · 早期 alpha。** 核心已成、有测试（**CI 全绿**），但接口可能还会变——尚未到生产级。
 
 ## 🧭 这是什么
 
@@ -272,18 +272,25 @@ MemoWeft 从环境变量读取模型配置。推荐使用 `MEMOWEFT_*` 前缀；
 
 **已完成**
 
-- 阶段 0–4B：证据层、画像 + 召回、纠正闭环、归因 + 主动询问、周期后台。
+- 阶段 0–4B：证据层、画像 + 召回、纠正闭环、归因 + 主动询问、周期后台（衰减、分型过期、召回门控、冲突复看、趋势）。
 - 阶段 4-A 档 1：行为观察摄入口（`ingestObservations` + 活动窗口 → `observed` 证据）。
 - 攒批画像更新 + 可独立配置写路径模型。
-- 框架闭环 Phase 5-A：便携记忆包（`exportBundle` / `validateBundle` / `importBundle`，保真 + 幂等 + 可迁移）。
-- 已用云端模型端到端验证，dogfood，**87 个测试通过**。
+- Phase 5-A：便携记忆包（`exportBundle` / `validateBundle` / `importBundle`，保真 + 幂等 + 可迁移）。
+- Phase 5-B：测试台导入导出（`/api/export-bundle`、`/api/import-bundle?mode=dryRun|merge`）+ 备份/迁移面板。
+- Phase 6-A：记忆管理页（筛选、详情、改删、标失效、授权开关）。
+- Phase 6-B G1：图谱后端（`buildMemoryGraph` 产出 payload）。
+- Phase 7-A：Cloud Guard（trends / ask 路径补上云过滤）。
+- Phase 8-A（即 4-A 档 2）：真·活动窗口采集器（Win32 前台窗口采集循环 + `npm run collector` 运行器）。
+- 已用云端模型端到端验证，dogfood，测试在 CI 全绿。
 
 **未完成**
 
-- 阶段 4-A 档 2：真实行为采集器。
-- 召回相似度阈值门控和进一步召回优化。
-- 测试台导入/导出按钮与备份/恢复 API（Phase 5-B）。
-- 更像用户产品的记忆管理页 + 图谱视图。
+- Phase 6-B G2：图谱前端（后端 payload 已就绪）。
+- Phase 9-A：星瑶最小宿主——第一个真实宿主应用。
+- Phase 10-A：插件契约。
+- Phase 11-A：稳定性 / 迁移加固。
+- Phase 12-A：npm 发布。
+- 召回精化后续（如相似度阈值门控）。
 
 状态来源见 [`STATE.md`](./STATE.md)。
 
