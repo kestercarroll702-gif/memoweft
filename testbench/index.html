@@ -45,7 +45,10 @@
       --font:ui-sans-serif,system-ui,"Segoe UI","Microsoft YaHei",-apple-system,sans-serif;
     }
     * { box-sizing:border-box; }
-    body { margin:0; font-family:var(--font); background:var(--bg); color:var(--fg); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+    body { margin:0; font-family:var(--font); background:var(--bg); color:var(--fg); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; padding-left:240px; transition:padding-left .18s ease; }
+    /* 首启门（gate）：没配模型时向导全屏——藏起左侧栏、收回内容左移。进 app 后去掉 gate。 */
+    body.gate { padding-left:0; }
+    body.gate #rail { display:none; }
 
     /* —— 顶栏 —— */
     header { padding:var(--sp-3) var(--sp-5); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:var(--sp-3); background:var(--panel); box-shadow:var(--shadow-sm); position:relative; z-index:5; }
@@ -68,7 +71,8 @@
     button.accent-outline:hover { background:#fbe6dc; border-color:var(--accent); }
 
     /* —— 主布局 —— */
-    .wrap { display:grid; grid-template-columns:1fr 380px; gap:var(--sp-4); padding:var(--sp-4) var(--sp-5); height:calc(100vh - 154px); }
+    /* 高度扣掉顶栏（原先还扣 modebar 那条，SB1 把 modebar 移进左侧栏后不再占纵向空间 → 154→114）。 */
+    .wrap { display:grid; grid-template-columns:1fr 380px; gap:var(--sp-4); padding:var(--sp-4) var(--sp-5); height:calc(100vh - 114px); }
 
     /* —— 卡片（列 / 抽屉共用卡片观感）—— */
     .col { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); display:flex; flex-direction:column; min-height:0; overflow-y:auto; }
@@ -129,12 +133,30 @@
     .col::-webkit-scrollbar-track { background:transparent; }
 
     /* ── 三模式共壳（配置向导 / 用户体验 / 开发者）── */
-    /* 模式切换器：做成好看的 segmented control —— 一整条药丸底槽，当前态白片高亮浮起。 */
-    .modebar { display:flex; align-items:center; gap:6px; padding:10px var(--sp-5); border-bottom:1px solid var(--line); background:var(--panel); }
-    .modebtn { font:inherit; font-size:12.5px; font-weight:600; padding:7px 18px; border:1px solid transparent; background:transparent; color:var(--muted); border-radius:var(--radius-pill); cursor:pointer; transition:background .15s ease, color .15s ease, box-shadow .15s ease; }
-    .modebtn:hover { color:var(--fg); background:var(--panel-2); }
-    .modebtn.active { background:var(--accent-soft); color:var(--accent); border-color:transparent; box-shadow:inset 0 0 0 1px var(--accent-ring); }
-    .modebtn.active:hover { background:var(--accent-soft); color:var(--accent); }
+    /* SB1：导航从顶部 modebar 挪进左侧固定栏 #rail（聊天为中心的应用壳）。
+       #rail 用 position:fixed 覆在左侧，body 加 padding-left:240px 让内容右移，
+       不重排现有 DOM 树（header/wrap 等原样），最省破坏。 */
+    #rail { position:fixed; left:0; top:0; bottom:0; width:240px; z-index:40; background:var(--panel);
+      border-right:1px solid var(--line); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; padding:var(--sp-4) var(--sp-3); gap:var(--sp-3); overflow-y:auto; }
+    #rail .rail-brand { display:flex; align-items:center; gap:8px; font-size:var(--fs-h1); font-weight:700; letter-spacing:.01em; padding:2px var(--sp-2) var(--sp-1); }
+    #rail .rail-brand::before { content:""; width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); flex:0 0 auto; }
+    #rail .rail-new { justify-content:center; font-weight:600; }
+    #rail .rail-sessions { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px; margin:2px 0; }
+    #rail .rail-foot { border-top:1px solid var(--line); padding-top:var(--sp-3); display:flex; flex-direction:column; gap:2px; }
+    #rail .rail-foot-title { font-size:var(--fs-xs); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; padding:2px var(--sp-2) 4px; }
+    /* 导航项（设置/记忆管理/开发者）：安静的行式链接，当前模式高亮。 */
+    .rail-link { display:flex; align-items:center; gap:8px; font:inherit; font-size:var(--fs-body); text-align:left; padding:8px var(--sp-2); border:1px solid transparent; background:transparent; color:var(--fg); border-radius:var(--radius-sm); cursor:pointer; transition:background .15s ease, color .15s ease; width:100%; }
+    .rail-link:hover { background:var(--panel-2); border-color:transparent; }
+    .rail-link.active { background:var(--accent-soft); color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent-ring); }
+    .rail-link.active:hover { background:var(--accent-soft); }
+    /* 会话列表条目（SB2 填内容，样式先备好）：预览文字 + N轮，当前会话高亮。 */
+    .sess-item { display:flex; flex-direction:column; gap:2px; padding:7px var(--sp-2); border:1px solid transparent; border-radius:var(--radius-sm); cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+    .sess-item:hover { background:var(--panel-2); }
+    .sess-item.current { background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent-ring); }
+    .sess-item .sess-prev { font-size:var(--fs-sm); color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sess-item.current .sess-prev { color:var(--accent); font-weight:600; }
+    .sess-item .sess-meta { font-size:var(--fs-xs); color:var(--muted); }
+    .rail-sessions .rail-empty { font-size:var(--fs-sm); color:var(--muted); padding:8px var(--sp-2); line-height:1.5; }
     /* 空占位容器（配置向导 / 用户体验）默认藏起，靠 body 模式类亮出——后续块填内容。 */
     #mode-wizard { display:none; }
     body.mode-wizard #mode-wizard { display:block; }
@@ -546,6 +568,19 @@
   </style>
 </head>
 <body>
+  <!-- SB1 左侧应用壳：新会话 / 会话列表 / 底部设置导航。fixed 覆左侧，body padding-left 让内容右移。 -->
+  <nav id="rail" aria-label="侧边导航">
+    <div class="rail-brand">MemoWeft</div>
+    <button class="accent-outline rail-new" onclick="resetSession()" title="开一段新对话；之前存下的记忆线索 / 经历 / 对你的了解都还在，只是清空当前对话窗口">＋ 新会话</button>
+    <div class="rail-sessions" id="railSessions"><div class="rail-empty">加载会话中…</div></div>
+    <div class="rail-foot">
+      <div class="rail-foot-title">设置</div>
+      <button class="rail-link" id="rail-nav-wizard" data-mode="wizard" onclick="applyMode('wizard')">⚙ 配置</button>
+      <button class="rail-link" id="rail-nav-memory" data-mode="memory" onclick="applyMode('memory')">🗂 记忆管理</button>
+      <button class="rail-link" id="rail-nav-dev" data-mode="developer" onclick="applyMode('developer')">🛠 开发者</button>
+    </div>
+  </nav>
+
   <header>
     <h1>MemoWeft 测试台</h1>
     <span class="sub">以"用户"身份用，右侧透视 MemoWeft 内部</span>
@@ -555,16 +590,8 @@
     <button id="memPill" onclick="openMem()" title="看看它目前记住了我哪些事——可以随时改或删"><span id="memPillN">它记住我的事</span><span class="chev">›</span></button>
     <!-- 设置齿轮：仅开发者模式显示（CSS 控显隐）。点开右侧「设置」抽屉——参数旋钮/危险操作都收在里面。 -->
     <button id="btnSettings" class="icon-btn" onclick="openSettings()" title="设置：参数旋钮、恢复默认、恢复出厂都收在这里"><span class="gear">⚙</span>设置</button>
-    <button class="accent-outline" onclick="resetSession()" title="开一段新对话；之前存下的记忆线索 / 经历 / 对你的了解都还在，只是清空当前对话窗口">＋ 新会话</button>
   </header>
 
-  <!-- 模式切换器：三模式共壳的入口。点按钮 → applyMode 切换主体容器。 -->
-  <div class="modebar">
-    <button class="modebtn" id="modebtn-wizard" onclick="applyMode('wizard')">配置向导</button>
-    <button class="modebtn" id="modebtn-user" onclick="applyMode('user')">用户体验</button>
-    <button class="modebtn" id="modebtn-memory" onclick="applyMode('memory')">记忆管理</button>
-    <button class="modebtn" id="modebtn-dev" onclick="applyMode('developer')">开发者</button>
-  </div>
 
   <!-- 配置向导模式：4 步向导（对话模型 / 写路径小模型 / 向量模型 / 部署选项）→ 生成 .env 文本 -->
   <div id="mode-wizard">
@@ -1543,10 +1570,11 @@ function applyMode(mode){
   const bodyClass = mode === 'developer' ? 'mode-dev' : ('mode-' + mode);
   document.body.classList.remove('mode-wizard','mode-user','mode-memory','mode-dev');
   document.body.classList.add(bodyClass);
-  // 切换器按钮高亮
-  ['wizard','user','memory','dev'].forEach(k => { const b = $('modebtn-'+k); if (b) b.classList.remove('active'); });
-  const activeBtn = $('modebtn-' + (mode === 'developer' ? 'dev' : mode));
-  if (activeBtn) activeBtn.classList.add('active');
+  // SB1：导航高亮从顶部 modebar 挪到左侧栏 #rail 的 .rail-link（按 data-mode 匹配）。
+  // user 模式是默认聊天态、不在 rail 导航里，故此时所有 rail-link 都不高亮（符合预期）。
+  document.querySelectorAll('#rail .rail-link').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+  });
   window._mode = mode;
   // 离开开发者模式时顺手收起设置抽屉（设置只在开发者模式有意义）。
   if (mode !== 'developer' && typeof closeSettings === 'function') closeSettings();
@@ -2679,15 +2707,16 @@ function showNoModelBanner(){
   b.style.cssText = 'position:sticky;top:0;z-index:60;background:#fbe7c9;color:#8a5a00;border-bottom:1px solid #eaca8a;padding:8px 16px;font-size:13px;display:flex;align-items:center;gap:12px;justify-content:center;';
   const msg = document.createElement('span'); msg.textContent = '还没配置模型，聊天暂时不可用。';
   const go = document.createElement('button'); go.textContent = '去配置'; go.style.cssText = 'padding:2px 12px'; go.onclick = () => applyMode('wizard');
-  const skip = document.createElement('button'); skip.textContent = '先逛逛'; skip.style.cssText = 'padding:2px 12px'; skip.onclick = () => applyMode('user');
+  const skip = document.createElement('button'); skip.textContent = '先逛逛'; skip.style.cssText = 'padding:2px 12px'; skip.onclick = () => { document.body.classList.remove('gate'); applyMode('user'); };
   b.append(msg, go, skip);
   document.body.insertBefore(b, document.body.firstChild);
 }
-// S3 首启门：没配模型 → 先进配置向导 + 挂提示条；配了 → 留在用户房间。探测失败就当已配，别把人挡门外。
+// S3 首启门：没配模型 → 向导全屏（body.gate 藏左侧栏 + 内容不右移）+ 挂提示条；
+// 配了 → 去掉 gate、留在用户房间（左侧栏可见）。探测失败就当已配，别把人挡门外。
 (async function initGate(){
   try {
     const h = await fetch('/api/health').then(x => x.json());
-    if (!h.llmReady) { applyMode('wizard'); showNoModelBanner(); }
+    if (!h.llmReady) { document.body.classList.add('gate'); applyMode('wizard'); showNoModelBanner(); }
   } catch(e) { /* 探测失败 → 不拦 */ }
 })();
 </script>
