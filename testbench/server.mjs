@@ -29,6 +29,7 @@ import { NullRetriever } from '../src/retrieval/nullRetriever.ts';
 import { VectorRetriever } from '../src/retrieval/vectorRetriever.ts';
 import { OpenAICompatEmbedder, loadEmbedConfig } from '../src/retrieval/embedder.ts';
 import { loadLLMPool } from '../src/llm/pool.ts';
+import { loadLLMConfig } from '../src/llm/client.ts';
 import { Conversation } from '../src/pipeline/conversation.ts';
 import { config } from '../src/config.ts';
 import { exportBundle, importBundle } from '../src/portable/index.ts';
@@ -242,6 +243,15 @@ const server = createServer(async (req, res) => {
     // 后台消化状态（前端轮询：转圈 / 待消化 / 刚更新了什么）
     if (req.method === 'GET' && url.pathname === '/api/bg-status') {
       sendJson(res, 200, { updating: profileUpdating, pending: !!bgTimer, last: bgLast });
+      return;
+    }
+
+    // 首启门（S3）：模型 / 嵌入器配没配 —— 前端据此决定先进配置向导还是直接进聊天。不需要 .env 也不能崩。
+    if (req.method === 'GET' && url.pathname === '/api/health') {
+      let llmReady = false, embedReady = false;
+      try { llmReady = !!loadLLMConfig(); } catch { /* 未配 → false */ }
+      try { embedReady = !!loadEmbedConfig(); } catch { /* 未配 → false */ }
+      sendJson(res, 200, { llmReady, embedReady });
       return;
     }
 

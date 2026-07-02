@@ -2669,7 +2669,27 @@ setInterval(pollChat, 2000);
 pollSeed(); pollChat();
 
 // 默认进"开发者"模式（方便联调：透视区所有面板可见）。
-applyMode('user'); // 方案A：正门 = 用户房间（原默认是 developer）。首启门（无模型→向导）在 initGate 里再调整。
+applyMode('user'); // 方案A：正门 = 用户房间（原默认是 developer）。
+
+// S3 首启门：没配模型时的常驻提示条（去配置 / 先逛逛）。配好重启后自然消失。
+function showNoModelBanner(){
+  if ($('noModelBanner')) return;
+  const b = document.createElement('div');
+  b.id = 'noModelBanner';
+  b.style.cssText = 'position:sticky;top:0;z-index:60;background:#fbe7c9;color:#8a5a00;border-bottom:1px solid #eaca8a;padding:8px 16px;font-size:13px;display:flex;align-items:center;gap:12px;justify-content:center;';
+  const msg = document.createElement('span'); msg.textContent = '还没配置模型，聊天暂时不可用。';
+  const go = document.createElement('button'); go.textContent = '去配置'; go.style.cssText = 'padding:2px 12px'; go.onclick = () => applyMode('wizard');
+  const skip = document.createElement('button'); skip.textContent = '先逛逛'; skip.style.cssText = 'padding:2px 12px'; skip.onclick = () => applyMode('user');
+  b.append(msg, go, skip);
+  document.body.insertBefore(b, document.body.firstChild);
+}
+// S3 首启门：没配模型 → 先进配置向导 + 挂提示条；配了 → 留在用户房间。探测失败就当已配，别把人挡门外。
+(async function initGate(){
+  try {
+    const h = await fetch('/api/health').then(x => x.json());
+    if (!h.llmReady) { applyMode('wizard'); showNoModelBanner(); }
+  } catch(e) { /* 探测失败 → 不拦 */ }
+})();
 </script>
 </body>
 </html>
