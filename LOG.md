@@ -4,6 +4,21 @@
 
 ---
 
+## 2026-07-02 · 公开仓加固批次（Wave 1 · T1–T5 + 债登记）
+
+**起因**：公开仓门面与内里对不上（README 写死 87 passing 已过期）+ 多 subject 召回越界隐患 + 嵌入器无超时会无限挂 + 向量索引全量重嵌浪费 + 写路径膨胀没有观测数据。一批并行任务卡收口。
+
+**做了什么（基线 main @ dec1c70，108 tests）**
+- **T1 README 同步**：中英 README 的静态测试徽章（写死 87 passing）换成 CI workflow badge（根治手工数字过期）；Done/Not yet 清单对齐 STATE.md；`reference/README.md` 改写为"只读基线快照"说明。
+- **T2 召回 subject 硬过滤**：`src/pipeline/conversation.ts` 召回循环加一行 subjectId 兜底过滤（`if (c.subjectId !== stored.subjectId) continue;`）；`tests/recallSubjectGuard.test.ts` 红→绿验证。
+- **T3 嵌入器超时**：`src/retrieval/embedder.ts` fetch 加 `AbortSignal.timeout`（默认 60s，`MEMOWEFT_EMBED_TIMEOUT_MS` 可配、兼容 `DLA_EMBED_TIMEOUT_MS`），超时抛中文错误、走既有降级链，不再无限挂起。
+- **T4 向量索引增量化**：vectors 表加 hash 列（sha256 内容指纹），`indexAll` 内部改增量 diff——新增/变更才 embed（一次批量）、删除集 DELETE、`indexAll([])` 仍清空全表，**对外替换式语义不变**；旧 schema 缺 hash 列 → DROP 重建（索引是可重建派生物）。`tests/retrieval.test.ts` +5 计数用例。
+- **T5 写路径 metrics 落盘**：`ConsolidateResult` 增必有字段 `profileSize`（本轮注入 prompt 的 active 认知条数）/`promptChars`（buildMessages 产物字符总和，无新事件早退时两值为 0）；`updateProfile` 返回 `metrics{profileSize,promptChars}` 透传；runLog `ProfileUpdateRecord.summary` 增两个可选字段；testbench `runProfileUpdate` 已接线落盘。`tests/writePathMetrics.test.ts` +3。
+- **债登记（地图）**：① **召回边界 V1 契约** → cell 7（一 subject 一 Retriever 实例 + Conversation 注入点硬过滤兜底；非死规则，"单进程多 subject 宿主"出现时升级 vectors 表加 subject 列 + 接口带 subjectId 的 B 方案）；② **11-A 债 · 写路径膨胀** → cell 10（修复 = 相关性限定注入且防重网先行；触发 = dogfood 看 T5 落盘的 profileSize/promptChars 曲线到疼点由人拍板）。docs-sync 检查单补"README 与 STATE 一致、不含手工测试数字"一条。
+- **验证**：全仓三绿实测 typecheck ✅ / test **117 过**（108 基线零回归 +9 新增）/ build ✅。分支 `chore/hardening-batch-202607`。
+
+---
+
 ## 2026-07-02 · 体验层 V3（方案A）：测试台改成"以人为正门"的应用壳
 
 **起因**：把测试台从"顶部四 tab 调试台"改成"聊天为中心的应用"。四视角(开发者/用户/软件/简单网页)论证后收敛为方案A——用户房间当正门、渐进展开、开发者另成一室。设计口径见记忆 [[memoweft-experience-layer]]。
