@@ -1402,6 +1402,29 @@ function softDelCog(id){
   });
 }
 
+// ── S1 记忆气泡：后台消化出新认知时，就地织进聊天流「记住了：X · 还没确认 · 改/删」──
+const _weavedNoteIds = new Set(); // 同一条只织一次
+function weaveMemNote(c){
+  if (!c || !c.id || _weavedNoteIds.has(c.id)) return;
+  _weavedNoteIds.add(c.id);
+  const chat = $('chat'); if (!chat) return;
+  const low = c.credStatus === 'candidate' || c.credStatus === 'low'; // 低置信 → 标「还没确认」
+  const note = document.createElement('div'); note.className = 'mem-note';
+  const inner = document.createElement('div'); inner.className = 'inner';
+  const ic = document.createElement('span'); ic.className = 'ic'; ic.textContent = '●';
+  const body = document.createElement('div'); body.className = 'body';
+  const lead = document.createElement('span'); lead.className = 'lead'; lead.textContent = '记住了：';
+  const txt = document.createElement('span'); txt.className = 'txt'; txt.textContent = c.content; // textContent 防注入
+  body.append(lead, txt);
+  if (low){ const tag = document.createElement('span'); tag.className = 'tag-unconfirmed'; tag.textContent = '还没确认'; body.append(tag); }
+  const acts = document.createElement('div'); acts.className = 'acts';
+  const bEdit = document.createElement('button'); bEdit.textContent = '改'; bEdit.onclick = () => softEditCog(c.id, bEdit);
+  const bDel = document.createElement('button'); bDel.className = 'del'; bDel.textContent = '删'; bDel.onclick = () => softDelCog(c.id);
+  acts.append(bEdit, bDel); body.append(acts);
+  inner.append(ic, body); note.append(inner);
+  chat.append(note); chat.scrollTop = chat.scrollHeight;
+}
+
 // 按当前模式刷新画像：user→友好只读版，dev→开发者原版。
 // 改/删认知后统一走这里，避免在 user 模式误调 loadCognition 渲染进开发者的 #coglist。
 function refreshCognition(){
@@ -2592,9 +2615,10 @@ async function pollBg(){
       _lastBgAt = s.last.at;
       if (!first) {
         loadCognition(); loadEvents();               // 开发者版面板（dev 模式在看）
-        if (window._mode === 'user') {               // 用户体验模式：刷友好版 + 自然发问一次
+        if (window._mode === 'user') {               // 用户体验模式：刷友好版 + 织记忆气泡 + 自然发问一次
           loadCognitionFriendly();
           loadEventsFriendly();
+          if (Array.isArray(s.last.newCognitions)) for (const c of s.last.newCognitions) weaveMemNote(c); // S1：新理解织进聊天流
           maybeAskInChat();
         }
         if (window._mode === 'memory') mmLoad();     // 记忆管理页：后台整理完自动刷新列表/详情

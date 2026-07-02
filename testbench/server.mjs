@@ -102,6 +102,8 @@ async function runProfileUpdate(trigger = 'background') {
       created: c.created.length, reinforced: c.reinforced, corrected: c.corrected,
       conflicted: c.conflicted, hypotheses: r.attributed.hypotheses.length,
       trends: trd.trends.length, expired: exp.expired, indexError: r.indexError,
+      // S1 记忆气泡：带上这批新生成认知的精简内容（只 id/content/credStatus），供前端织进聊天流。
+      newCognitions: c.created.map((x) => ({ id: x.id, content: x.content, credStatus: x.credStatus })),
     };
     // ②治慢落盘：各步耗时 + 摘要（AGENTS.md"内幕必落盘"；最慢的写路径以前没诊断日志）。
     logger.appendProfileUpdate({
