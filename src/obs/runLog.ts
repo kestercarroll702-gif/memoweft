@@ -90,6 +90,10 @@ export interface ProfileUpdateRecord {
     hypotheses: number;
     trends: number;
     expired: number;
+    /** 写路径仪表（D4 只观测）：本轮注入 prompt 的 active 认知条数。可选——旧日志无此字段，读取要兼容。 */
+    profileSize?: number;
+    /** 写路径仪表（D4 只观测）：本轮 consolidate prompt 全部 content 字符数之和。可选——旧日志无此字段。 */
+    promptChars?: number;
   };
   /** 本次三步累计模型调用次数。 */
   llmCalls: number;

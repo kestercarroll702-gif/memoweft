@@ -41,6 +41,12 @@ export interface ConsolidateResult {
   conflicted: number;
   processedEvents: number;
   llmCalls: number;
+  /** 写路径仪表（决策 D4 · 只观测不动刀）：本轮注入 prompt 的 active 认知条数（= 现有画像大小）。
+   *  0 = 本轮未执行整理（无新事件早退）。给 11-A 膨胀债画 dogfood 曲线用。 */
+  profileSize: number;
+  /** 写路径仪表（决策 D4 · 只观测不动刀）：本轮 buildMessages 产物全部 content 的字符数之和（prompt 多大）。
+   *  0 = 本轮未执行整理（无新事件早退）。给 11-A 膨胀债画 dogfood 曲线用。 */
+  promptChars: number;
 }
 
 /** 候选认知的原始形状（字段名容错：content / new_content / cognition 都接）。 */
@@ -129,7 +135,7 @@ function buildMessages(existing: Cognition[], events: EventView[]): ChatMessage[
 
 export async function consolidate(subjectId: string, deps: ConsolidateDeps): Promise<ConsolidateResult> {
   const newEvents = deps.eventStore.unconsolidated(subjectId);
-  const empty: ConsolidateResult = { created: [], reinforced: 0, corrected: 0, conflicted: 0, processedEvents: 0, llmCalls: 0 };
+  const empty: ConsolidateResult = { created: [], reinforced: 0, corrected: 0, conflicted: 0, processedEvents: 0, llmCalls: 0, profileSize: 0, promptChars: 0 };
   if (newEvents.length === 0) return empty;
 
   const existing = deps.cognitionStore.active(subjectId);
@@ -156,10 +162,13 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
 
   // 结构化输出加固（jsonRepair）：去代码块围栏 → 解析对象；失败落日志 + 最多重试一次（提示"只输出 JSON"）。
   // 仍失败 → null（按"本轮无产出"处理，等价旧的返回空对象；下方各 `?? []` 兜住）。重试会多调一次模型，故计数取前后差。
+  // 写路径仪表（D4 只观测）：先把 messages 存下来量 prompt 字符数，再原样喂给解析器——行为零变化，只加计量。
+  const messages = buildMessages(existing, events);
+  const promptChars = messages.reduce((n, m) => n + m.content.length, 0);
   const before = deps.llm.callCount;
   const out = (await parseJsonObjectWithRepair<LLMOut>({
     llm: deps.llm,
-    messages: buildMessages(existing, events),
+    messages,
   })) ?? {};
   const llmCalls = deps.llm.callCount - before;
 
@@ -252,5 +261,6 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
     return { created, reinforced, corrected, conflicted };
   });
 
-  return { ...mutation, processedEvents: newEvents.length, llmCalls };
+  // 写路径仪表：profileSize = 本轮注入 prompt 的 active 认知条数（existing 就是拼进 prompt 的那份画像）。
+  return { ...mutation, processedEvents: newEvents.length, llmCalls, profileSize: existing.length, promptChars };
 }

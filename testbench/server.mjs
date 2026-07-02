@@ -159,6 +159,8 @@ async function runProfileUpdate(trigger = 'background') {
         created: c.created.length, reinforced: c.reinforced, corrected: c.corrected,
         conflicted: c.conflicted, hypotheses: r.attributed.hypotheses.length,
         trends: trd.trends.length, expired: exp.expired,
+        // 写路径仪表（D4 只观测）：画像多大 / prompt 多大，落盘给 11-A 膨胀债画 dogfood 曲线。
+        profileSize: r.metrics.profileSize, promptChars: r.metrics.promptChars,
       },
       llmCalls: r.distilled.llmCalls + c.llmCalls + r.attributed.llmCalls,
       indexError: r.indexError,

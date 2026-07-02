@@ -52,6 +52,9 @@ export interface UpdateProfileResult {
   indexError: string | null;
   /** 各步耗时(ms)，治慢诊断用（2026-07-01）——测试台落盘看"慢在哪步"。 */
   timings: UpdateProfileTimings;
+  /** 写路径仪表（决策 D4 · 只观测不动刀）：从 consolidate 结果透传的"画像多大 / prompt 多大"，
+   *  供测试台落盘、给 11-A 膨胀债画 dogfood 曲线。两值均 0 = 本轮 consolidate 未执行（无新事件）。 */
+  metrics: { profileSize: number; promptChars: number };
 }
 
 export async function updateProfile(subjectId: string, deps: UpdateProfileDeps): Promise<UpdateProfileResult> {
@@ -98,6 +101,8 @@ export async function updateProfile(subjectId: string, deps: UpdateProfileDeps):
     attributed,
     indexed,
     indexError,
+    // 写路径仪表（D4 只观测）：从 consolidate 结果原样透传，方便落盘处不用钻进 consolidated 里挖。
+    metrics: { profileSize: consolidated.profileSize, promptChars: consolidated.promptChars },
     timings: {
       distillMs: t1 - t0,
       consolidateMs: t2 - t1,
