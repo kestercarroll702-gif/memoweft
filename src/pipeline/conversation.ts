@@ -30,6 +30,8 @@ export interface ConversationDeps {
    * 让续聊带上下文。缺省空 = 全新会话，行为同旧。只影响回话窗口，不落库、不产证据。
    */
   seedTurns?: Turn[];
+  /** 宿主注入的回话人设/系统提示（cell 9：语气·角色归宿主）；缺省用库内最朴素提示。 */
+  systemPrompt?: string;
 }
 
 /** 召回到、注入了回话的一条（含相似度，供透视）。 */
@@ -88,7 +90,7 @@ export class Conversation {
     let llmCalls = 0;
     let error: string | null = null;
     try {
-      const r = await reply(userMsg, recent, recall, llm);
+      const r = await reply(userMsg, recent, recall, llm, this.deps.systemPrompt);
       replyText = r.text;
       llmCalls = r.llmCalls;
     } catch (e) {

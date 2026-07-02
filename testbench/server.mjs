@@ -67,14 +67,23 @@ if (!embedConfig) console.log('  ⚠️ 未配 MEMOWEFT_EMBED_*（或兼容 DLA_
 
 // （旧 makeLLM 已并入 loadLLMPool：缺 .env 不崩、缺写路径小模型回退对话模型——见 src/llm/pool.ts。）
 
+// 测试台作为「宿主」，给回话注入 MemoWeft-aware 人设（cell 9：语气/角色归宿主，库内默认最朴素）。
+// 修一个 dogfood 暴露的坑：素提示下大模型会露出出厂反射「我不保留记忆、聊完就忘」，正好否定 MemoWeft 的价值。
+const REPLY_PERSONA =
+  '你是一个长期陪着这个用户、会持续记住 ta 的助手。' +
+  '下面若给出「你已了解关于这个用户的情况」，就自然地把它用上，像一个真的记得 ta 的人那样回应。' +
+  '绝不要说“我不会保留记忆”“每次对话都是全新开始”“对话结束就忘”这类话——' +
+  '你背后有一个跨对话持续记住 ta 的记忆层，ta 说的会被记下来、以后还认得。' +
+  '语气自然、简洁、真诚，别生硬地复述你了解到的东西。';
+
 // 每会话一个 Conversation（窗口）+ logger；/api/reset 新开。
 let sessionId = `s-${Date.now()}`;
-let convo = new Conversation({ store, retriever, cognitionStore: cogStore, llm: chatLLM });
+let convo = new Conversation({ store, retriever, cognitionStore: cogStore, llm: chatLLM, systemPrompt: REPLY_PERSONA });
 let logger = createRunLogger({ dir: LOG_DIR, sessionId });
 
 function newSession() {
   sessionId = `s-${Date.now()}`;
-  convo = new Conversation({ store, retriever, cognitionStore: cogStore, llm: chatLLM });
+  convo = new Conversation({ store, retriever, cognitionStore: cogStore, llm: chatLLM, systemPrompt: REPLY_PERSONA });
   logger = createRunLogger({ dir: LOG_DIR, sessionId });
 }
 

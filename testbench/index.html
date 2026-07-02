@@ -149,7 +149,7 @@
     body.mode-user .wrap { grid-template-columns:1fr; }
     body.mode-dev  .wrap { grid-template-columns:1fr 380px; }
     /* S0：用户模式下聊天区留出更舒适的居中宽度（正门体验，聊天不贴满屏）。 */
-    body.mode-user .wrap { max-width:820px; margin-left:auto; margin-right:auto; }
+    body.mode-user .wrap { max-width:1120px; margin-left:auto; margin-right:auto; }
     /* S0：用户模式隐藏系统信号——灌数据进度条 seedbar 在正门不出现（开发者模式仍显）。
        pollSeed 用内联 display 强制 block，故这里用 !important 压过它（只在 user 模式）。 */
     body.mode-user #seedbar { display:none !important; }
