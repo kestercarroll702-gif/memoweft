@@ -1793,7 +1793,9 @@ function filterDevSession(list){
 // 进开发者模式：切到（没有就先建）dev 专属会话，保持 dev 模式渲染其聊天流。
 async function enterDevSession(){
   // 记下进入前用户所在会话，便于回 user 时切回（避免把用户留在 dev 会话里）。
-  if (window._mode !== 'developer') _beforeDevSession = _currentSessionId;
+  // 注意：applyMode 调本函数前已把 window._mode 改成了 'developer'，所以【不能】再按 _mode 守卫
+  // （那样守卫恒假、记账丢失）。applyMode 的调用点已用 prevMode≠developer 保证只在真进入 dev 时调，直接记账即可。
+  _beforeDevSession = _currentSessionId;
   let dev = getDevSessionId();
   try {
     if (!dev){
@@ -1815,7 +1817,9 @@ async function leaveDevSession(){
   const dev = getDevSessionId();
   // 仅当当前正停在 dev 会话上、且记得进入前的用户会话时，才切回。
   if (_beforeDevSession && dev && _currentSessionId === dev && _beforeDevSession !== dev){
-    await openSessionUI(_beforeDevSession, { toUser:true });
+    // 只把【后端当前会话】切回用户会话，不强改前端模式——否则 dev→记忆管理/配置 会被这一下弹回聊天正门。
+    // （dev→user 时 _currentSessionId 已由 openSessionUI/resetSession 切成非 dev，本 switch 不触发，故 toUser 取 false 安全。）
+    await openSessionUI(_beforeDevSession, { toUser:false });
   }
   _beforeDevSession = null;
 }
