@@ -1,7 +1,7 @@
 # MemoWeft 三层边界（Core / Host / Plugin）
 
 > 本文是三层归位的**边界口径**：每层负责什么、不负责什么、层与层怎么交互、现状离目标差多少。
-> 定稿依据：[架构归位路线.md](./架构归位路线.md)（2026-07 用户拍板）。架构总览见 [architecture.md](./architecture.md)；用词遵循 [naming.md](./naming.md)。
+> 定稿依据：[架构归位路线.md](./架构归位路线.md)（2026-07 用户拍板）。架构总览见 [architecture.md](../architecture.md)；用词遵循 [naming.md](../naming.md)。
 > 改动任何一层的职责前，先改本文，再动代码。
 
 ---

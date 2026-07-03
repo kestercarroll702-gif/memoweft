@@ -111,7 +111,7 @@ export const CONFIG_META = [
   {
     path: 'retrieval.topK',
     label: '回话注入几条认知',
-    hint: '每次回话最多翻出几张最相关的知识卡；调大=更懂你但噪声/token 涨，调小=干净省钱但可能漏事。',
+    hint: '每次回话最多翻出几条最相关的理解；调大=召回更全但噪声/token 涨，调小=干净省钱但可能漏事。',
     group: 'retrieval',
     control: 'slider',
     min: 1,

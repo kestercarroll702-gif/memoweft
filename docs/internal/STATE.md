@@ -1,12 +1,12 @@
 # MemoWeft · STATE（白板 · 只反映此刻 · 开工先读这个）
 
-> 规则：本文件**极短（目标 ≤40 行）**。完工时【改写】对应行，历史【追加】到 `LOG.md`，不在此堆流水账。
-> 设计细节在 `docs/项目地图.md`（**按 cell 随用随读，别通读**）；协作契约在 `AGENTS.md`。
+> 规则：本文件**极短（目标 ≤40 行）**。完工时【改写】对应行；历史与决策记进 git 提交说明，不在此堆流水账。
+> 设计细节在 `项目地图.md`（**按 cell 随用随读，别通读**）；协作契约在 `AGENTS.md`。
 
 **阶段**：阶段 0 ✅ · 1 画像+召回 ✅ · 阶段 2 纠正闭环 ✅ · 阶段 3 归因+主动询问 ✅ · **阶段 4-B 周期后台 ✅**（衰减/过期/召回门控/冲突复看/趋势）· 阶段 4-A 多源感知 · **档1 摄入口闭环 ✅** · **档2 真采集器 ✅**（Win32 前台窗口采集循环 + `npm run collector` 运行器）· **公开仓加固批次 ✅（2026-07-02）** · **架构归位·批次1 边界文档 ✅（2026-07-02）** · **架构归位·批次2 统一入口+受控管理API ✅（2026-07-02）** · **架构归位·批次3 收瘦入口+归档雪藏+testbench切受控API ✅（2026-07-02）** · **架构归位·批次4 Host迁移蓝图（设计文档）✅（2026-07-02）** · **架构归位·批次5 步0-6 Host 全完成 ✅** · **插件 v1 体验插件 ✅** · **架构归位·采集器迁插件包 ✅（2026-07-03）**（真采集迁 `plugins/collector-active-window/`＋Core 只留通用摄入口＋采集流接 Host `/api/observe`）
 **框架闭环**（总设计任务书）：**Phase 5-A 便携记忆包 ✅**（导入/导出/备份/恢复，保真）· **5-B 测试台导入导出 ✅**（`/api/export-bundle`、`/api/import-bundle?mode=dryRun|merge` + 备份/迁移面板）· **6-A 记忆管理页 ✅**（筛选/详情/改删/标失效/授权开关）· 6-B 图谱视图（**G1 后端 ✅** · G2 前端 ⬜）· **7-A Cloud Guard ✅**（trends/ask 路径补过滤）· **8-A 真采集器 ✅** · 9-A 星瑶最小宿主 · 10-A 插件契约 · 11-A 稳定性/迁移 · 12-A npm 发布
 **最后更新**：2026-07-03
-**架构归位**：三层边界（Core/Host/Plugin）已定稿——Core 管记忆怎么正确存在，Host 管使用和管理，Plugin 管扩展。边界与现状差距见 `docs/boundaries.md`，实施路线见 `docs/架构归位路线.md`；`apps/memoweft-host` 迁移蓝图（批次5 施工图，含 Core 缺口/迁移顺序）见 `docs/host-migration.md`。
+**架构归位**：三层边界（Core/Host/Plugin）已定稿——Core 管记忆怎么正确存在，Host 管使用和管理，Plugin 管扩展。边界与现状差距见 `boundaries.md`，实施路线见 `架构归位路线.md`。
 **模型部署口径**：文档已改为 **Cloud-first onboarding**（开发者先用 OpenAI-compatible 云端端点跑通）+ **evidence 级授权**（`allowCloudRead` 控制哪些证据可进云端 prompt）+ **Hybrid/local 作为高级选项**。详见 `docs/deployment.md`。
 **写路径**：原话 → 整理事件(distill) → 画像(consolidate) → 归因(attribute) → 索引(retriever.indexAll)　**读路径**：消息 → 召回相关认知 → 注入回话
 

@@ -1,8 +1,8 @@
 # Contributing to MemoWeft
 
-先说清楚这个项目的特别之处：**MemoWeft 主要由 AI 维护**。它的文档是分层的（`AGENTS.md` / `STATE.md` / `docs/项目地图.md` / `LOG.md`），就是为了让 AI 接手时能低成本读懂、按同一套规矩改。人类贡献者当然欢迎——这份指南对人和 AI 都适用。
+先说清楚这个项目的特别之处：**MemoWeft 主要由 AI 维护**。它的文档是分层的（`AGENTS.md` / `docs/internal/STATE.md` / `docs/internal/项目地图.md`），就是为了让 AI 接手时能低成本读懂、按同一套规矩改。人类贡献者当然欢迎——这份指南对人和 AI 都适用。
 
-AI 维护者（包括你，如果你是被派来干活的 AI）请先读 [`docs/MAINTENANCE.md`](docs/MAINTENANCE.md)：那里讲的是「一个 issue 怎么从提出走到合并」的完整流程。本文件讲的是**每次改代码都要守的硬规矩**。
+AI 维护者（包括你，如果你是被派来干活的 AI）请先读 [`docs/internal/MAINTENANCE.md`](docs/internal/MAINTENANCE.md)：那里讲的是「一个 issue 怎么从提出走到合并」的完整流程。本文件讲的是**每次改代码都要守的硬规矩**。
 
 ---
 
@@ -18,14 +18,16 @@ AI 维护者（包括你，如果你是被派来干活的 AI）请先读 [`docs/
 
 - **Node ≥ 24**。不是随便写的：代码直接 `import 'node:sqlite'`（`DatabaseSync`），这个模块到 Node 24 才转正；测试和构建也直接跑 `.ts` 文件，靠 Node 24 原生解析 TypeScript。22/23 上这些一般能跑、但只打实验警告、不保证稳定，锁 24 是为稳定。
 - **零 runtime 依赖**。装依赖只会装 `typescript` 和 `@types/node` 两个 devDependency。
-- 想跑测试台 / 真实写路径，需要在 `.env` 配模型与嵌入器（见下方「配置」）。**但单元测试不需要任何 .env**——测试用假 LLM，纯离线，71 个全过。
+- 想跑测试台 / 真实写路径，需要在 `.env` 配模型与嵌入器（见下方「配置」）。**但单元测试不需要任何 .env**——测试用假 LLM，纯离线，Core 144 个全过。
 
 ```bash
 npm ci            # 或 npm install
 npm run typecheck # 类型
-npm test          # 单元测试（离线，71 过）
+npm test          # Core 单元测试（离线，144 过）
 npm run build     # 出 dist/
 ```
+
+Host 与采集插件各有独立测试：`npm test -w @memoweft/host`（25 过）、`npm test -w @memoweft/collector-active-window`（8 过）。
 
 ---
 
@@ -34,7 +36,7 @@ npm run build     # 出 dist/
 | 命令 | 干什么 | 绿的标准 |
 | --- | --- | --- |
 | `npm run typecheck` | `tsc` 全量类型检查（`src` + `tests`） | 无报错 |
-| `npm test` | `node --test tests/**/*.test.ts`，纯离线 | `pass 71 / fail 0`（数字随测试增减，`fail` 必须 0） |
+| `npm test` | `node --test tests/**/*.test.ts`，纯离线 | `pass 144 / fail 0`（数字随测试增减，`fail` 必须 0） |
 | `npm run build` | `tsc` 出 `dist/`（含 `.d.ts`） | 无报错、`dist/` 更新 |
 
 三条要**按顺序都过**才算完成。别只跑 typecheck 就交。
@@ -43,10 +45,6 @@ npm run build     # 出 dist/
 
 ## 分支与提交约定
 
-> **注意：本仓当前还不是 git 仓库，无法回滚。** 在 `git init` 建立可回退基线之前，每一步改动都要小步 + 立刻验证（三绿）。这是硬约束，不是洁癖——改坏了没有后悔药。
-
-转成 git 仓 / 上 GitHub 之后：
-
 - **别直接在默认分支（`main`）上改。** 开分支：
   - `feat/<简述>` 新功能
   - `fix/<简述>` 修 bug
@@ -54,7 +52,7 @@ npm run build     # 出 dist/
   - `chore/<简述>` 杂项（构建、配置、改名）
 - **小步提交，一个提交一件事。** 提交信息写清楚「改了什么 + 为什么」，别写 "update"、"fix" 这种没信息量的。
 - **禁止 `git commit --no-verify`、禁止跳过测试。** 护栏是给整个项目兜底的，绕过等于把风险塞给下一个接手的人。
-- PR 正文模板见 [`docs/MAINTENANCE.md`](docs/MAINTENANCE.md)：至少说清 **改了什么 / 为什么 / 怎么验的（贴三绿结果）**。
+- PR 正文模板见 [`docs/internal/MAINTENANCE.md`](docs/internal/MAINTENANCE.md)：至少说清 **改了什么 / 为什么 / 怎么验的（贴三绿结果）**。
 
 ---
 
@@ -85,9 +83,9 @@ npm run build     # 出 dist/
 
 代码和文档要一起动，这是 AGENTS.md 工作流的收尾步：
 
-- 改了**接口 / 状态** → 改写 [`STATE.md`](STATE.md)（它极短，只反映此刻；历史别堆这里）。
-- 有值得记的**历史 / 决策** → 追加到 [`LOG.md`](LOG.md)（只追加，不回改历史条目）。
-- 改了**设计方向 / 数据结构** → 改 [`docs/项目地图.md`](docs/项目地图.md) 对应的 cell。
+- 改了**接口 / 状态** → 改写 [`docs/internal/STATE.md`](docs/internal/STATE.md)（它极短，只反映此刻；历史别堆这里）。
+- 有值得记的**历史 / 决策** → 写进提交说明；对外里程碑补进 [`CHANGELOG.md`](CHANGELOG.md)。
+- 改了**设计方向 / 数据结构** → 改 [`docs/internal/项目地图.md`](docs/internal/项目地图.md) 对应的 cell。
 - 改了**对外能力 / 用法** → 同步对外文档（`README`、`docs/` 下的 architecture / integration / quickstart 等）。
 
 「代码绿了但文档没跟上」= 没做完。
@@ -114,4 +112,4 @@ npm run build     # 出 dist/
 - [ ] 没碰 `.env`、没删 `DLA_*` 旧键、没改物理目录名与 `./dla.db`
 - [ ] PR 正文写清了「改了什么 / 为什么 / 怎么验的（贴三绿）」
 
-License：TBD（作者未定，见 README）。在定下来之前，贡献请知悉许可条款可能随首个正式版本确定。
+License：MIT（见仓库根 [`LICENSE`](LICENSE)）。提交贡献即表示同意以 MIT 许可你的改动。

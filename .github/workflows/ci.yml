@@ -69,3 +69,9 @@ jobs:
 
       - name: Host Test
         run: npm test -w @memoweft/host
+
+      - name: Collector Plugin Typecheck
+        run: npm run typecheck -w @memoweft/collector-active-window
+
+      - name: Collector Plugin Test
+        run: npm test -w @memoweft/collector-active-window

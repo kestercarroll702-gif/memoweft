@@ -1,7 +1,7 @@
 {
   "name": "memoweft",
-  "version": "0.0.0",
-  "description": "MemoWeft — weave user evidence into a model-independent, traceable cognition layer. 套在大模型外部的用户认知层。",
+  "version": "0.1.0",
+  "description": "换个模型，AI 就把用户忘光了。MemoWeft 给 AI 助手一块带得走的长期记忆——而且不把猜的当真的。Long-term memory for AI assistants: portable across models, and it keeps facts and guesses apart.",
   "keywords": ["llm", "agent", "memory", "cognition", "user-profile"],
   "license": "MIT",
   "engines": { "node": ">=24" },
@@ -22,7 +22,7 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "LICENSE"],
+  "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "README.en.md", "CHANGELOG.md", "LICENSE"],
   "workspaces": [".", "apps/*", "plugins/*"],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

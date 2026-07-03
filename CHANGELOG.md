@@ -1,0 +1,33 @@
+# Changelog
+
+All notable changes to MemoWeft are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+> This file is the user-facing summary of notable changes; the full commit history has the fine detail.
+> While the API is pre-1.0, minor versions may include breaking changes.
+
+## [Unreleased]
+
+## [0.1.0] — 2026-07
+
+First tidied pre-release. Core, a reference host, and the first plugins are in place and tested; interfaces may still change.
+
+### Added
+
+- **Cognitive core** — `evidence → event → cognition` layers with profile + recall, correction loop, attribution + proactive asking, and a periodic background pass (decay, typed expiry, recall gating, conflict revisit, trends).
+- **Unified Core entry** — `createMemoWeftCore` facade plus a controlled memory-management API (invalidate, authorization, safe delete, merge, archive, integrity check) so hosts never touch the stores directly.
+- **Portability & graph** — portable memory bundle (`exportBundle` / `validateBundle` / `importBundle`) and a memory-graph backend payload (`buildMemoryGraph`).
+- **Cloud Guard** — cloud-read filtering on the write / trends / ask paths; observed behavior defaults to non-cloud-readable.
+- **Reference host** (`apps/memoweft-host`) — chat, setup wizard, memory-management page, multi-session, backup / restore, and factory reset, all through the Core public API.
+- **Experience plugin contract v1** — swappable personas over one core (`plain` + 星瑶 / Xingyao).
+- **Collector plugin** (`@memoweft/collector-active-window`) — active-window collector that feeds the host via `POST /api/observe` (host audits, then `core.ingestObservation`).
+
+### Notes
+
+- `MEMOWEFT_*` environment variables are the primary names; the legacy `DLA_*` prefix remains supported for backward compatibility.
+- Not yet: memory-graph front-end, schema versioning / migration hardening, npm publishing.
+
+[Unreleased]: https://github.com/kestercarroll702-gif/memoweft/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/kestercarroll702-gif/memoweft/releases/tag/v0.1.0
