@@ -2,38 +2,25 @@
 
 > 唯一的"现在该做什么"看板。只写**当前主线 + 允许做 + 不做 + 验收**。历史不写这儿——看 git 提交与 `CHANGELOG.md`。
 
-## 当前主线：质量证据（Quality Evidence）· 总纲第 3 步
+## 当前状态：总纲第 1–3 步已完成，等开工第 4 步
 
-回答评估者两问「凭什么信」和「能撑多少」：eval 用例证明认知纪律真生效、lint + 覆盖率关卡、SECURITY / issue·PR 模板 / 维护声明、perf 实测数字、CI provenance 发布。**这批有代码也有文档，但不改核心运行时逻辑、不动认知纪律判定算法——只给它加断言证据。**
+- **第 1 步 · 0.3.0 补漏加固** ✅ 已发布 `memoweft@0.3.0`（npm latest）。
+- **第 2 步 · 接口契约 Memory Surface Contract v1** ✅（合 `74b58c3`）：`docs/memory-surface-contract.md` + `src/index.ts` 稳定性分级注释。
+- **第 3 步 · 质量证据** ✅（合 `1d09c55`）：eval 25 用例断言认知纪律三条（冲突暴露 / 情绪封顶 / 记≠信）、ESLint 松档关卡 + 覆盖率 97.42%、SECURITY / issue·PR 模板 / 维护声明、perf 实测（10k 条 `updateProfile` ≈ 462ms）、CI provenance 发布配置。三绿 194/194 + lint 绿。
 
-**施工任务书五份 + 总览，在 [`docs/internal/tasks/quality-evidence/`](./docs/internal/tasks/quality-evidence/README.md)**：Q1 lint+覆盖率 / Q2 eval 套件 / Q3 信任文档 / Q4 perf 实测 / Q5 provenance 发布。Q1/Q2/Q4 可并行，Q3 排 Q2 后。7 项设计选择作者已拍板（见 README）。
+**下一主线 = 总纲第 4 步：英文化与模型兼容（0.4.0）**——提示词 / 兜底文案抽中英双语层、INSTALL / integration 英文版、examples 扩到 3 个、temperature 可配、hostId 默认名改。**待作者拍板开工后细化成施工任务书**（`quality-evidence/` 那套即样板）。
 
-## 允许做
+## 待作者手动（发布 / 平台侧尾巴，AI 做不了）
 
-- Q1–Q5 任务书写明的事，按"改哪里 / 不许动 / 验收"执行。
-- lint / coverage / bench 工具进 **devDependencies**。
+- **Q5 provenance 发布**：往 GitHub secrets 放 `NPM_TOKEN`（npm automation token）→ 打 `v*` tag 触发 publish job（`npm publish --provenance`）。
+- **GitHub 仓库设置**：开启 "Private vulnerability reporting"，`SECURITY.md` 的私密报告链接才生效。
+- **覆盖率徽章 97.42%**：本机数；CI（ubuntu Node24）跑出后按其 "all files" line% 再校一次。
 
-## 不做（本主线明确不碰）
+## 发现待办（不阻塞，回头清）
 
-- ❌ 改 `src/consolidation/` 的置信度算法 / 认知纪律判定逻辑（`confidence.ts` / `consolidate.ts` / `model.ts`）——eval 只加断言，不改算法迁就测试；断言跑红=发现真 bug，停下问。
-- ❌ 加任何 runtime 依赖（`dependencies` 保持 `{}`）。
-- ❌ lint 扫出的 `src` 存量问题本批不修，记"发现待办"。
-- ❌ Q5 的 npm token 托管由作者手动（GitHub secrets），AI 不代做、不写死 token。
-
-## 验收
-
-- 每任务对应任务书验收清单全勾 + `npm run typecheck && npm test && npm run build` 三绿。全批合完跑 README 的"批次完成验收"。
-
----
-
-## 已完成上一主线：接口契约 Memory Surface Contract v1 ✅（2026-07-05 · 合 `74b58c3`）
-
-S2-1 写 `docs/memory-surface-contract.md` + S2-2 给 `src/index.ts` 贴稳定性标签（导出符号 170→170 不变、零运行时改动），已合 main。
-
-## 已发布：memoweft@0.3.0（npm latest）
-
-发布尾巴（作者手动）：main 推 origin、tag `v0.3.0`、GitHub Release；CI 矩阵在真 Node 20/22 上验 better-sqlite3 路径。
+- lint 6 个警告（存量）：4 个未用变量 + `tests/store.test.ts` 两处 `@ts-expect-error` 缺说明。松档已降 warn、不阻断；清理时给未用变量加 `_` 前缀 / 给 ts-comment 补一句说明即可。
+- README `Node ≥24` 徽章与 `engines>=20` 口径可再对齐（≥24 是零依赖路径，20/22 走可选 `better-sqlite3`）。
 
 ## 后续总排序
 
-第 3 步（当前）→ … → 第 10 步收口 1.0，商用线 + 功能线合排共 11 步，见 [`docs/internal/tasks/后续批次总纲.md`](./docs/internal/tasks/后续批次总纲.md)——每步开工前才细化成施工任务书（`quality-evidence/` 这套即样板）。
+第 4 步 → … → 第 10 步收口 1.0，商用线 + 功能线合排共 11 步，见 [`docs/internal/tasks/后续批次总纲.md`](./docs/internal/tasks/后续批次总纲.md)——每步开工前才细化成施工任务书。
