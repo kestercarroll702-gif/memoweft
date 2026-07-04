@@ -17,8 +17,10 @@
   "main": "dist/index.js",       // 运行时入口（编译后）
   "types": "dist/index.d.ts",    // 类型入口
   "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "README.zh-CN.md", "CHANGELOG.md", "LICENSE"],
-  "engines": { "node": ">=24" }, // node:sqlite 到 24 才转正
-  "dependencies": {}             // 零运行时依赖
+  "engines": { "node": ">=20" }, // Node ≥24 用内置 node:sqlite；20/22 需可选的 better-sqlite3
+  "dependencies": {},            // 零运行时依赖（可选 peer 见下）
+  "peerDependencies": { "better-sqlite3": ">=9" },
+  "peerDependenciesMeta": { "better-sqlite3": { "optional": true } }
 }
 ```
 
@@ -27,7 +29,7 @@
 - **`main` / `types` 指向 `dist/`**：消费者装完 `import` 的是**编译后的 `.js` + `.d.ts`**，不是源码。所以**发布前必须先 `npm run build`**（下节的 `prepublishOnly` 已把这步兜进自动化）。
 - **`files` 只挑 `.js` + `.d.ts`**（外加双 README / CHANGELOG / LICENSE）：不把 `.js.map` / `.d.ts.map` 打进包。原因见 §2。
 - **`type: "module"`**：纯 ESM 包。消费者用 `import`，不支持 `require`。
-- **零 `dependencies`**：存储 / HTTP / 向量全用 Node 内置（`node:sqlite` / `node:http` / `node:fs`）。这也意味着**消费者的 Node 必须 ≥ 24**（`node:sqlite` 到 24 才转正）——已在 `package.json` 用 `engines` 声明。
+- **零 `dependencies`**：存储 / HTTP / 向量全用 Node 内置（`node:sqlite` / `node:http` / `node:fs`），`dependencies` 恒为空——「零运行时依赖」指的就是这个。**Node ≥ 24 开箱即用**（`node:sqlite` 到 24 转正）；**Node 20/22** 上内置模块不可用，消费者需装可选驱动 `better-sqlite3`（`npm i better-sqlite3`）。`better-sqlite3` 声明为**可选 peer 依赖**（`peerDependenciesMeta.optional`），装不装用户自己定，不进 `dependencies`——`npm install memoweft` 仍不拉任何 runtime 依赖 / 原生模块。`engines` 已相应放宽到 `>=20`。
 
 ---
 
@@ -128,10 +130,10 @@ node --input-type=module -e "import { MEMOWEFT_VERSION } from 'memoweft'; consol
 
 以下在早期版本里曾是"待办"，现已落地，列在这里是为了说明**不用再做**：
 
-- **`engines` 字段**：已声明 `"node": ">=24"`，装在旧 Node 上的人会早收到警告。
+- **`engines` 字段**：已声明 `"node": ">=20"`（Node ≥24 走内置 `node:sqlite`；20/22 需可选的 `better-sqlite3`）。
 - **`repository` / `homepage` / `bugs` / `keywords`**：均已填 GitHub 地址与关键词，npm 页面会显示仓库链接、利于搜索。
 - **LICENSE**：已定 **MIT**（根目录 `LICENSE` + `package.json` `"license"` + README License 段一致），随 `files` 白名单打包。
-- **CI（GitHub Actions）**：`.github/workflows/ci.yml` 在 push（`main`）/ PR 上跑 Node 24 下 `typecheck + test + build` 三绿，作为合并门。
+- **CI（GitHub Actions）**：`.github/workflows/ci.yml` 在 push（`main`）/ PR 上跑 Node 24 下 `typecheck + test + build` 三绿作为合并门，另加触达矩阵（Node 22.18+ 强制 `better-sqlite3` 跑全测试、Node 20 用 dist 冒烟脚本验）。
 - **`bin` 字段**：**不需要**——MemoWeft 是库、无 CLI 命令。`testbench` 是 `npm run` 脚本、非对外可执行入口。将来若出 CLI 再加。
 
 > 尚未做、属作者单独决策的：**自动发布的 CI 工作流**（把 npm token 入库触发自动 `npm publish`）。本项目当前是手动 `npm publish` + `prepublishOnly` 兜底，自动发布暂不引入。

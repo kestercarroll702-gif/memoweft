@@ -29,7 +29,7 @@ MemoWeft 已发布到 npm，宿主直接装：
 npm install memoweft
 ```
 
-（TypeScript 项目另需 `@types/node@^24`——库的公开类型里有 `node:sqlite`。）想从源码接（改库本身 / 跟最新提交）也行：
+（TypeScript 项目按常规装 `@types/node` 即可；Node 20/22 上另装可选驱动 `better-sqlite3`。）想从源码接（改库本身 / 跟最新提交）也行：
 
 ```bash
 git clone https://github.com/memoweft/memoweft.git
@@ -45,7 +45,7 @@ npm run typecheck && npm test && npm run build
 - 直接引用 `../memoweft/src/index.ts`；
 - 或引用 build 后的 `dist/index.js`。
 
-> 要求：Node ≥ 24。项目使用 `node:sqlite` 等 Node 内置能力，且当前开发 / 测试以 Node 24 为准。
+> 要求：**Node ≥ 24 开箱即用**（存储用内置 `node:sqlite`）；**Node 20/22** 上内置模块不可用，需装可选驱动 `better-sqlite3`（`npm i better-sqlite3`）。开发 / 跑 `.ts` 测试仍以 Node ≥24 为准（Node 22 需 22.18+ 才默认支持原生剥 `.ts` 类型，Node 20 不支持）。
 
 ---
 
