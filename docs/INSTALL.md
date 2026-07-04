@@ -10,13 +10,13 @@
 
 | 要求 | 说明 |
 | --- | --- |
-| **Node ≥ 24（开箱即用）或 Node 20/22 + `better-sqlite3`** | 存储底层是 SQLite，两条驱动：Node ≥24 默认走内置 `node:sqlite`（到 24 才转正），零额外依赖；Node 20/22 上内置模块不可用，装上可选的 `better-sqlite3` 即可跑（`npm i better-sqlite3`，见下方 §1.2）。 |
+| **Node ≥ 24（开箱即用）或 Node 20/22 + `better-sqlite3`（后备）** | 存储底层是 SQLite。驱动**优先用内置 `node:sqlite`**、加载不到才回退可选的 `better-sqlite3`。Node ≥24 上 `node:sqlite` 转正稳定、零额外依赖；Node 20 上没有它、必须装 `better-sqlite3`（`npm i better-sqlite3`，见下方 §1.2）；Node 22 视你的版本 / flag 是否已提供 `node:sqlite` 而定，用不上时才需装 `better-sqlite3`。 |
 | **一个 OpenAI-compatible 对话模型端点** | 默认推荐云端端点：最省事、最容易让开发者跑起来。只要兼容 `/chat/completions` 即可。 |
 | **可选：写路径小快模型端点** | 用于 `distill → consolidate → attribute`，缺配会回退对话模型。 |
 | **可选：嵌入端点** | 用于语义召回。缺配时召回降级为空，画像照写，只是不注入长期认知。 |
 | **零运行时依赖** | runtime `dependencies` 为空，存储 / HTTP / 向量计算均用 Node 内置。`better-sqlite3` 只是**可选 peer 依赖**，Node ≥24 用户根本不需要装它。 |
 
-> ⚙️ **Node 20/22 需要装可选驱动 `better-sqlite3`。** 内置 `node:sqlite` 到 Node 24 才转正，20/22 上不可用；装上 `better-sqlite3`（原生模块，见 §1.2）后，MemoWeft 会自动选它当底层。开发库本身（跑仓库里的 `.ts` 示例 / 测试台）另有门槛：Node 22 需 22.18+ 才默认支持原生剥 `.ts` 类型，Node 20 没有此能力——想跑 `.ts` 请用 Node ≥24；只是**当库用**（`import 'memoweft'` 吃编译后的 `.js`）则 Node 20/22 + `better-sqlite3` 即可。
+> ⚙️ **`node:sqlite` 加载不到时，装可选驱动 `better-sqlite3` 兜底。** MemoWeft **优先用内置 `node:sqlite`**、加载不到才回退 `better-sqlite3`（原生模块，见 §1.2）。`node:sqlite` 到 Node 24 才转正稳定；Node 20 上没有它，**必须**装 `better-sqlite3`；Node 22 是否可用取决于你的 Node 版本 / flag——用不上时才需装 `better-sqlite3`（装了也只在 `node:sqlite` 加载不到时才会被选中，不会顶替已可用的内置驱动）。开发库本身（跑仓库里的 `.ts` 示例 / 测试台）另有门槛：Node 22 需 22.18+ 才默认支持原生剥 `.ts` 类型，Node 20 没有此能力——想跑 `.ts` 请用 Node ≥24；只是**当库用**（`import 'memoweft'` 吃编译后的 `.js`）则装好可用驱动即可。
 
 > ℹ️ **云端优先，不是无脑上云。** MemoWeft 推荐开发者用云端端点快速开始，但每条证据仍有 `allowCloudRead` 等授权位。宿主负责隐私政策和同意 UI；MemoWeft 负责保留模型切换和过滤钩子。完整模式见 [`deployment.md`](./deployment.md)。
 
