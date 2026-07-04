@@ -49,7 +49,7 @@
 "prepublishOnly": "npm run typecheck && npm test && npm run build"
 ```
 
-npm 在 `npm publish`（和 `npm pack`）**打包之前**会自动跑它。任何一步红（类型不过 / 测试不过 / 构建报错）就**中止发布**，包根本不会生成。这一条同时解决两个老坑：
+npm 在 `npm publish` **打包之前**会自动跑它。任何一步红（类型不过 / 测试不过 / 构建报错）就**中止发布**，包根本不会生成。这一条同时解决两个老坑：
 
 - **忘跑测试就发**——现在测试红了发不出去。
 - **发陈旧 `dist/`**——每次发布前都强制重跑 `npm run build`，覆盖旧产物，杜绝把改名前 / 上一版的构建混着发出去。
@@ -62,7 +62,7 @@ npm test            # Core 测试全过
 npm run build       # 重新产出 dist/
 ```
 
-> `prepublishOnly` 只在 `publish` / `pack` 时触发，`npm install` 不会跑它——不影响装依赖。
+> `prepublishOnly` **只在 `npm publish` 时触发**；`npm pack` 和 `npm install` 都不会跑它。所以本地 `npm pack --dry-run` 核对包内容时不会自动重建——要核对最新产物，先手动 `npm run build`。
 
 ---
 
@@ -80,7 +80,7 @@ npm run build       # 重新产出 dist/
 npm pack --dry-run
 ```
 
-> 注意：`npm pack` 也会触发 `prepublishOnly`，所以这一步本身就顺带跑了三绿 + 重新构建。
+> 注意：`npm pack` **不触发** `prepublishOnly`（那只在 `npm publish` 时跑）。所以这步核对的是**当前的 `dist/`**——想核对最新产物，先手动 `npm run build` 再 `npm pack --dry-run`。
 
 确认输出里：
 
@@ -144,7 +144,7 @@ node --input-type=module -e "import { MEMOWEFT_VERSION } from 'memoweft'; consol
 定版本号（package.json + src/version.ts 两处同步）+ 更新 CHANGELOG
         │
         ▼
-npm pack --dry-run   ← 触发 prepublishOnly（自动三绿+构建）；核对只含 dist 的 .js/.d.ts + 双README + CHANGELOG + LICENSE
+npm run build → npm pack --dry-run   ← 核对只含 dist 的 .js/.d.ts + 双README + CHANGELOG + LICENSE（pack 不触发 prepublishOnly，故先手动 build 出最新产物）
         │
         ▼
 npm login → npm publish   ← 发布前 npm 再次自动跑 prepublishOnly，任一红则中止（不会发出陈旧构建）
