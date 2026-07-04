@@ -83,7 +83,7 @@ In a line: others "remember"; MemoWeft aims to **remember, and not misuse it**.
 - 🧩 **One memory, many faces** — experience plugins decide tone and persona (plain + 星瑶 ship in-box) over shared memory.
 - ☁️ **Cloud-first, not cloud-blind** — model calls can go to the cloud, but each evidence item controls whether it may be cloud-read; desktop/behavior observations default to local-only.
 - 👀 **It can sense, not just chat** — beyond conversation, it ingests behavior observations (e.g. an active-window collector plugin) as evidence.
-- 🪶 **Zero runtime dependencies** — only Node built-ins (`node:sqlite` / `node:http` / `node:fs`). `npm install` won't drag in a transitive-dependency swamp.
+- 🪶 **Zero runtime dependencies (the price: Node ≥ 24)** — storage / HTTP / vectors all use Node built-ins (`node:sqlite` / `node:http` / `node:fs`), not a single third-party package. **Why Node 24**: `node:sqlite` stabilized in Node 24 — using it buys clean deploys, no dependency hell, and an `npm install` that drags in nothing.
 
 ---
 
@@ -110,11 +110,23 @@ Reads and writes are **decoupled**: reads are light and synchronous; writes are 
 
 ---
 
-## 🧩 Use it as a library (a few lines)
+## 🧩 Use it as a library (copy-paste and run)
 
-> **Requirements:** Node ≥ 24, zero runtime dependencies. Install it: `npm install memoweft` (TypeScript projects also need `@types/node@^24`, see [`docs/INSTALL.md`](docs/INSTALL.md)).
+**① Install** (needs Node ≥ 24):
 
-Configure a model in `.env`, then the **recommended path is the unified entry `createMemoWeftCore`** — one call wires the three stores, the retriever, and the model pool (all read from `.env`, degrading gracefully when unconfigured):
+```bash
+npm install memoweft
+```
+
+**② Configure a chat model** — create `.env` in your project root with any OpenAI-compatible endpoint:
+
+```bash
+MEMOWEFT_LLM_BASE_URL=https://your-endpoint/v1
+MEMOWEFT_LLM_API_KEY=sk-...
+MEMOWEFT_LLM_MODEL=gpt-4o-mini
+```
+
+**③ Save as `demo.mjs`, run `node --env-file=.env demo.mjs`** — the unified entry `createMemoWeftCore` wires the three stores, retriever, and model pool in one call (all read from `.env`, degrading gracefully when unconfigured):
 
 ```ts
 import { createMemoWeftCore } from 'memoweft';
@@ -144,7 +156,7 @@ console.log(turn.recall);  // which understandings got recalled and injected thi
 core.close();
 ```
 
-No embedder configured? Recall falls back to empty automatically — writes still land as evidence, replies just skip semantic recall. A runnable version is in [`examples/minimal.ts`](./examples/minimal.ts). For direct access to the underlying parts (`openStores` / `Conversation` / `updateProfile` / retrievers), see [`docs/integration.md`](./docs/integration.md).
+> TypeScript projects also need `@types/node@^24` (the public types reference `node:sqlite`). No embedder configured? Recall falls back to empty automatically — writes still land as evidence, replies just skip semantic recall. A runnable in-repo version is in [`examples/minimal.ts`](./examples/minimal.ts); for direct access to the underlying parts (`openStores` / `Conversation` / `updateProfile` / retrievers), see [`docs/integration.md`](./docs/integration.md).
 
 ---
 

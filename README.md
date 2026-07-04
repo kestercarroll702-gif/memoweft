@@ -83,7 +83,7 @@ npm start -w @memoweft/host        # → http://localhost:7788
 - 🧩 **一套记忆，多张脸**——体验插件决定语气和人设（自带普通助手 + 星瑶两张脸），底层记忆共用。
 - ☁️ **云端优先，但不无脑上云**——模型调用可以走云端，但每条证据能单独控制「能不能上云」；桌面/行为观察默认不上云。
 - 👀 **能感知，不只会聊**——除了对话，还能吃「行为观察」（比如活动窗口采集插件），当作证据沉淀。
-- 🪶 **零运行时依赖**——只用 Node 内置的 `node:sqlite` / `node:http` / `node:fs`。`npm install` 不会给你拖进一堆传递依赖。
+- 🪶 **零运行时依赖（代价是要 Node ≥ 24）**——存储 / HTTP / 向量全用 Node 内置的 `node:sqlite` / `node:http` / `node:fs`，一个第三方包都不装。**为什么卡 Node 24**：`node:sqlite` 到 Node 24 才转正——用它换来的是干净部署、没有依赖地狱、`npm install` 不拖进一堆传递依赖。
 
 ---
 
@@ -110,11 +110,23 @@ flowchart LR
 
 ---
 
-## 🧩 当库用（几行代码）
+## 🧩 当库用（几行代码，复制就能跑）
 
-> **前置：** Node ≥ 24，零运行时依赖。装一下：`npm install memoweft`（TypeScript 项目另需 `@types/node@^24`，见 [`docs/INSTALL.md`](docs/INSTALL.md)）。
+**① 装**（需 Node ≥ 24）：
 
-`.env` 里配好模型，然后**推荐走统一入口 `createMemoWeftCore`**——一行装配好三层存储、召回器、模型池（都从 `.env` 读，没配就自动降级、不崩）：
+```bash
+npm install memoweft
+```
+
+**② 配个对话模型**——项目根建 `.env`，填任意 OpenAI 兼容端点：
+
+```bash
+MEMOWEFT_LLM_BASE_URL=https://你的端点/v1
+MEMOWEFT_LLM_API_KEY=sk-...
+MEMOWEFT_LLM_MODEL=gpt-4o-mini
+```
+
+**③ 存成 `demo.mjs`，`node --env-file=.env demo.mjs` 跑**——统一入口 `createMemoWeftCore` 一行装配好三层存储、召回器、模型池（都从 `.env` 读，没配就自动降级、不崩）：
 
 ```ts
 import { createMemoWeftCore } from 'memoweft';
@@ -144,7 +156,7 @@ console.log(turn.recall);  // 这轮召回并注入了哪些理解
 core.close();
 ```
 
-没配嵌入器也能跑：召回自动降级为空，证据照写，只是回话不做语义召回。可跑版本见 [`examples/minimal.ts`](./examples/minimal.ts)。想直接用底层部件（`openStores` / `Conversation` / `updateProfile` / 召回器），见 [`docs/integration.md`](./docs/integration.md)。
+> TypeScript 项目另需 `@types/node@^24`（库的公开类型里有 `node:sqlite`）。没配嵌入器也能跑：召回自动降级为空，证据照写，只是回话不做语义召回。仓库内的可跑版本见 [`examples/minimal.ts`](./examples/minimal.ts)；想直接用底层部件（`openStores` / `Conversation` / `updateProfile` / 召回器）见 [`docs/integration.md`](./docs/integration.md)。
 
 ---
 
