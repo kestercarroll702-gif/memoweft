@@ -10,14 +10,16 @@
 ```jsonc
 {
   "name": "memoweft",
-  "version": "0.0.0",
+  "version": "0.1.0",            // 首个 alpha（与 src/version.ts 的 MEMOWEFT_VERSION 已同步）
   "type": "module",
   "main": "dist/index.js",       // 运行时入口（编译后）
   "types": "dist/index.d.ts",    // 类型入口
-  "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "LICENSE"],
+  "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "README.en.md", "CHANGELOG.md", "LICENSE"],
   "dependencies": {}             // 零运行时依赖
 }
 ```
+
+> **就绪度（2026-07-04 实测）**：包名 `memoweft` 未被占（`npm view` 报 404）；`npm pack` 干净（dist 的 .js/.d.ts + README×2 + CHANGELOG + LICENSE，无 src/内部文档/map/db）；从 tarball 装进空项目 → ESM `import` + `createMemoWeftCore(':memory:')` + TS 类型解析全通。**只差 `npm login` + `npm publish`（作者账号，不可撤回）。**
 
 关键点：
 - **`main` / `types` 指向 `dist/`**：消费者装完 `import` 的是**编译后的 `.js` + `.d.ts`**，不是源码。所以**发布前必须先 `npm run build`**。
@@ -50,7 +52,7 @@
 
 ```bash
 npm run typecheck   # 类型全绿
-npm test            # 71 个测试全过
+npm test            # Core 144 全过（Host 25 / 插件 8 各自 workspace 也应绿）
 npm run build       # 重新产出 dist/（务必重跑，覆盖旧产物！）
 ```
 
@@ -68,19 +70,13 @@ npm view memoweft        # 报 404 = 没被占，可用；有内容 = 已被占
 
 若 `memoweft` 被占或想用 scope，改成 `@<你的用户名>/memoweft`（scope 包首发要加 `--access public`，见 §4.4）。**只改 `package.json` 的 `name` 这一处**——`src` 内全是相对路径导入、无 `from 'memoweft'` 自引用，改 `name` 对内部 import 零影响。
 
-### 4.2 定版本号
+### 4.2 定版本号 ✅（已定 `0.1.0`）
 
-- 当前是 `0.0.0`（占位，不发布）。
-- **首个 alpha 建议 `0.1.0`**（在 `package.json` 改）。
-- 注意：`package.json` 的 `version` 与代码里的 `MEMOWEFT_VERSION`（`'0.0.0-rebuild'`，`src/index.ts`）**不是同一处**，别混。要不要同步由作者定。
+- `package.json` 的 `version` 与 `src/version.ts` 的 `MEMOWEFT_VERSION` **已同步为 `0.1.0`**（改版本号时两处一起改，别只改一处）。
 
-### 4.3 补 LICENSE（作者拍板）
+### 4.3 补 LICENSE ✅（已定 MIT）
 
-发布前包里应有 `LICENSE`。**许可证类型是价值判断，须作者定**（常见选 MIT 或 Apache-2.0，后者带专利条款更稳）。定了之后：
-
-1. 在根目录建 `LICENSE` 文件。
-2. 在 `package.json` 加 `"license": "MIT"`（或所选类型）。
-3. README 的 License 段从 “TBD” 改成实际类型。
+根目录已有 `LICENSE`（MIT）、`package.json` `"license": "MIT"`、README License 段已写 MIT。发布时随 `files` 白名单一并打包。
 
 ### 4.4 dry-run 核对包内容
 

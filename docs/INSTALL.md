@@ -11,6 +11,7 @@
 | 要求 | 说明 |
 | --- | --- |
 | **Node ≥ 24** | 库直接跑 `.ts`，使用 Node 内置 `node:sqlite`。作者实测 Node 24，CI 也应锁 24。 |
+| **TypeScript 消费者：`@types/node` ≥ 24** | 库的公开类型里出现 `node:sqlite`。TS 项目若没装（或装了太旧的）`@types/node`，`import 'memoweft'` 会报 `Cannot find module 'node:sqlite'`——装上 `@types/node@^24` 即可。Node 24 项目一般本就有。 |
 | **一个 OpenAI-compatible 对话模型端点** | 默认推荐云端端点：最省事、最容易让开发者跑起来。只要兼容 `/chat/completions` 即可。 |
 | **可选：写路径小快模型端点** | 用于 `distill → consolidate → attribute`，缺配会回退对话模型。 |
 | **可选：嵌入端点** | 用于语义召回。缺配时召回降级为空，画像照写，只是不注入长期认知。 |
