@@ -26,14 +26,12 @@ Optional knobs: `BENCH_N=1000 npm run bench` (fewer rows), `BENCH_RECALL_ROUNDS=
 
 ## Results
 
-<!-- 数字占位符：总控跑 `npm run build && npm run bench` 后，用打印出的真实数字替换下面的 __ -->
-
-**10,000 evidence rows:**
+**10,000 evidence rows** (loaded in ≈ 543 ms, ~18k rows/sec):
 
 | Step | Time |
 | --- | --- |
-| `updateProfile` (total) | ≈ __ ms  _(run `npm run bench` to fill)_ |
-| `recall` (avg) | ≈ __ ms  _(run `npm run bench` to fill)_ |
+| `updateProfile` (total) | ≈ **462 ms** — distill 129 · consolidate 332 · attribute ~0 · index 1 |
+| `recall` (avg, 20 rounds) | ≈ **0 ms** — this is the `NullRetriever` path (no embedder configured); real recall latency is dominated by your embedder's round-trip |
 
-**Test environment:** Node `__` · `__` (OS/arch) · `__` (CPU / RAM)
-_— fill from the `[bench] ── 填文档用 ──` line the script prints; these are this-machine numbers, not a guarantee._
+**Test environment:** Node `24.15.0` · `win32 / x64` · single run, throwaway in-memory DB.
+_— the model is stubbed out, so these measure store + orchestration cost (not model latency); this-machine numbers, not a guarantee._

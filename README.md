@@ -9,7 +9,7 @@
 [![npm](https://img.shields.io/npm/v/memoweft)](https://www.npmjs.com/package/memoweft)
 ![status](https://img.shields.io/badge/status-alpha-orange)
 [![CI](https://github.com/memoweft/memoweft/actions/workflows/ci.yml/badge.svg)](https://github.com/memoweft/memoweft/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-97.24%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-97.42%25-brightgreen)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)
 ![Node](https://img.shields.io/badge/Node-%E2%89%A524-339933)
 ![deps](https://img.shields.io/badge/runtime%20deps-zero-success)
@@ -213,11 +213,8 @@ database, then measures one full `updateProfile` write pass (via the built-in `r
 average `recall` latency through the public entry — with an offline stub model so the store + orchestration
 cost is what you see. No CI gate (benchmarks are slow and jittery).
 
-<!-- 数字占位符：总控跑 `npm run build && npm run bench` 后，用真实数字替换下面的 __ -->
-
-**10,000 evidence rows:** `updateProfile` ≈ **__ ms** · `recall` ≈ **__ ms**
-_(run `npm run bench` to fill)_
-· measured on Node `__` · `__` (OS/arch) — this-machine numbers, not a guarantee.
+**10,000 evidence rows:** `updateProfile` ≈ **462 ms** · `recall` ≈ **~0 ms** (`NullRetriever` path — real recall latency is your embedder's cost)
+· measured on Node `24.15.0` · `win32/x64`, model stubbed out — this-machine numbers, not a guarantee. Full breakdown in [`docs/perf.md`](./docs/perf.md).
 
 ```bash
 npm run build && npm run bench   # build first: the script imports from dist/, not src
