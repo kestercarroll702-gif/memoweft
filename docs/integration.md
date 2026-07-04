@@ -32,7 +32,7 @@ npm install memoweft
 （TypeScript 项目另需 `@types/node@^24`——库的公开类型里有 `node:sqlite`。）想从源码接（改库本身 / 跟最新提交）也行：
 
 ```bash
-git clone https://github.com/kestercarroll702-gif/memoweft.git
+git clone https://github.com/memoweft/memoweft.git
 cd memoweft
 npm install
 npm run typecheck && npm test && npm run build

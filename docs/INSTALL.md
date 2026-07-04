@@ -38,7 +38,7 @@ npm install memoweft
 ### 1.2 从源码跑（开发库本身 / 跑参考宿主与测试台）
 
 ```bash
-git clone https://github.com/kestercarroll702-gif/memoweft.git
+git clone https://github.com/memoweft/memoweft.git
 cd memoweft
 npm install        # 只装 devDependencies，无运行时依赖
 npm run typecheck && npm test && npm run build   # 三绿 = 环境就绪

@@ -7,12 +7,12 @@
   "engines": { "node": ">=24" },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kestercarroll702-gif/memoweft.git"
+    "url": "git+https://github.com/memoweft/memoweft.git"
   },
   "bugs": {
-    "url": "https://github.com/kestercarroll702-gif/memoweft/issues"
+    "url": "https://github.com/memoweft/memoweft/issues"
   },
-  "homepage": "https://github.com/kestercarroll702-gif/memoweft#readme",
+  "homepage": "https://github.com/memoweft/memoweft#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,7 +22,7 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "README.en.md", "CHANGELOG.md", "LICENSE"],
+  "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "README.zh-CN.md", "CHANGELOG.md", "LICENSE"],
   "workspaces": [".", "apps/*", "plugins/*"],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

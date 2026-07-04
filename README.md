@@ -2,265 +2,265 @@
 
 # 🧵 MemoWeft
 
-### 给 AI 装一块长期记忆——记住用户是谁，还分得清哪些是事实、哪些只是猜的，换个模型也带得走。
+### Long-term memory for AI apps — it remembers who the user is, keeps facts and guesses apart, and carries that across models.
 
-*把一条条零散的记忆线索，织成一张「这个人是谁」的布——但不假装每根线都一样可信。*
+*Scattered memory cues, woven thread by thread into a picture of who the user is — without pretending every thread is equally trustworthy.*
 
 [![npm](https://img.shields.io/npm/v/memoweft)](https://www.npmjs.com/package/memoweft)
 ![status](https://img.shields.io/badge/status-alpha-orange)
-[![CI](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml/badge.svg)](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml)
+[![CI](https://github.com/memoweft/memoweft/actions/workflows/ci.yml/badge.svg)](https://github.com/memoweft/memoweft/actions/workflows/ci.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)
 ![Node](https://img.shields.io/badge/Node-%E2%89%A524-339933)
-![deps](https://img.shields.io/badge/运行时依赖-零-success)
+![deps](https://img.shields.io/badge/runtime%20deps-zero-success)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-[English](./README.en.md) | **简体中文**
+**English** | [简体中文](./README.zh-CN.md)
 
 </div>
 
 ---
 
-## 换个模型，AI 就把你忘光了
+## Swap the model, and the AI forgets you entirely
 
-你跟一个 AI 助手聊了三个月，它慢慢摸清了你的作息、口味、脾气。然后你把底层模型一换——它两眼一抹黑，重新问你"你是谁"。
+You chat with an assistant for three months. It slowly learns your schedule, your taste, your quirks. Then you swap the underlying model — and it draws a blank, asking "who are you?" all over again.
 
-把上下文一股脑塞进 prompt 也不是办法：查不到来源（它凭什么这么认为？）、搬不走（下个模型用不了）、还越塞越长越贵。
+Stuffing everything into the prompt isn't the answer either: you can't trace it (why does it believe that?), you can't carry it (the next model can't use it), and it just grows longer and pricier.
 
-**MemoWeft 把「对一个人的了解」当成一份能长期攒、能追溯、能搬家的资产**，而不是一段用完就丢的 prompt。
+**MemoWeft treats the understanding of a person as a durable asset** — something you accumulate, trace, and move — instead of a throwaway prompt.
 
-它是一个你 `import` 的库，不是一个应用：**不聊天、不装人设、不做界面**——那些是宿主的活。它只干一件事：把记忆织好、存住，需要时递给你。
+It's a library you `import`, not an app: **it doesn't chat, doesn't do personas, doesn't render UI** — that's the host's job. It does one thing: weave the memory, keep it, and hand it back when you ask.
 
 ---
 
-## 🚀 先跑起来看看（一条命令，看见它记住你）
+## 🚀 Run it first (one command, watch it remember you)
 
-不想看文档？直接跑，两分钟见分晓：
+Don't feel like reading docs? Just run it — two minutes to see for yourself:
 
 ```bash
-git clone https://github.com/kestercarroll702-gif/memoweft.git
+git clone https://github.com/memoweft/memoweft.git
 cd memoweft
 npm install
 npm run build
 npm start -w @memoweft/host        # → http://localhost:7788
 ```
 
-打开 `http://localhost:7788`，跟它聊几句家常。聊一会儿、等它在后台整理一下，**顶栏那颗「它记住我 N 件事」就会跟着往上跳数**——那是它悄悄攒下的、对你的理解。点开就能看它到底记住了些什么。
+Open `http://localhost:7788` and chat a little. After a few messages — once it tidies things up in the background — **the "it remembers N things about me" button in the top bar ticks up**. That's the understanding it has quietly accumulated about you; click it to see exactly what it kept.
 
-然后是最好玩的一步：顶栏一键，把「普通助手」切成「**星瑶**」（一个陪伴型人设）——**同一份记忆，换一张脸，记忆还在**。
+Then the fun part: from the top bar, flip the **plain assistant** into **星瑶 (Xingyao)**, a companion persona — **same memory, different face, memory intact**.
 
-记忆是底座，人设只是插在上面、随时能换的一张脸——星瑶是自带的一张，你也可以换成自己的。
+Memory is the substrate; the persona is just a face on top you can swap anytime — Xingyao is one that ships in the box, bring your own instead.
 
-> 想先配好模型再玩？第一次打开会有个配置引导，填一个 OpenAI 兼容的接口就行，云端本地都成。只想当库用、几行代码接进自己的应用？往下翻到「🧩 当库用」那一节。
+> Want to configure a model first? The first launch walks you through a quick setup — just point it at an OpenAI-compatible endpoint (cloud or local). Just want the library, a few lines into your own app? See the "🧩 Use it as a library" section below.
 
 ---
 
-## 它凭什么不是「又一个向量记忆库」
+## Why it's not "just another vector memory store"
 
-普通记忆库的逻辑是：存进去 = 当真，来了新的就覆盖旧的。MemoWeft 不这么干——它对**「允许相信什么」很较真**。这套「认知纪律」才是它真正的不一样：
+A plain memory store's logic is: stored = true, and newest wins. MemoWeft doesn't play that way — it's **fussy about what it's allowed to believe**. That "cognitive discipline" is the real difference:
 
-- **记 ≠ 信。** 用户亲口说的，和大模型猜的，不是一回事。模型推出来的先当**低把握度**的候选，绝不直接混成事实。
-- **矛盾先摊开，不偷偷合并。** 你上周说爱喝咖啡、这周说戒了，它不会默默选一个——而是把冲突标出来，等确认。
-- **把握度它自己算，不听模型自报。** 一条理解有多可信，由证据强度和反复印证程度决定，不是让大模型拍脑袋打个分。
-- **情绪会淡，偏好留得住。** "今天心情差"这种会随时间衰减；"我不吃香菜"这种明确偏好不会被自动忘掉。
-- **禁止自证。** 助手自己说过的话、用户的沉默，都不算证据——不然它会越聊越信自己编的。
+- **Recorded ≠ believed.** What the user said and what the LLM guessed are not the same thing. Model inferences enter as **low-confidence candidates**, never as fact.
+- **Conflicts are surfaced, not silently merged.** Said you love coffee last week, quit it this week? It won't quietly pick one — it flags the conflict and waits.
+- **Confidence is computed, not self-reported.** How trustworthy a belief is comes from evidence strength and repeated corroboration, not the LLM grading itself.
+- **Moods fade, preferences stick.** "Bad day today" decays over time; "I don't eat cilantro" isn't auto-forgotten.
+- **No self-corroboration.** The assistant's own words and the user's silence are not evidence — otherwise it just talks itself into believing its own guesses.
 
-| | 普通向量 / 记忆库 | MemoWeft |
+| | Typical vector / memory store | MemoWeft |
 | --- | --- | --- |
-| 遇到矛盾 | 覆盖 / 取最新 | **暴露冲突**，不偷偷合并 |
-| 采信 | 存了就当真 | **记 ≠ 信** |
-| 模型猜测 | 可能混成事实 | **低把握度假设** |
-| 过期 | 永久有效 | **分型过期**（情绪快忘、偏好留住） |
+| Conflicting info | overwrite / keep latest | **conflict exposed**, not silently merged |
+| Trust | stored = treated as true | **recorded ≠ believed** |
+| Model guesses | may slip in as fact | **low-confidence hypothesis** |
+| Expiry | permanent | **typed expiry** (moods fade, preferences stick) |
 
-一句话：别人是「记得住」，MemoWeft 想做到的是「**记得住，还不乱用**」。
-
----
-
-## ✨ 它有什么
-
-- 🧠 **认知纪律**——记 ≠ 信、冲突暴露、把握度自算、分型过期（上面那套）。
-- 🔀 **换模型不丢记忆**——认知层是 SQLite 里的普通数据，不焊死在模型权重里。换 GPT、换 Claude、换本地模型，记忆照样在。
-- 🔎 **每条判断都可追溯**——它为什么这么认为？一路能回溯到形成它的那条原始证据。
-- 🧩 **一套记忆，多张脸**——体验插件决定语气和人设（自带普通助手 + 星瑶两张脸），底层记忆共用。
-- ☁️ **云端优先，但不无脑上云**——模型调用可以走云端，但每条证据能单独控制「能不能上云」；桌面/行为观察默认不上云。
-- 👀 **能感知，不只会聊**——除了对话，还能吃「行为观察」（比如活动窗口采集插件），当作证据沉淀。
-- 🪶 **零运行时依赖（代价是要 Node ≥ 24）**——存储 / HTTP / 向量全用 Node 内置的 `node:sqlite` / `node:http` / `node:fs`，一个第三方包都不装。**为什么卡 Node 24**：`node:sqlite` 到 Node 24 才转正——用它换来的是干净部署、没有依赖地狱、`npm install` 不拖进一堆传递依赖。
+In a line: others "remember"; MemoWeft aims to **remember, and not misuse it**.
 
 ---
 
-## 🧵 三层记忆，怎么织的
+## ✨ What you get
+
+- 🧠 **Cognitive discipline** — recorded ≠ believed, conflicts exposed, confidence self-computed, typed expiry (the set above).
+- 🔀 **Swap models without losing memory** — the cognition layer is plain data in SQLite, not baked into weights. GPT, Claude, a local model — the memory stays.
+- 🔎 **Every judgment is traceable** — why does it believe that? It traces back to the raw evidence that formed it.
+- 🧩 **One memory, many faces** — experience plugins decide tone and persona (plain + 星瑶 ship in-box) over shared memory.
+- ☁️ **Cloud-first, not cloud-blind** — model calls can go to the cloud, but each evidence item controls whether it may be cloud-read; desktop/behavior observations default to local-only.
+- 👀 **It can sense, not just chat** — beyond conversation, it ingests behavior observations (e.g. an active-window collector plugin) as evidence.
+- 🪶 **Zero runtime dependencies (the price: Node ≥ 24)** — storage / HTTP / vectors all use Node built-ins (`node:sqlite` / `node:http` / `node:fs`), not a single third-party package. **Why Node 24**: `node:sqlite` stabilized in Node 24 — using it buys clean deploys, no dependency hell, and an `npm install` that drags in nothing.
+
+---
+
+## 🧵 Three memory layers, how it's woven
 
 ```mermaid
 flowchart LR
-  subgraph 写路径 [写路径 · 织布]
-    E["证据 evidence<br/>(原始事实)"] --> V["事件 event<br/>(放进情境)"] --> C["认知 cognition<br/>(判断 · 画像)"]
+  subgraph write [Write path · weaving]
+    E["evidence<br/>(raw facts)"] --> V["event<br/>(contextualized)"] --> C["cognition<br/>(judgment · profile)"]
   end
-  subgraph 读路径 [读路径 · 从布上取一块]
-    Q["用户消息"] --> S["召回相关认知"] --> INJ["注入回话"]
+  subgraph read [Read path · reading the cloth]
+    Q["user message"] --> S["recall relevant cognition"] --> INJ["inject into reply"]
   end
-  C -. 建索引 .-> S
+  C -. indexes .-> S
 ```
 
-| 层 | 大白话 |
+| Layer | Plain meaning |
 | --- | --- |
-| **证据 evidence** | 唯一真相：用户说了什么、观察到了什么。这层只存事实，不存判断。 |
-| **事件 event** | 把证据放进情境：当时发生了什么。 |
-| **认知 cognition** | 判断层：一条带把握度、能溯源的用户画像。 |
+| **evidence** | The source of truth: what the user said or what was observed. Facts only, no judgments. |
+| **event** | Evidence in context: a small summary of what happened. |
+| **cognition** | The judgment layer: a user-profile entry with confidence and source links. |
 
-读写是**解耦**的：读路径轻、同步；写路径攒批、异步——所以整理记忆不会卡住回话。
+Reads and writes are **decoupled**: reads are light and synchronous; writes are batched and asynchronous — so tidying memory never blocks a reply.
 
 ---
 
-## 🧩 当库用（几行代码，复制就能跑）
+## 🧩 Use it as a library (copy-paste and run)
 
-**① 装**（需 Node ≥ 24）：
+**① Install** (needs Node ≥ 24):
 
 ```bash
 npm install memoweft
 ```
 
-**② 配个对话模型**——项目根建 `.env`，填任意 OpenAI 兼容端点：
+**② Configure a chat model** — create `.env` in your project root with any OpenAI-compatible endpoint:
 
 ```bash
-MEMOWEFT_LLM_BASE_URL=https://你的端点/v1
+MEMOWEFT_LLM_BASE_URL=https://your-endpoint/v1
 MEMOWEFT_LLM_API_KEY=sk-...
 MEMOWEFT_LLM_MODEL=gpt-4o-mini
 ```
 
-**③ 存成 `demo.mjs`，`node --env-file=.env demo.mjs` 跑**——统一入口 `createMemoWeftCore` 一行装配好三层存储、召回器、模型池（都从 `.env` 读，没配就自动降级、不崩）：
+**③ Save as `demo.mjs`, run `node --env-file=.env demo.mjs`** — the unified entry `createMemoWeftCore` wires the three stores, retriever, and model pool in one call (all read from `.env`, degrading gracefully when unconfigured):
 
 ```ts
 import { createMemoWeftCore } from 'memoweft';
 
-// 一行装配：三层 store + 召回器 + 模型池全从 .env 读。
+// One call assembles the three stores + retriever + model pool from .env.
 const core = createMemoWeftCore({ dbPath: './memoweft.db' });
 
 const subjectId = 'user-42';
 
-// 1）把用户原话存成证据。
+// 1) Feed the user's own words as evidence.
 await core.ingestUserMessage({
   subjectId,
-  content: '我下午三点后只喝无咖啡因的，咖啡因毁我睡眠。',
+  content: 'I only drink decaf after 3pm — caffeine wrecks my sleep.',
 });
 
-// 2）整理成带把握度的画像（攒批写路径）。
+// 2) Tidy raw evidence into a confidence-scored profile (batched write path).
 await core.updateProfile({ subjectId });
 
-// 3）回话时召回相关用户上下文并注入。
+// 3) Reply with relevant user context recalled and injected.
 const turn = await core.handleConversationTurn({
   subjectId,
-  message: '下午推荐我喝点什么？',
+  message: 'Recommend me an afternoon drink',
 });
-console.log(turn.reply);   // 回话里会带上"你下午不喝含咖啡因的"
-console.log(turn.recall);  // 这轮召回并注入了哪些理解
+console.log(turn.reply);   // the reply carries "no caffeine in the afternoon for you"
+console.log(turn.recall);  // which understandings got recalled and injected this turn
 
 core.close();
 ```
 
-> TypeScript 项目另需 `@types/node@^24`（库的公开类型里有 `node:sqlite`）。没配嵌入器也能跑：召回自动降级为空，证据照写，只是回话不做语义召回。仓库内的可跑版本见 [`examples/minimal.ts`](./examples/minimal.ts)；想直接用底层部件（`openStores` / `Conversation` / `updateProfile` / 召回器）见 [`docs/integration.md`](./docs/integration.md)。
+> TypeScript projects also need `@types/node@^24` (the public types reference `node:sqlite`). No embedder configured? Recall falls back to empty automatically — writes still land as evidence, replies just skip semantic recall. A runnable in-repo version is in [`examples/minimal.ts`](./examples/minimal.ts); for direct access to the underlying parts (`openStores` / `Conversation` / `updateProfile` / retrievers), see [`docs/integration.md`](./docs/integration.md).
 
 ---
 
-## ☁️ 模型部署：云端优先，但不是无脑上云
+## ☁️ Model deployment: cloud-first, not cloud-blind
 
-默认接入体验是**云端友好**：填个 OpenAI 兼容的云端接口就能先跑起来，不用一上来就装本地模型。但这不等于所有原始证据都能直接发云端——边界是：
+The default is **cloud-friendly**: point it at an OpenAI-compatible cloud endpoint and it runs — no local models required up front. But that doesn't mean every raw evidence item is safe to send to the cloud. The boundary:
 
-- **模型调用可以云端优先。** 对话、写路径、归因、趋势、嵌入都能指向云端 OpenAI 兼容接口。
-- **证据决定能不能上云。** 每条 evidence 带 `allowCloudRead` 之类的授权位。
-- **行为观察默认保守。** 桌面窗口、屏幕、剪贴板、文件、健康/睡眠等观察，默认**不上云**，除非宿主明确征得同意。
-- **同意权在宿主。** MemoWeft 只给模型开关和过滤钩子；隐私政策、同意 UI 归宿主。
+- **Model calls may be cloud-first.** Chat, write-path, attribution, trends, and embeddings can all use OpenAI-compatible cloud endpoints.
+- **Evidence controls cloud access.** Each evidence item carries authorization bits like `allowCloudRead`.
+- **Observed behavior defaults conservative.** Desktop, screen, clipboard, file, health/sleep observations default to **not cloud-readable** unless the host explicitly asks.
+- **Consent belongs to the host.** MemoWeft provides the model switches and filtering hooks; policy and consent UI are the host's.
 
-| 模式 | 适合谁 | 说明 |
+| Mode | Best for | Summary |
 | --- | --- | --- |
-| **Cloud-first** | Demo、原型、日常开发接入 | 对话 / 写路径 / 嵌入都走云端，最快跑起来 |
-| **Cloud-guarded** | 用云端模型的真实应用 | 仍用云端模型，但 `allowCloudRead=false` 的证据会被过滤掉 |
-| **Hybrid / 本地敏感** | 隐私敏感的桌面助手 | 敏感观察留本地，低风险调用可走云端 |
+| **Cloud-first** | demos, prototypes, normal onboarding | chat / write / embed all go to the cloud, fastest to run |
+| **Cloud-guarded** | real apps using cloud models | cloud models are used, but `allowCloudRead=false` evidence is filtered out |
+| **Hybrid / local-sensitive** | privacy-sensitive desktop assistants | sensitive observations stay local, lower-risk calls may use cloud |
 
-完整说明见 [`docs/deployment.md`](./docs/deployment.md)。
+Full policy in [`docs/deployment.md`](./docs/deployment.md).
 
 ---
 
-## ⚙️ 配置
+## ⚙️ Configuration
 
-从环境变量读模型。推荐 `MEMOWEFT_*` 前缀；旧的 `DLA_*` 仍兼容。
+Models are read from environment variables. Prefer the `MEMOWEFT_*` prefix; the legacy `DLA_*` prefix still works.
 
-| 用途 | 变量 |
+| Purpose | Variables |
 | --- | --- |
-| 对话模型 | `MEMOWEFT_LLM_BASE_URL` · `MEMOWEFT_LLM_API_KEY` · `MEMOWEFT_LLM_MODEL` |
-| 写路径模型 | `MEMOWEFT_WRITE_LLM_BASE_URL` · `MEMOWEFT_WRITE_LLM_API_KEY` · `MEMOWEFT_WRITE_LLM_MODEL` |
-| 嵌入器 | `MEMOWEFT_EMBED_BASE_URL` · `MEMOWEFT_EMBED_API_KEY` · `MEMOWEFT_EMBED_MODEL` |
+| Chat LLM | `MEMOWEFT_LLM_BASE_URL` · `MEMOWEFT_LLM_API_KEY` · `MEMOWEFT_LLM_MODEL` |
+| Write LLM | `MEMOWEFT_WRITE_LLM_BASE_URL` · `MEMOWEFT_WRITE_LLM_API_KEY` · `MEMOWEFT_WRITE_LLM_MODEL` |
+| Embedder | `MEMOWEFT_EMBED_BASE_URL` · `MEMOWEFT_EMBED_API_KEY` · `MEMOWEFT_EMBED_MODEL` |
 
-三组都接受 OpenAI 兼容接口。云端最省事；Ollama、LM Studio 等本地端点也支持。完整 env 说明见 [`docs/INSTALL.md`](./docs/INSTALL.md)。
+All three accept OpenAI-compatible endpoints. Cloud is the easiest default; local endpoints like Ollama or LM Studio work too. Full env reference in [`docs/INSTALL.md`](./docs/INSTALL.md).
 
 ---
 
-## 🔌 它做什么 / 不做什么
+## 🔌 What it does / doesn't do
 
-| MemoWeft（库） | 宿主应用 |
+| MemoWeft (the library) | The host app |
 | --- | --- |
-| 摄入证据、织三层、算把握度、提供可溯源的用户上下文 | 聊天、人设、语气、界面、什么时候开口 |
-| 保留模型可切换，记录 evidence 级授权 | 隐私政策、同意 UI、到底存不存 |
-| 按请求把相关用户上下文递回去 | 决定怎么用（回话 / 工具调用 / 桌面助手 / Agent） |
+| Ingests evidence, weaves the three layers, computes confidence, hands back traceable context | Chat, persona, tone, UI, when to speak |
+| Keeps model routing swappable, records evidence-level authorization | Privacy policy, consent UI, what's stored at all |
+| Returns relevant user context on request | Decides how to use it (reply / tool call / desktop assistant / agent) |
 
-主要导出见 [`src/index.ts`](./src/index.ts)，接入说明见 [`docs/integration.md`](./docs/integration.md)。
-
----
-
-## 📦 项目状态
-
-**早期 alpha。** Core、一个参考宿主、头两个插件都已就位并有测试；算法和认知纪律是真的。接口还可能动。
-
-**已经能用**
-
-- **认知内核**——证据 → 事件 → 认知三层、画像 + 召回、纠正闭环、归因 + 主动询问、周期后台（衰减、分型过期、召回门控、冲突复看、趋势）。
-- **统一入口**——`createMemoWeftCore` + 受控记忆管理 API（标失效 / 授权 / 安全删除 / 合并 / 归档 / 完整性检查），宿主不直接碰底层存储。
-- **可迁移与图谱**——便携记忆包（导入 / 导出 / 校验，保真 + 幂等）+ 图谱后端 payload。
-- **Cloud Guard**——写 / 趋势 / 归因路径上云过滤。
-- **参考宿主**（`apps/memoweft-host`）——聊天、配置向导、记忆管理页、多会话、备份 / 恢复、恢复出厂，全走 Core 公开面。
-- **体验插件契约 v1**——同一 core 上可换人设（普通助手 + 星瑶）。
-- **采集插件**——活动窗口采集器独立成包（`@memoweft/collector-active-window`），经宿主 `/api/observe` 落库。
-- **已发布到 npm**——`npm install memoweft`（首版 `0.1.0`）。
-
-**还没做**
-
-- 图谱前端（后端 payload 已就绪）。
-- Schema 版本 / 迁移加固。
-- 召回精化（如相似度阈值门控）。
-
-状态来源见 [`docs/internal/STATE.md`](./docs/internal/STATE.md)。
+Main exports are in [`src/index.ts`](./src/index.ts); integration guide in [`docs/integration.md`](./docs/integration.md).
 
 ---
 
-## 📚 文档
+## 📦 Project status
 
-| 文档 | 内容 |
+**Early alpha.** The Core, a reference host, and the first two plugins are in place and tested; the algorithms and cognitive discipline are real. Interfaces may still move.
+
+**Working now**
+
+- **Cognitive core** — evidence → event → cognition, profile + recall, correction loop, attribution + proactive asking, periodic background (decay, typed expiry, recall gating, conflict revisit, trends).
+- **Unified entry** — `createMemoWeftCore` + a controlled memory-management API (invalidate / authorize / safe-delete / merge / archive / integrity check) so hosts never touch the stores directly.
+- **Portability & graph** — portable memory bundle (import / export / validate, faithful + idempotent) + memory-graph backend payload.
+- **Cloud Guard** — cloud-read filtering on the write / trends / attribution paths.
+- **Reference host** (`apps/memoweft-host`) — chat, setup wizard, memory-management page, multi-session, backup / restore, factory reset — all through the Core public API.
+- **Experience plugin contract v1** — swappable personas over one core (plain + 星瑶).
+- **Collector plugin** — active-window collector in its own package (`@memoweft/collector-active-window`), feeding the host via `/api/observe`.
+- **Published to npm** — `npm install memoweft` (first release `0.1.0`).
+
+**Not yet**
+
+- Memory-graph front-end (the backend payload is ready).
+- Schema versioning / migration hardening.
+- Recall-refinement follow-ups (e.g. similarity-threshold gating).
+
+Status is derived from [`docs/internal/STATE.md`](./docs/internal/STATE.md). Where it's headed — and why the library (not the host) is the product — is in [`ROADMAP.md`](./ROADMAP.md).
+
+---
+
+## 📚 Documentation
+
+| Doc | What's inside |
 | --- | --- |
-| [`docs/INSTALL.md`](./docs/INSTALL.md) | 安装、配 `.env`、跑测试、起宿主 / 测试台 |
-| [`docs/deployment.md`](./docs/deployment.md) | 云端 / 云守护 / 混合部署与隐私模式 |
-| [`docs/architecture.md`](./docs/architecture.md) | 三层数据、读写解耦、认知纪律、可替换点 |
-| [`docs/integration.md`](./docs/integration.md) | 宿主接入指南 + 导出表 |
-| [`docs/naming.md`](./docs/naming.md) | 双语命名与定位口径 |
-| [`plugins/collector-active-window/README.md`](./plugins/collector-active-window/README.md) | 活动窗口采集插件（采集 → 宿主 → core 数据流） |
-| [`docs/PUBLISHING.md`](./docs/PUBLISHING.md) | 打包和 npm 发布流程 |
-| [`examples/minimal.ts`](./examples/minimal.ts) | 可运行最小示例 |
+| [`docs/INSTALL.md`](./docs/INSTALL.md) | Install, configure `.env`, run tests, launch the host / testbench |
+| [`docs/deployment.md`](./docs/deployment.md) | Cloud-first / cloud-guarded / hybrid deployment and privacy modes |
+| [`docs/architecture.md`](./docs/architecture.md) | Three layers, read/write decoupling, swappable parts, cognitive-discipline details |
+| [`docs/integration.md`](./docs/integration.md) | Host integration guide + export table |
+| [`docs/naming.md`](./docs/naming.md) | Bilingual naming & positioning guide |
+| [`plugins/collector-active-window/README.md`](./plugins/collector-active-window/README.md) | Active-window collector plugin (collector → host → core flow) |
+| [`docs/PUBLISHING.md`](./docs/PUBLISHING.md) | Packaging & npm release flow |
+| [`examples/minimal.ts`](./examples/minimal.ts) | Runnable minimal example |
 
-内部设计笔记与开发白板（项目地图、路线、`STATE` / `LOG`）在 [`docs/internal/`](./docs/internal/)——是「项目怎么造的」背景，用库不需要读。
+Internal design notes and the dev whiteboard (project map, roadmap, `STATE` / `LOG`) live in [`docs/internal/`](./docs/internal/) — background on how the project is built, not needed to use the library.
 
 ---
 
-## 🤝 参与
+## 🤝 Contributing
 
-MemoWeft 主要**由 AI 维护**，文档分层就是为了让接手的 AI（和人）低成本读懂、按同一套规矩改。任何代码改动都要保持三绿：
+MemoWeft is mostly **AI-maintained**; the layered docs exist so the AI (and humans) taking over can get up to speed cheaply and change things by the same rules. Any code change must keep three checks green:
 
 ```bash
 npm run typecheck && npm test && npm run build
 ```
 
-工作契约见 [`AGENTS.md`](./AGENTS.md)，硬规矩见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
+Working contract in [`AGENTS.md`](./AGENTS.md), hard rules in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## License
 
 [MIT](./LICENSE) © 2026 MemoWeft contributors.
 
-## 致谢
+## Acknowledgements
 
-独立构建，借鉴了 **Mem0** 和 **Graphiti** 的思路；接口保持隔离，方便后续替换。
+Independently built, drawing on ideas from **Mem0** and **Graphiti** — interfaces are kept isolated so parts stay swappable.

@@ -30,5 +30,5 @@ First tidied pre-release. Core, a reference host, and the first plugins are in p
 - `MEMOWEFT_*` environment variables are the primary names; the legacy `DLA_*` prefix remains supported for backward compatibility.
 - Not yet: memory-graph front-end, schema versioning / migration hardening.
 
-[Unreleased]: https://github.com/kestercarroll702-gif/memoweft/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/kestercarroll702-gif/memoweft/releases/tag/v0.1.0
+[Unreleased]: https://github.com/memoweft/memoweft/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/memoweft/memoweft/releases/tag/v0.1.0
