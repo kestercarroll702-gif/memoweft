@@ -32,7 +32,8 @@
     "collector": "node plugins/collector-active-window/run.mjs",
     "experience": "node testbench/server.mjs",
     "build": "tsc -p tsconfig.build.json",
-    "dev:core": "tsc -p tsconfig.build.json --watch"
+    "dev:core": "tsc -p tsconfig.build.json --watch",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {},
   "devDependencies": {
