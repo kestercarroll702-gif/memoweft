@@ -6,6 +6,7 @@
 
 *Scattered memory cues, woven thread by thread into a picture of who the user is — without pretending every thread is equally trustworthy.*
 
+[![npm](https://img.shields.io/npm/v/memoweft)](https://www.npmjs.com/package/memoweft)
 ![status](https://img.shields.io/badge/status-alpha-orange)
 [![CI](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml/badge.svg)](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)
@@ -111,7 +112,7 @@ Reads and writes are **decoupled**: reads are light and synchronous; writes are 
 
 ## 🧩 Use it as a library (a few lines)
 
-> **Requirements:** Node ≥ 24. Zero runtime dependencies, all Node built-ins. Currently **used from source**, not published to npm yet.
+> **Requirements:** Node ≥ 24, zero runtime dependencies. Install it: `npm install memoweft` (TypeScript projects also need `@types/node@^24`, see [`docs/INSTALL.md`](docs/INSTALL.md)).
 
 Configure a model in `.env`, then the **recommended path is the unified entry `createMemoWeftCore`** — one call wires the three stores, the retriever, and the model pool (all read from `.env`, degrading gracefully when unconfigured):
 
@@ -205,12 +206,12 @@ Main exports are in [`src/index.ts`](./src/index.ts); integration guide in [`doc
 - **Reference host** (`apps/memoweft-host`) — chat, setup wizard, memory-management page, multi-session, backup / restore, factory reset — all through the Core public API.
 - **Experience plugin contract v1** — swappable personas over one core (plain + 星瑶).
 - **Collector plugin** — active-window collector in its own package (`@memoweft/collector-active-window`), feeding the host via `/api/observe`.
+- **Published to npm** — `npm install memoweft` (first release `0.1.0`).
 
 **Not yet**
 
 - Memory-graph front-end (the backend payload is ready).
 - Schema versioning / migration hardening.
-- npm publishing.
 - Recall-refinement follow-ups (e.g. similarity-threshold gating).
 
 Status is derived from [`docs/internal/STATE.md`](./docs/internal/STATE.md).

@@ -21,27 +21,28 @@
 
 ---
 
-## 1. 从 GitHub 安装（当前形态：源码使用）
+## 1. 安装
 
-MemoWeft 目前**以源码形式**使用，尚未发布到 npm。发布流程见 [`PUBLISHING.md`](./PUBLISHING.md)。
+### 1.1 当库用（`npm install`）
+
+MemoWeft 已发布到 npm。宿主开发者直接装：
+
+```bash
+npm install memoweft
+```
+
+然后 `import { createMemoWeftCore } from 'memoweft'`（用法见 README「当库用」/ [`integration.md`](./integration.md)）。TypeScript 项目另需 `@types/node@^24`（库的公开类型里有 `node:sqlite`）。
+
+### 1.2 从源码跑（开发库本身 / 跑参考宿主与测试台）
 
 ```bash
 git clone https://github.com/kestercarroll702-gif/memoweft.git
 cd memoweft
 npm install        # 只装 devDependencies，无运行时依赖
+npm run typecheck && npm test && npm run build   # 三绿 = 环境就绪
 ```
 
-装完先跑护栏：
-
-```bash
-npm run typecheck
-npm test
-npm run build
-```
-
-三条都绿 = 环境就绪。
-
-> 将来发布到 npm 后，宿主开发者可直接 `npm install memoweft` + `import ... from 'memoweft'`。发布前可用本地路径、git submodule，或 build 后的 `dist/index.js`。
+参考宿主 `npm start -w @memoweft/host`（:7788）、测试台 `npm run testbench`（:7888）都从源码跑。发布流程见 [`PUBLISHING.md`](./PUBLISHING.md)。
 
 ---
 

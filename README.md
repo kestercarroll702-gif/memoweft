@@ -6,6 +6,7 @@
 
 *把一条条零散的记忆线索，织成一张「这个人是谁」的布——但不假装每根线都一样可信。*
 
+[![npm](https://img.shields.io/npm/v/memoweft)](https://www.npmjs.com/package/memoweft)
 ![status](https://img.shields.io/badge/status-alpha-orange)
 [![CI](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml/badge.svg)](https://github.com/kestercarroll702-gif/memoweft/actions/workflows/ci.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)
@@ -111,7 +112,7 @@ flowchart LR
 
 ## 🧩 当库用（几行代码）
 
-> **前置：** Node ≥ 24。零运行时依赖，用的都是 Node 内置能力。目前**以源码使用**，尚未发到 npm。
+> **前置：** Node ≥ 24，零运行时依赖。装一下：`npm install memoweft`（TypeScript 项目另需 `@types/node@^24`，见 [`docs/INSTALL.md`](docs/INSTALL.md)）。
 
 `.env` 里配好模型，然后**推荐走统一入口 `createMemoWeftCore`**——一行装配好三层存储、召回器、模型池（都从 `.env` 读，没配就自动降级、不崩）：
 
@@ -205,12 +206,12 @@ core.close();
 - **参考宿主**（`apps/memoweft-host`）——聊天、配置向导、记忆管理页、多会话、备份 / 恢复、恢复出厂，全走 Core 公开面。
 - **体验插件契约 v1**——同一 core 上可换人设（普通助手 + 星瑶）。
 - **采集插件**——活动窗口采集器独立成包（`@memoweft/collector-active-window`），经宿主 `/api/observe` 落库。
+- **已发布到 npm**——`npm install memoweft`（首版 `0.1.0`）。
 
 **还没做**
 
 - 图谱前端（后端 payload 已就绪）。
 - Schema 版本 / 迁移加固。
-- 发到 npm。
 - 召回精化（如相似度阈值门控）。
 
 状态来源见 [`docs/internal/STATE.md`](./docs/internal/STATE.md)。
