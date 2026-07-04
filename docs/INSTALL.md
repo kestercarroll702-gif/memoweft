@@ -10,12 +10,14 @@
 
 | 要求 | 说明 |
 | --- | --- |
-| **Node ≥ 24** | 库直接跑 `.ts`，使用 Node 内置 `node:sqlite`。作者实测 Node 24，CI 也应锁 24。 |
+| **Node ≥ 24**（推荐） | 库直接跑 `.ts`，使用 Node 内置 `node:sqlite`。作者实测 Node 24，CI 也锁 24。 |
 | **TypeScript 消费者：`@types/node` ≥ 24** | 库的公开类型里出现 `node:sqlite`。TS 项目若没装（或装了太旧的）`@types/node`，`import 'memoweft'` 会报 `Cannot find module 'node:sqlite'`——装上 `@types/node@^24` 即可。Node 24 项目一般本就有。 |
 | **一个 OpenAI-compatible 对话模型端点** | 默认推荐云端端点：最省事、最容易让开发者跑起来。只要兼容 `/chat/completions` 即可。 |
 | **可选：写路径小快模型端点** | 用于 `distill → consolidate → attribute`，缺配会回退对话模型。 |
 | **可选：嵌入端点** | 用于语义召回。缺配时召回降级为空，画像照写，只是不注入长期认知。 |
 | **零运行时依赖** | `dependencies` 为空，存储 / HTTP / 向量计算均用 Node 内置。 |
+
+> ⚙️ **Node 22 也许能跑（非官方，不保证）。** 装出来的包是编译后的 `.js`，本身不挑 `.ts`——真正卡的是 `node:sqlite`。Node 22.5+ 加 `--experimental-sqlite` 能开 `node:sqlite`；要直接跑仓库里的 `.ts`（示例 / 测试台）还得加 `--experimental-strip-types`（22.6+）。两个都是实验特性，行为可能随小版本变、也可能有坑，**出问题请先升到 Node 24 复现**。CI 与官方支持只认 Node ≥ 24。
 
 > ℹ️ **云端优先，不是无脑上云。** MemoWeft 推荐开发者用云端端点快速开始，但每条证据仍有 `allowCloudRead` 等授权位。宿主负责隐私政策和同意 UI；MemoWeft 负责保留模型切换和过滤钩子。完整模式见 [`deployment.md`](./deployment.md)。
 
