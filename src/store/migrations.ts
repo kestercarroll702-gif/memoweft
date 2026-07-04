@@ -91,6 +91,16 @@ export function runMigrations(db: DatabaseSync, opts: RunMigrationsOptions = {})
   const log = opts.log ?? (() => {});
   const from = getSchemaVersion(db);
 
+  // 降级防护（A）：库版本高于本代码支持的最新版 = 这库由【更新版本】的 memoweft 创建。
+  //   绝不能让旧代码静默读写它不认识的 schema（会写坏数据）——直接拒，让用户升级。
+  //   真·新库文件 from=0，触发不了；只挡"未来版本建的库被旧代码打开"。
+  if (from > latest) {
+    throw new Error(
+      `数据库 schema 版本 v${from} 高于本版 memoweft 支持的 v${latest}：` +
+      `这个库由更新版本的 memoweft 创建，请先升级 memoweft 再打开（拒绝用旧代码读写不认识的 schema，防写坏数据）。`,
+    );
+  }
+
   // 新库：store 已建最新 schema，直接盖最新版本号，不跑迁移。
   if (opts.fresh) {
     if (opts.dryRun) return { from, to: from, applied: [], dryRun: true };
@@ -112,6 +122,8 @@ export function runMigrations(db: DatabaseSync, opts: RunMigrationsOptions = {})
 
   let backupPath: string | undefined;
   if (wantBackup && opts.dbPath && opts.dbPath !== ':memory:' && existsSync(opts.dbPath)) {
+    // 注：copyFileSync 只拷主库文件。当前默认 rollback journal + 单进程下一致、够用。
+    //   ⚠ 若将来开 WAL，只拷主文件不拷 -wal 会得到不一致备份——那时改用 `VACUUM INTO '<bak>'` 更稳。
     backupPath = `${opts.dbPath}.bak-v${from}-${Date.now()}`;
     copyFileSync(opts.dbPath, backupPath);
     log(`[migrate] 迁移前备份 → ${backupPath}`);

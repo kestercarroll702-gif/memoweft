@@ -42,15 +42,23 @@ export function openStores(dbPath: string, cfg?: MemoWeftConfig): StoreBundle {
   //   已存在的老库（如 npm 上的 0.1.0 库）走 runMigrations 从 user_version 升上来（见 migrations.ts）。
   const fresh = dbPath === ':memory:' || !existsSync(dbPath);
   const db = new DatabaseSync(dbPath);
-  // 三个 store 都接同一条连接（构造里会各自 CREATE TABLE IF NOT EXISTS + 迁移，幂等）。
-  // 只有 evidence store 的 put 会读 config 补授权默认，故只把 cfg 透给它（event/cognition 不读 config）。
-  const evidenceStore = new SqliteEvidenceStore(db, cfg);
-  const eventStore = new SqliteEventStore(db);
-  const cognitionStore = new SqliteCognitionStore(db);
-  // 审计表也挂共享连接（批次2）：管理操作的"改数据 + 落审计"能包进同一个事务、全成或全滚。
-  const managementLog = new SqliteManagementLog(db);
-  // 建表后统一走版本化：新库盖最新版，老库升级（有真改动会先备份）。
-  runMigrations(db, { dbPath, fresh });
+  // 建库/迁移期间任何一步抛错（如降级防护拒绝打开未来版本的库），都要【关掉这条连接】再抛，
+  //   否则连接泄漏——文件被锁、下次打不开也删不掉（Windows EPERM）。
+  let evidenceStore: EvidenceStore, eventStore: EventStore, cognitionStore: CognitionStore, managementLog: ManagementLog;
+  try {
+    // 三个 store 都接同一条连接（构造里会各自 CREATE TABLE IF NOT EXISTS + 迁移，幂等）。
+    // 只有 evidence store 的 put 会读 config 补授权默认，故只把 cfg 透给它（event/cognition 不读 config）。
+    evidenceStore = new SqliteEvidenceStore(db, cfg);
+    eventStore = new SqliteEventStore(db);
+    cognitionStore = new SqliteCognitionStore(db);
+    // 审计表也挂共享连接（批次2）：管理操作的"改数据 + 落审计"能包进同一个事务、全成或全滚。
+    managementLog = new SqliteManagementLog(db);
+    // 建表后统一走版本化：新库盖最新版，老库升级（有真改动会先备份）。
+    runMigrations(db, { dbPath, fresh });
+  } catch (e) {
+    db.close();
+    throw e;
+  }
 
   // 事务深度：SQLite 不支持嵌套事务，只有最外层真 BEGIN/COMMIT；里层再调只直接跑（可重入）。
   let depth = 0;

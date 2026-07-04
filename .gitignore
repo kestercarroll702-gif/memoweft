@@ -10,6 +10,8 @@
 *.db-journal
 *.sqlite
 dla.db
+# 例外：冻结的迁移测试 fixture（真 0.1.0 schema，供"无损升级"测试，别忽略）
+!tests/fixtures/*.db
 testbench/*.db
 testbench/seed-*.ps1
 apps/*/data/

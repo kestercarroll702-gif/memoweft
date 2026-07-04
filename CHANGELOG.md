@@ -12,7 +12,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
-- **Schema versioning & migrations** — the database now carries a `PRAGMA user_version`; `openStores` runs an ordered migration runner on open. New databases are stamped to the latest version; existing ones (e.g. a `0.1.0` database) are migrated forward, each migration in its own transaction (rolls back on failure), with an automatic pre-migration backup for schema-changing migrations and a dry-run mode. Exposed as `runMigrations` / `getSchemaVersion` / `LATEST_SCHEMA_VERSION`. A `0.1.0` database opens losslessly under the new version (covered by tests).
+- **Schema versioning & migrations** — the database now carries a `PRAGMA user_version`; `openStores` runs an ordered migration runner on open. New databases are stamped to the latest version; existing ones (e.g. a `0.1.0` database) are migrated forward, each migration in its own transaction (rolls back on failure), with an automatic pre-migration backup for schema-changing migrations and a dry-run mode. Exposed as `runMigrations` / `getSchemaVersion` / `LATEST_SCHEMA_VERSION`.
+- **Downgrade protection** — opening a database whose schema version is *newer* than the running `memoweft` is now refused with a clear error, instead of silently reading/writing an unknown schema (which could corrupt data).
+- A `0.1.0` database opens losslessly under the new version — verified against a frozen `0.1.0` fixture (`tests/fixtures/memoweft-0.1.0.db`) plus a schema-parity check that a freshly-created database and a migrated old one converge to the identical schema.
 
 ## [0.1.0] — 2026-07
 
