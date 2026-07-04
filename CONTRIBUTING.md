@@ -16,8 +16,8 @@
 
 ## 环境要求
 
-- **Node ≥ 24**。不是随便写的：代码直接 `import 'node:sqlite'`（`DatabaseSync`），这个模块到 Node 24 才转正；测试和构建也直接跑 `.ts` 文件，靠 Node 24 原生解析 TypeScript。22/23 上这些一般能跑、但只打实验警告、不保证稳定，锁 24 是为稳定。
-- **零 runtime 依赖**。装依赖只会装 `typescript` 和 `@types/node` 两个 devDependency。
+- **Node ≥ 24 开箱即用；Node 20/22 需 `npm i better-sqlite3`。** 存储底层用 SQLite，有两条驱动：Node ≥24 默认走内置 `node:sqlite`（该模块到 24 才转正），零额外依赖；Node 20/22 上内置模块不可用，装上可选的 `better-sqlite3` 即可跑（见 [`docs/INSTALL.md`](docs/INSTALL.md)）。开发库本身（跑 `.ts` 测试、原生剥类型）仍推荐 Node ≥24：Node 22 需 22.18+ 才默认支持原生剥 `.ts` 类型，Node 20 没有此能力（全套 `.ts` 测试在 20 上跑不了，CI 改用 dist 冒烟脚本验）。
+- **零 runtime 依赖**。runtime `dependencies` 永远为空——这是「零运行时依赖」的准确含义。`better-sqlite3` 是**可选 peer 依赖**（`peerDependenciesMeta.optional`），装不装用户自己定，可选 peer 不算破戒。开发时装依赖装的是 devDependencies：`typescript`、`@types/node`，外加仅供多版本测试矩阵用的 `better-sqlite3`（Node 24 默认走内置驱动，测零依赖路径时会先 `rm` 掉它）。
 - 想跑测试台 / 真实写路径，需要在 `.env` 配模型与嵌入器（见下方「配置」）。**但单元测试不需要任何 .env**——测试用假 LLM，纯离线，以 `npm test` 各 workspace 实际输出为准、`fail` 必须为 0。
 
 ```bash
