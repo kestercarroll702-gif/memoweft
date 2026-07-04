@@ -10,13 +10,13 @@
 
 | 要求 | 说明 |
 | --- | --- |
-| **Node ≥ 24（开箱即用）或 Node 20/22 + `better-sqlite3`** | 存储底层是 SQLite，两条驱动：Node ≥24 默认走内置 `node:sqlite`（到 24 才转正），零额外依赖；Node 20/22 上内置模块不可用，装上可选的 `better-sqlite3` 即可跑（`npm i better-sqlite3`，见下方 §1.3）。 |
+| **Node ≥ 24（开箱即用）或 Node 20/22 + `better-sqlite3`** | 存储底层是 SQLite，两条驱动：Node ≥24 默认走内置 `node:sqlite`（到 24 才转正），零额外依赖；Node 20/22 上内置模块不可用，装上可选的 `better-sqlite3` 即可跑（`npm i better-sqlite3`，见下方 §1.2）。 |
 | **一个 OpenAI-compatible 对话模型端点** | 默认推荐云端端点：最省事、最容易让开发者跑起来。只要兼容 `/chat/completions` 即可。 |
 | **可选：写路径小快模型端点** | 用于 `distill → consolidate → attribute`，缺配会回退对话模型。 |
 | **可选：嵌入端点** | 用于语义召回。缺配时召回降级为空，画像照写，只是不注入长期认知。 |
 | **零运行时依赖** | runtime `dependencies` 为空，存储 / HTTP / 向量计算均用 Node 内置。`better-sqlite3` 只是**可选 peer 依赖**，Node ≥24 用户根本不需要装它。 |
 
-> ⚙️ **Node 20/22 需要装可选驱动 `better-sqlite3`。** 内置 `node:sqlite` 到 Node 24 才转正，20/22 上不可用；装上 `better-sqlite3`（原生模块，见 §1.3）后，MemoWeft 会自动选它当底层。开发库本身（跑仓库里的 `.ts` 示例 / 测试台）另有门槛：Node 22 需 22.18+ 才默认支持原生剥 `.ts` 类型，Node 20 没有此能力——想跑 `.ts` 请用 Node ≥24；只是**当库用**（`import 'memoweft'` 吃编译后的 `.js`）则 Node 20/22 + `better-sqlite3` 即可。
+> ⚙️ **Node 20/22 需要装可选驱动 `better-sqlite3`。** 内置 `node:sqlite` 到 Node 24 才转正，20/22 上不可用；装上 `better-sqlite3`（原生模块，见 §1.2）后，MemoWeft 会自动选它当底层。开发库本身（跑仓库里的 `.ts` 示例 / 测试台）另有门槛：Node 22 需 22.18+ 才默认支持原生剥 `.ts` 类型，Node 20 没有此能力——想跑 `.ts` 请用 Node ≥24；只是**当库用**（`import 'memoweft'` 吃编译后的 `.js`）则 Node 20/22 + `better-sqlite3` 即可。
 
 > ℹ️ **云端优先，不是无脑上云。** MemoWeft 推荐开发者用云端端点快速开始，但每条证据仍有 `allowCloudRead` 等授权位。宿主负责隐私政策和同意 UI；MemoWeft 负责保留模型切换和过滤钩子。完整模式见 [`deployment.md`](./deployment.md)。
 
@@ -34,7 +34,7 @@ npm install memoweft
 
 然后 `import { createMemoWeftCore } from 'memoweft'`（用法见 README「当库用」/ [`integration.md`](./integration.md)）。装出来**零 runtime 依赖**（Node ≥24 用内置 `node:sqlite`）。TypeScript 项目按常规装 `@types/node` 即可。
 
-### 1.3 Node 20/22：装可选驱动 `better-sqlite3`
+### 1.2 Node 20/22：装可选驱动 `better-sqlite3`
 
 Node ≥24 到此为止就够了。**Node 20/22** 上内置 `node:sqlite` 不可用，需额外装可选驱动：
 
@@ -47,7 +47,7 @@ npm i better-sqlite3
 - `better-sqlite3` 是**原生模块**，一般走 prebuilt 二进制、秒装；若你的平台 / Node 版本没有匹配的 prebuilt，会回落到 `node-gyp` 现编译（需要 Python + C++ 工具链）。所以**不承诺一定装得上**——装不上时最稳的出路是把 Node 升到 ≥24（内置驱动、零依赖）。
 - 没装它、又不在 Node ≥24 上时，`import 'memoweft'` 会直接报一句人话错误，列出两条出路（升 Node ≥24 / 装 `better-sqlite3`）。
 
-### 1.2 从源码跑（开发库本身 / 跑参考宿主与测试台）
+### 1.3 从源码跑（开发库本身 / 跑参考宿主与测试台）
 
 ```bash
 git clone https://github.com/memoweft/memoweft.git
