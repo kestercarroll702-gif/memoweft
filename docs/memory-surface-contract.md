@@ -211,7 +211,45 @@
 
 ---
 
-## 五、存疑符号定级（回源确认结论）
+## 五、破坏性变更政策（pre-1.0，中间偏松）
+
+> 契约顶部「怎么读这份契约」已给一句话摘要；本章是**成文的政策全文**，宿主据此判断"某次升级会不会崩我的集成、要不要改代码"。
+
+### 5.1 什么算「破坏 stable」
+
+对 **stable** 面（第一/二章列出的门面方法与数据形状），下列改动算破坏：**改字段名 / 删字段 / 改可空性（可选↔必填、可空↔非空）/ 改语义**（例：`confidence` 从 0~1000 量纲改成 0~1 概率）。
+
+### 5.2 破坏 stable 的三要件（作者拍板②）
+
+允许在 **minor 版**破坏 stable，但**必须同时**满足三条，缺一不可：
+
+1. **① CHANGELOG 明确标注** —— 在 `CHANGELOG.md` 的 `Changed`（或 `Removed`）段点名写清破了哪个符号 / 哪个字段。
+2. **② 一句迁移说明** —— 旧→新怎么改（宿主照着一步能改完），写在 CHANGELOG 同一条里。
+3. **③ 能保旧名的走 `@deprecated` 别名** —— 凡是"改名 / 换常量"这类能留旧名的，保留旧名并挂 `@deprecated` 指向新名（**照现成样板**：`DLA_VERSION`（`src/index.ts:210` @deprecated 别名指向 `MEMOWEFT_VERSION`）、`DlaConfig`（`src/config.ts:136` @deprecated 别名指向 `MemoWeftConfig`）——这两处就是"已弃用样板"，别删）。
+
+**不强制"保留整整一个版本再删"**：删除时机不设硬性冷却期，能留别名就留、留不了（如删字段）就按 ①② 标注 + 迁移说明走。
+
+### 5.3 枚举加值口径（作者拍板③）
+
+对 `SourceKind` / `ContentType` / `FormedBy` / `CredStatus` / `EvidenceRelation` 等枚举：
+
+- **加新取值 ≠ 破坏** —— minor 版可加值。**但宿主必须对这些枚举留 `default` 兜底分支**（`switch` 没 `default`、加值后漏分支——**责任在宿主**，见隐性契约第 10 条）。
+- **收窄（删取值）= 破坏** —— 按 5.2 三要件走。
+
+### 5.4 experimental 面（松口径）
+
+对 **experimental** 面（第四章清单：`Observation.meta` / `Observation.kind` 开放集 / `ImportMode.replace` / 图谱 `conflicts_with`·`corrects` 边 / `Cognition.askedAt` 写入时机 / `Retriever`·`Embedder`·`LLMClient` 扩展点 / config 的取用方式 / `ManagementLogEntry` / `EventInput`·`CognitionInput` 等）：
+
+- **minor 版随便改**，改了不算爽约。
+- **CHANGELOG 提一句即可**，不欠迁移说明、不欠 `@deprecated` 别名。
+
+### 5.5 internal 面
+
+**别依赖**。导出还在只是本步"只标不删"（删属第 10 步）；一旦收口删除，不走 stable 的三要件，CHANGELOG 提一句即可。
+
+---
+
+## 六、存疑符号定级（回源确认结论）
 
 任务书点名的 6 处存疑符号，回源逐项落定：
 
