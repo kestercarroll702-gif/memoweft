@@ -1,6 +1,6 @@
 # @memoweft/collector-active-window
 
-MemoWeft **采集插件（Collector Plugin）** · Windows 前台活动窗口采集器 V1（仅 Windows · 零依赖）。
+MemoWeft **采集插件（Collector Plugin）** · 前台活动窗口采集器 V1（**现只 Windows** · 零依赖）。采样器按平台工厂化，加平台见下「平台支持」。
 
 > 架构归位：真实采集属 **Plugin 层**，不属于 Core（`boundaries.md §4.1`）。本包从 `src/perception/collectors/` 迁出后独立成 workspace。
 
@@ -27,6 +27,15 @@ MemoWeft **采集插件（Collector Plugin）** · Windows 前台活动窗口采
 - Core 对 `observed` 证据套保守默认：**本地可读 / 不上云 / 可推画像**。
 
 想让某条观察上云，是记忆管理页的**人工动作**，不是采集默认。
+
+## 平台支持（现只 Windows）
+
+采集循环（连续合并 / 阈值过滤 / 计时）**平台无关**；只有"采一次前台窗口"是平台专有。采样器按平台工厂化：
+
+- **加平台的唯一口子** = `src/samplerFactory.ts` 的 `createForegroundSampler(platform)`。要支持 macOS / Linux，在这里加一个 case、实现对应的 `sample*(): Promise<ForegroundWindow|null>`（**mac** 用 `osascript`/AppleScript 取 frontmost app + window title；**Linux** 用 `xdotool` / `wmctrl`），采集循环一行不用改。
+- 未支持的平台：工厂返回 `null`，运行器给"未支持 + 怎么加"的明确提示后退出，不空转。
+- **零依赖红线**：加平台采样器只准用 **node 内置**（`child_process` 调系统自带命令），**禁引 npm 包**。
+- 现只写了 Windows（`win32Foreground.ts`，用 user32.dll + PowerShell）——mac/Linux 采样器暂不写（开发机是 Windows、跑不了也验不了，不造验不了的代码）。
 
 ## 怎么跑
 

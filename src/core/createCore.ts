@@ -33,6 +33,7 @@ import type { ImportOptions } from '../portable/importBundle.ts';
 import { buildMemoryGraph, type BuildGraphOptions } from '../graph/buildMemoryGraph.ts';
 import type { MemoryGraphPayload } from '../graph/model.ts';
 import type { Evidence, SourceKind } from '../evidence/model.ts';
+import type { MemoWeftPlugin, PluginContext, PluginUserMessage } from '../plugin/contract.ts';
 
 // ── 工厂入参 ──
 
@@ -49,6 +50,9 @@ export interface CreateCoreOptions {
   config?: MemoWeftConfig;
   /** 向量库路径；缺省与 dbPath 同库。一个 subject 一个实例的既有契约不变。 */
   vectorDbPath?: string;
+  /** 插件（第 7 步·契约 v2·experimental）：experience（systemPrompt·Host 每轮传）/ tool / collector（hook + 声明权限）。
+   *  不传 = 无插件，行为同旧。hook 在方法层烧、只观察不改管线；每个 hook 拿受限 PluginContext（按声明权限门控、不持 store）。 */
+  plugins?: MemoWeftPlugin[];
 }
 
 // ── 各方法输入类型（Core 只认标准输入，boundaries.md §3）──
@@ -177,6 +181,70 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
   // 会话缓存：conversationId → Conversation。首次建实例（systemPrompt/seedTurns 此时生效），后续复用不重建。
   const conversations = new Map<string, Conversation>();
 
+  // ── 插件（第 7 步·契约 v2）：hook 全在本工厂的方法层烧，conversation.ts / ingest.ts 纯逻辑不碰。──
+  const plugins = options.plugins ?? [];
+
+  /** 插件出错不崩主流程：记日志、吞掉（呼应"召回失败不挡回话"）。 */
+  function logPluginError(hook: string, pluginId: string, e: unknown): void {
+    console.warn(`[memoweft/plugin] plugin '${pluginId}' ${hook} hook threw (ignored):`, e instanceof Error ? e.message : e);
+  }
+
+  /**
+   * 受限上下文（闭包给·绝不交 store）：按【该插件声明的权限】门控 + 绑当次 subject。
+   * submitObservation 显式只取白名单字段、【不带授权位】→ ingestObservations 走 observedDefaults（cloud=false）；
+   *   防插件运行时塞 allowCloudRead:true 因"显式>默认"绕过"observed 不上云"（Host sanitizeObservation 的 Core 侧等价）。
+   * 注意：submitObservation 走【纯函数 ingestObservations】、【不走烧 onObservation 的方法】——插件提交的观察照常落库，
+   *   但【不再级联触发 onObservation】，杜绝"插件 onObservation→submitObservation→再 onObservation"的重入死循环。
+   */
+  function makePluginContext(plugin: MemoWeftPlugin, subjectId: string): PluginContext {
+    return {
+      async submitObservation(input) {
+        if (!plugin.permissions?.submitObservation) {
+          throw new Error(`plugin '${plugin.id}' has no 'submitObservation' permission`);
+        }
+        const clean: Observation = {
+          kind: input.kind,
+          occurredAt: input.occurredAt,
+          content: input.content,
+          originId: input.originId ?? null,
+          meta: input.meta,
+        };
+        ingestObservations(subjectId, [clean], { evidenceStore, config: cfg });
+      },
+      async requestMemory(query) {
+        if (!plugin.permissions?.requestMemory) {
+          throw new Error(`plugin '${plugin.id}' has no 'requestMemory' permission`);
+        }
+        return recallCognitions(query, subjectId, { retriever, cognitionStore }, cfg);
+      },
+    };
+  }
+
+  /** 逐插件烧一个 hook（await + try/catch，出错不崩主流程）。 */
+  async function fireHook(
+    name: 'onUserMessage' | 'onObservation',
+    subjectId: string,
+    run: (plugin: MemoWeftPlugin, ctx: PluginContext) => void | Promise<void>,
+  ): Promise<void> {
+    for (const p of plugins) {
+      if (typeof p[name] !== 'function') continue;
+      try {
+        await run(p, makePluginContext(p, subjectId));
+      } catch (e) {
+        logPluginError(name, p.id, e);
+      }
+    }
+  }
+
+  // onLoad hook：建 core 时烧一次。【fire-and-forget·不 await】——createMemoWeftCore 保持同步返回（await 会把签名变 Promise、破坏全部调用方）。
+  //   此时 stores/retriever 已就绪：ctx 的 submitObservation/requestMemory 可用（新库 requestMemory 可能空）。Promise 链兜住同步/异步抛错。
+  for (const p of plugins) {
+    if (typeof p.onLoad !== 'function') continue;
+    Promise.resolve()
+      .then(() => p.onLoad!(makePluginContext(p, cfg.identity.subjectId)))
+      .catch((e) => logPluginError('onLoad', p.id, e));
+  }
+
   return {
     async ingestUserMessage(input) {
       // testbench/server.mjs 现行组合（perceive → put）的正式归位：Host 以后调这里，不再自己拼。
@@ -192,11 +260,18 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
     },
 
     async ingestObservation(input) {
-      const r = ingestObservations(subjectOf(input.subjectId), input.observations, {
+      const subjectId = subjectOf(input.subjectId);
+      const r = ingestObservations(subjectId, input.observations, {
         evidenceStore,
         hostId: input.hostId,
         config: cfg,
       });
+      // onObservation hook（方法层烧·观察不改管线）：对提交的每条观察烧一遍。ingest.ts 纯逻辑不碰。
+      if (plugins.some((p) => typeof p.onObservation === 'function')) {
+        for (const obs of input.observations) {
+          await fireHook('onObservation', subjectId, (p, ctx) => p.onObservation!(obs, ctx));
+        }
+      }
       return r.stored;
     },
 
@@ -219,12 +294,22 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
         });
         conversations.set(id, convo);
       }
-      return convo.handle(input.message, {
+      const outcome = await convo.handle(input.message, {
         subjectId: input.subjectId,
         hostId: input.hostId,
         originId: input.originId,
         occurredAt: input.occurredAt,
       });
+      // onUserMessage hook（方法层烧·回话已生成后·观察不改管线；返回值丢弃）。conversation.ts 纯逻辑不碰。
+      if (plugins.some((p) => typeof p.onUserMessage === 'function')) {
+        const msg: PluginUserMessage = {
+          content: input.message,
+          subjectId: outcome.storedEvidence.subjectId,
+          reply: outcome.reply,
+        };
+        await fireHook('onUserMessage', msg.subjectId, (p, ctx) => p.onUserMessage!(msg, ctx));
+      }
+      return outcome;
     },
 
     dropConversation(conversationId) {

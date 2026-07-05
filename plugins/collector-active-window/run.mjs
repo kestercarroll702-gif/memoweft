@@ -1,5 +1,6 @@
 /**
- * MemoWeft 活动窗口采集器 · 独立运行器（Collector Plugin V1）。独立进程，零依赖，仅 Windows。
+ * MemoWeft 活动窗口采集器 · 独立运行器（Collector Plugin V1）。独立进程，零依赖。
+ * 采样器按平台工厂化（现只 Windows；加 macOS/Linux 的口子见 src/samplerFactory.ts）。
  *
  * 数据流（架构归位路线 §3）：
  *   本运行器采窗口 → 映射成 generic Observation → POST Host /api/observe
@@ -22,7 +23,7 @@ import {
   DEFAULT_SAMPLE_INTERVAL_SEC,
   DEFAULT_MIN_DURATION_SEC,
 } from './src/activeWindowCollector.ts';
-import { sampleForegroundWindowWin32, foregroundSamplerSupported } from './src/win32Foreground.ts';
+import { createForegroundSampler, SUPPORTED_PLATFORMS } from './src/samplerFactory.ts';
 
 // Host 地址：缺省 :7788（Host 默认端口）。旧 testbench 的 :7888 已不是采集目标。
 const BASE_URL = process.env.MEMOWEFT_HOST_URL || 'http://localhost:7788';
@@ -34,8 +35,12 @@ const argMin = Number(process.argv[3]);
 const sampleIntervalSec = Number.isFinite(argInterval) && argInterval > 0 ? argInterval : DEFAULT_SAMPLE_INTERVAL_SEC;
 const minDurationSec = Number.isFinite(argMin) && argMin > 0 ? argMin : DEFAULT_MIN_DURATION_SEC;
 
-if (!foregroundSamplerSupported()) {
-  console.error(`[采集器] 本采集器 V1 只支持 Windows（当前平台 ${process.platform}），退出。`);
+// 按平台造采样器（加平台的唯一口子在 src/samplerFactory.ts）。未支持 → 明确提示怎么加、退出，不空转。
+const baseSampler = createForegroundSampler();
+if (!baseSampler) {
+  console.error(`[采集器] 当前平台 ${process.platform} 暂不支持（现只 ${SUPPORTED_PLATFORMS.join(' / ')}）。`);
+  console.error(`[采集器] 想加 macOS/Linux：在 plugins/collector-active-window/src/samplerFactory.ts 加一个采样器`);
+  console.error(`[采集器]   （mac 用 osascript、Linux 用 xdotool/wmctrl；只准用 node 内置、禁引 npm 包）。`);
   process.exit(1);
 }
 
@@ -47,7 +52,7 @@ let shown = null; // { app, title, sinceMs }
 
 /** 包一层采样器：把每次采到什么打出来。 */
 async function loggingSampler() {
-  const win = await sampleForegroundWindowWin32();
+  const win = await baseSampler();
   if (!win) {
     if (shown) console.log(`[${ts()}] 采样：取不到前台窗口（锁屏/出错）→ 当前段截断`);
     shown = null;
@@ -98,7 +103,7 @@ const collector = createActiveWindowCollector({
   },
 });
 
-console.log(`[采集器] MemoWeft 活动窗口采集器 V1（仅 Windows · 零依赖 · Collector Plugin）`);
+console.log(`[采集器] MemoWeft 活动窗口采集器 V1（平台 ${process.platform} · 零依赖 · Collector Plugin）`);
 console.log(`[采集器] 采样间隔 ${sampleIntervalSec}s · 产出阈值 ${minDurationSec}s（不足丢弃）· 目标 ${ENDPOINT}`);
 console.log(`[采集器] observed 隐私默认：本地可读 / 不上云 / 可推画像（本进程不带任何上云授权）`);
 console.log(`[采集器] Ctrl+C 退出（会冲刷最后一段）`);
