@@ -193,6 +193,8 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
    * 受限上下文（闭包给·绝不交 store）：按【该插件声明的权限】门控 + 绑当次 subject。
    * submitObservation 显式只取白名单字段、【不带授权位】→ ingestObservations 走 observedDefaults（cloud=false）；
    *   防插件运行时塞 allowCloudRead:true 因"显式>默认"绕过"observed 不上云"（Host sanitizeObservation 的 Core 侧等价）。
+   * 注意：submitObservation 走【纯函数 ingestObservations】、【不走烧 onObservation 的方法】——插件提交的观察照常落库，
+   *   但【不再级联触发 onObservation】，杜绝"插件 onObservation→submitObservation→再 onObservation"的重入死循环。
    */
   function makePluginContext(plugin: MemoWeftPlugin, subjectId: string): PluginContext {
     return {
