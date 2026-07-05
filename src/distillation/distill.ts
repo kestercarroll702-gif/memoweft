@@ -7,7 +7,7 @@ import type { EvidenceStore } from '../evidence/store.ts';
 import type { EventStore } from '../event/store.ts';
 import type { Event } from '../event/model.ts';
 import type { LLMClient, ChatMessage } from '../llm/client.ts';
-import { filterCloudReadable } from '../evidence/privacy.ts';
+import { filterReadableByTier } from '../evidence/privacy.ts';
 import { resolveLang, type Lang } from '../config.ts';
 
 export interface DistillDeps {
@@ -50,17 +50,18 @@ export async function distill(subjectId: string, deps: DistillDeps): Promise<Dis
 
   if (pending.length === 0) return { event: null, pendingCount: 0, llmCalls: 0 };
 
-  // 隐私关：只把"允许上云"的原话喂给（云端）LLM；cloud=false 的不进 prompt。
-  // deps.llm 假设是云端模型——接本地模型时需改（见 evidence/privacy.ts 前提注释）。
-  const cloudSafe = filterCloudReadable(pending);
-  // 极端情况：本批全是"不许上云"的证据（现证据多为 cloud=true；observed 默认 cloud=false 后会遇到）→ 不拿空材料调云端模型。
-  // 【注意·别再误读】此处直接 return、【不建 event】：这些证据【不算已覆盖】，会留在 pending，下一轮仍被扫到。
-  //   这是有意的——cloud=false 的 observed 证据要等【本地模型】能读它时才消化（档2「上本地模型」：给 LLMClient 加 tier，
-  //   本地写路径放行 allowCloudRead=false）。在档2落地前，默认不上云的 observed 就是"暂挂着等"，不是 bug、也别当已处理。
-  if (cloudSafe.length === 0) return { event: null, pendingCount: pending.length, llmCalls: 0 };
+  // 隐私关（按当前写模型 tier 筛）+ 推理门（allowInference）：只把【当前模型可读】且【可推画像】的原话
+  //   喂给 LLM 建事件。tier=cloud 筛 allowCloudRead；tier=local 筛 allowLocalRead（本地模型能读 observed）。
+  //   inference 门：event summary 会喂进 consolidate 画像，故 inference=false 的证据连事件都不进
+  //   （防其内容经 summary 间接渗进画像；与 consolidate/attribute 三处一致）。tier 绑在 deps.llm 上，缺省 'cloud'。
+  const tier = deps.llm.tier ?? 'cloud';
+  const digestible = filterReadableByTier(pending, tier).filter((e) => e.allowInference);
+  // 本批无一条【当前模型可消化】→ 不拿空材料调模型、不建 event。被挡的证据（tier 不可读 / inference=false）
+  //   【不算已覆盖】、留在 pending 下轮再扫——换本地模型 / 授权上云 / 重开推理授权后才被补消化。
+  if (digestible.length === 0) return { event: null, pendingCount: pending.length, llmCalls: 0 };
 
   const lang = resolveLang();
-  const lines = cloudSafe.map((e) => `(${e.occurredAt.slice(0, 16)}) ${e.rawContent}`).join('\n');
+  const lines = digestible.map((e) => `(${e.occurredAt.slice(0, 16)}) ${e.rawContent}`).join('\n');
   const userHead = lang === 'zh' ? '用户依次说了：' : 'The user said, in order:';
   const messages: ChatMessage[] = [
     { role: 'system', content: SYSTEM[lang] },
@@ -71,11 +72,13 @@ export async function distill(subjectId: string, deps: DistillDeps): Promise<Dis
   const summary = (await deps.llm.chat(messages)).trim();
   const llmCalls = deps.llm.callCount - before;
 
+  // 覆盖修复（D8）：event 只覆盖【真消化进 summary 的】证据；被挡的不覆盖、留 pending 可再扫
+  //   （否则 observed 与对话证据混批时会被静默标"已覆盖"却从未消化、且再也扫不到——卖点被架空）。
   const event = deps.eventStore.put({
     subjectId,
     summary,
-    occurredAt: pending[0]!.occurredAt,
-    evidenceIds: pending.map((e) => e.id),
+    occurredAt: digestible[0]!.occurredAt,
+    evidenceIds: digestible.map((e) => e.id),
   });
 
   return { event, pendingCount: pending.length, llmCalls };
