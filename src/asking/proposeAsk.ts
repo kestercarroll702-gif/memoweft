@@ -76,10 +76,15 @@ const PHRASE_SYSTEM: Record<Lang, string> = {
 };
 
 /** 模板兜底：带证据、留余地的朴素问法。 */
-function templateQuestion(hypothesis: string, evidence: { summary: string }[]): string {
-  const shown = evidence.map((e) => `「${e.summary}」`).join('、');
-  if (!shown) return `我有个不太确定的猜测：${hypothesis}。是这样吗？`;
-  return `我看到${shown}，所以在想：${hypothesis}。是这样吗？`;
+function templateQuestion(hypothesis: string, evidence: { summary: string }[], lang: Lang): string {
+  if (lang === 'zh') {
+    const shown = evidence.map((e) => `「${e.summary}」`).join('、');
+    if (!shown) return `我有个不太确定的猜测：${hypothesis}。是这样吗？`;
+    return `我看到${shown}，所以在想：${hypothesis}。是这样吗？`;
+  }
+  const shown = evidence.map((e) => `"${e.summary}"`).join(', ');
+  if (!shown) return `I have a hunch I'm not too sure about: ${hypothesis}. Is that right?`;
+  return `I noticed ${shown}, which got me wondering: ${hypothesis}. Is that right?`;
 }
 
 async function phraseQuestion(
@@ -96,7 +101,7 @@ async function phraseQuestion(
     { role: 'user', content: user },
   ];
   const text = (await llm.chat(messages)).trim();
-  return text || templateQuestion(hypothesis, evidence);
+  return text || templateQuestion(hypothesis, evidence, lang);
 }
 
 export async function proposeAsk(
@@ -144,7 +149,7 @@ export async function proposeAsk(
 
     const question = deps.llm
       ? await phraseQuestion(cog.content, cloudSafe, deps.llm, lang)
-      : templateQuestion(cog.content, evidence);
+      : templateQuestion(cog.content, evidence, lang);
 
     proposals.push({
       cognitionId: cog.id,

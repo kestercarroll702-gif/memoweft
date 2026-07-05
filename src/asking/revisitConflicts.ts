@@ -56,11 +56,18 @@ function templateQuestion(
   content: string,
   support: { summary: string }[],
   contradict: { summary: string }[],
+  lang: Lang,
 ): string {
-  const s = support.map((e) => `「${e.summary}」`).join('、');
-  const c = contradict.map((e) => `「${e.summary}」`).join('、');
-  if (s && c) return `关于"${content}"——一方面${s}，另一方面又${c}。现在到底是哪样呢？`;
-  return `关于"${content}"，我这边的信息有点对不上，能帮我确认下现在是怎样吗？`;
+  if (lang === 'zh') {
+    const s = support.map((e) => `「${e.summary}」`).join('、');
+    const c = contradict.map((e) => `「${e.summary}」`).join('、');
+    if (s && c) return `关于"${content}"——一方面${s}，另一方面又${c}。现在到底是哪样呢？`;
+    return `关于"${content}"，我这边的信息有点对不上，能帮我确认下现在是怎样吗？`;
+  }
+  const s = support.map((e) => `"${e.summary}"`).join(', ');
+  const c = contradict.map((e) => `"${e.summary}"`).join(', ');
+  if (s && c) return `About "${content}" — on one hand ${s}, but on the other hand ${c}. Which is it actually now?`;
+  return `About "${content}", the signals on my end don't quite line up. Could you help me confirm how it stands now?`;
 }
 
 async function phraseQuestion(
@@ -81,7 +88,7 @@ async function phraseQuestion(
     { role: 'user', content: user },
   ];
   const text = (await llm.chat(messages)).trim();
-  return text || templateQuestion(content, support, contradict);
+  return text || templateQuestion(content, support, contradict, lang);
 }
 
 export async function revisitConflicts(
@@ -114,7 +121,7 @@ export async function revisitConflicts(
     // 隐私护栏：只把允许上云的两面证据喂给（云端）措辞模型；宿主展示的两面证据保持完整（展示归宿主）。
     const question = deps.llm
       ? await phraseQuestion(cog.content, filterCloudReadable(supportEv).map(brief), filterCloudReadable(contradictEv).map(brief), deps.llm, lang)
-      : templateQuestion(cog.content, support, contradict);
+      : templateQuestion(cog.content, support, contradict, lang);
 
     proposals.push({
       cognitionId: cog.id,

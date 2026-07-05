@@ -61,3 +61,4 @@
 ## 发现待办
 
 - A1 探测备注：`apps/*`、`plugins/*`、testbench UI 里也有面向用户中文，但那属「可选带界面」的宿主侧，**不在本批** 0.4.0 核心库 `src` 英文化范围（见 README「本批明确不做」）。
+- **A2 探测前提修正（据实）**：本卡背景曾称「没有测试断言固定中文措辞（grep 零命中）」——**实际有 5 处**断言 T2 英文化掉的**报错/日志文案**（非 fixture 输入）：`jsonRepair.test.ts:100`（长度=→length=）、`validateBundle.test.ts:76`（重复 id→duplicate ids）、`memoryApi.test.ts:106/113/273`（已失效/已归档/跨 subject → invalidated/archived/cross-subject）。施工中据实更新为断**英文**（缺省 en 的真实输出）——属「报错英文化」的必然连带，**非改 fixture、不违 B6**。探测当初 grep 的短语集未覆盖这几个词，特此更正记录。

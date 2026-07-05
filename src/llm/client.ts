@@ -4,6 +4,7 @@
  *
  * "问什么"（prompt）不在这里——留在 pipeline/action.ts。本文件只负责"发消息、拿文本、计数"。
  */
+import { resolveLang } from '../config.ts';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -67,7 +68,9 @@ export function loadLLMConfig(prefix = 'LLM'): LLMConfig {
   const model = readEnvWithFallback(`${base}_MODEL`);
   if (!baseUrl || !apiKey || !model) {
     throw new Error(
-      `LLM 配置缺失：请在 .env 设置 MEMOWEFT_${base}_BASE_URL / _API_KEY / _MODEL（或兼容旧名 DLA_${base}_*）`,
+      resolveLang() === 'zh'
+        ? `LLM 配置缺失：请在 .env 设置 MEMOWEFT_${base}_BASE_URL / _API_KEY / _MODEL（或兼容旧名 DLA_${base}_*）`
+        : `Missing LLM config: set MEMOWEFT_${base}_BASE_URL / _API_KEY / _MODEL in .env (legacy DLA_${base}_* still supported)`,
     );
   }
   // temperature 可选：空 / 非数字 → undefined（chat() 里回落 0.3，零行为变更）。0 是合法值（写路径可要更稳）。
@@ -110,20 +113,32 @@ export class OpenAICompatClient implements LLMClient {
     } catch (err) {
       // 超时（TimeoutError）给清楚 message，让其走既有降级链（错误往上抛）。
       if (err instanceof Error && err.name === 'TimeoutError') {
-        throw new Error(`LLM 请求超时（超过 ${timeoutMs}ms）`);
+        throw new Error(
+          resolveLang() === 'zh'
+            ? `LLM 请求超时（超过 ${timeoutMs}ms）`
+            : `LLM request timed out (exceeded ${timeoutMs}ms)`,
+        );
       }
       throw err;
     }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`LLM 请求失败 ${res.status}: ${text.slice(0, 500)}`);
+      throw new Error(
+        resolveLang() === 'zh'
+          ? `LLM 请求失败 ${res.status}: ${text.slice(0, 500)}`
+          : `LLM request failed ${res.status}: ${text.slice(0, 500)}`,
+      );
     }
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const content = data.choices?.[0]?.message?.content;
     if (typeof content !== 'string') {
-      throw new Error(`LLM 返回格式异常：${JSON.stringify(data).slice(0, 500)}`);
+      throw new Error(
+        resolveLang() === 'zh'
+          ? `LLM 返回格式异常：${JSON.stringify(data).slice(0, 500)}`
+          : `Unexpected LLM response format: ${JSON.stringify(data).slice(0, 500)}`,
+      );
     }
     // reasoning 兼容：剥掉混在 content 里的 <think>…</think> 思考段（只剥闭合对）。
     return stripReasoning(content);

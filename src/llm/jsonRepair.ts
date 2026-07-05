@@ -93,7 +93,9 @@ export async function parseJsonObjectWithRepair<T = Record<string, unknown>>(
   if (parsed !== null) return parsed;
 
   log(
-    `首次输出非合法 JSON，重试一次。解析失败：长度=${first.length}、含代码围栏=${/```/.test(first)}、含花括号=${first.includes('{')}`,
+    lang === 'zh'
+      ? `首次输出非合法 JSON，重试一次。解析失败：长度=${first.length}、含代码围栏=${/```/.test(first)}、含花括号=${first.includes('{')}`
+      : `First output was not valid JSON, retrying once. Parse failed: length=${first.length}, hasCodeFence=${/```/.test(first)}, hasBrace=${first.includes('{')}`,
   );
   const retryMessages: ChatMessage[] = [...deps.messages, { role: 'user', content: JSON_ONLY_NUDGE[lang] }];
   const second = await deps.llm.chat(retryMessages);
@@ -101,7 +103,9 @@ export async function parseJsonObjectWithRepair<T = Record<string, unknown>>(
   if (reparsed !== null) return reparsed;
 
   log(
-    `重试后仍非合法 JSON，放弃本轮。解析失败：长度=${second.length}、含代码围栏=${/```/.test(second)}、含花括号=${second.includes('{')}`,
+    lang === 'zh'
+      ? `重试后仍非合法 JSON，放弃本轮。解析失败：长度=${second.length}、含代码围栏=${/```/.test(second)}、含花括号=${second.includes('{')}`
+      : `Still not valid JSON after retry, giving up this round. Parse failed: length=${second.length}, hasCodeFence=${/```/.test(second)}, hasBrace=${second.includes('{')}`,
   );
   return null;
 }
