@@ -120,6 +120,7 @@ export {
   type LLMClient,
   type ChatMessage,
   type ModelTier,
+  type UsageStats,
   OpenAICompatClient,
   loadLLMConfig,
 } from './llm/client.ts';
@@ -158,6 +159,7 @@ export {
   type PortableAPI,
   type MemoryGraphAPI,
   type HealthReport,
+  type UsageReport,
 } from './core/index.ts';
 
 // 受控记忆管理 API（批次2）：7 操作 + 审计表，管理操作带 reason 留痕

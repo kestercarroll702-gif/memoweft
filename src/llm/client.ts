@@ -20,6 +20,20 @@ export interface ChatMessage {
  */
 export type ModelTier = 'cloud' | 'local';
 
+/**
+ * LLM token 用量累计（观测/计费·档8「宿主能算钱」）：单调递增、绑 client 实例，复刻 callCount 形态。
+ * 很多本地 / OpenAI 兼容端点【不回 usage】（llama.cpp / ollama / vLLM 某些配置）——读到才加、读不到跳过，
+ * 故 `callsWithUsage` ≤ callCount。宿主要算"每次均耗"应拿 totalTokens / callsWithUsage，别拿 total / callCount
+ * （会被没回 usage 的调用稀释而偏低）。只做纯计数供宿主乘单价，库不内置价目表、绝不流入置信度自算。
+ */
+export interface UsageStats {
+  readonly promptTokens: number;
+  readonly completionTokens: number;
+  readonly totalTokens: number;
+  /** 有几次调用真拿到了 usage（≤ callCount）；供宿主算有据的均值。 */
+  readonly callsWithUsage: number;
+}
+
 /** 大模型客户端抽象——调用方只依赖此接口，不关心背后是哪家模型。 */
 export interface LLMClient {
   chat(messages: ChatMessage[]): Promise<string>;
@@ -29,6 +43,9 @@ export interface LLMClient {
    *  宿主自注入的 client 不带此字段也照跑（缺省当 cloud，非破坏）。tier 绑在 client 实例上，
    *  故 pool 缺配回退成对话模型时自然继承对话模型的 tier——杜绝"标 local 实跑云端"。 */
   readonly tier?: ModelTier;
+  /** token 用量累计（可选·档8·观测/计费）：宿主自注入的 client 不带也照跑（缺省 undefined，同 tier?）。
+   *  只做纯计数供宿主算钱，绝不流入置信度自算（同 temperature/tier 的洁癖）。见 UsageStats。 */
+  readonly usage?: UsageStats;
 }
 
 export interface LLMConfig {
@@ -105,6 +122,7 @@ export function loadLLMConfig(prefix = 'LLM'): LLMConfig {
 export class OpenAICompatClient implements LLMClient {
   private readonly config: LLMConfig;
   private _callCount = 0;
+  private _usage: UsageStats = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callsWithUsage: 0 };
 
   constructor(cfg?: LLMConfig) {
     this.config = cfg ?? loadLLMConfig();
@@ -117,6 +135,11 @@ export class OpenAICompatClient implements LLMClient {
   /** 部署位置（档2）：透传配置里的 tier；未配 = undefined（下游按 'cloud' 处理）。 */
   get tier(): ModelTier | undefined {
     return this.config.tier;
+  }
+
+  /** token 用量累计（档8）：返回快照拷贝，防外部改内部计数。 */
+  get usage(): UsageStats {
+    return { ...this._usage };
   }
 
   async chat(messages: ChatMessage[]): Promise<string> {
@@ -157,7 +180,22 @@ export class OpenAICompatClient implements LLMClient {
     }
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
+    // token 用量（档8·观测/计费）：读到才加、读不到静默跳过（本地 / 兼容端点常不回 usage，绝不因此崩）。
+    // 累加放在 content 校验【之前】：token 已真实消耗，即便下面因格式异常抛错也该记账。
+    const rawUsage = data.usage;
+    if (rawUsage) {
+      const p = typeof rawUsage.prompt_tokens === 'number' ? rawUsage.prompt_tokens : 0;
+      const c = typeof rawUsage.completion_tokens === 'number' ? rawUsage.completion_tokens : 0;
+      const t = typeof rawUsage.total_tokens === 'number' ? rawUsage.total_tokens : p + c;
+      this._usage = {
+        promptTokens: this._usage.promptTokens + p,
+        completionTokens: this._usage.completionTokens + c,
+        totalTokens: this._usage.totalTokens + t,
+        callsWithUsage: this._usage.callsWithUsage + 1,
+      };
+    }
     const content = data.choices?.[0]?.message?.content;
     if (typeof content !== 'string') {
       throw new Error(
