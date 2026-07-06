@@ -1,15 +1,7 @@
-# docs/internal · 内部背景资料（非必读）
+# Internal Design Notes
 
-这里是 MemoWeft 的**内部设计笔记与历史白板**——记录项目"当初怎么造、怎么决策"的背景。
+This directory contains a small set of evergreen maintainer notes. It is not required for using MemoWeft or contributing routine changes.
 
-**用库、改代码、或 AI 接手，都不需要默认读这里。** 开工看仓库根的 `AGENTS.md` + `CURRENT.md`；用库看 `README.md`。只有当你要查某个旧接口、旧决策、或某段历史的来龙去脉时，再按需翻对应文件。
+- [`boundaries.md`](./boundaries.md) — the long-term Core / Host / Plugin responsibility boundary.
 
-留档内容：
-
-- `STATE.md` —— 某时间点的内部状态快照（历史存档，可能已过时）。
-- `项目地图.md` —— 早期设计 master（17 格全貌 + 决策），历史参考。
-- `架构归位路线.md` —— Core / Host / Plugin 三层归位的实施路线（已完成，留档）。
-- `boundaries.md` —— 三层边界"负责什么 / 不负责什么"的细则。
-- `MAINTENANCE.md` —— 一个 issue 从提出到合并的完整流程（可选参考，非硬门槛）。
-
-这些都是**背景**，不是规矩来源。硬规矩在 `CONTRIBUTING.md`，当前该做什么在 `CURRENT.md`。
+Public documentation starts at [`docs/README.md`](../README.md). Historical task plans, implementation logs, and status snapshots are intentionally not retained here.

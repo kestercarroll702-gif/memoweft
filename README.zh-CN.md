@@ -133,6 +133,15 @@ core.close();
 
 核心文档包括[接入指南](./docs/integration.zh-CN.md)、[架构说明](./docs/architecture.md)、[部署说明](./docs/deployment.md)、[公开记忆面契约](./docs/memory-surface-contract.md)和[插件契约](./docs/plugin-contract.md)。
 
+## 仓库结构
+
+- `src/` — MemoWeft Core 库。
+- `apps/memoweft-host/` — 仓库自带的 reference host demo。
+- `packages/` — MCP、AI SDK 等生态适配器。
+- `plugins/` — 可选的采集器与体验插件。
+- `examples/` — 小型接入示例。
+- `docs/` — 公开文档。
+
 ## 项目状态
 
 MemoWeft 仍处于 1.0 之前，并坚持 library-first。Core 行为已经实现并有测试覆盖，但 minor 版本之间的接口仍可能调整。稳定、实验性与内部接口的边界见 [Memory Surface Contract](./docs/memory-surface-contract.md)。

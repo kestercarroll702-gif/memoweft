@@ -133,6 +133,15 @@ Start with the [public documentation index](./docs/README.md).
 
 Key guides cover [integration](./docs/integration.md), [architecture](./docs/architecture.md), [deployment](./docs/deployment.md), the [public memory surface contract](./docs/memory-surface-contract.md), and the [plugin contract](./docs/plugin-contract.md).
 
+## Repository layout
+
+- `src/` — MemoWeft Core library.
+- `apps/memoweft-host/` — bundled reference host demo.
+- `packages/` — ecosystem adapters such as MCP and AI SDK.
+- `plugins/` — optional collectors and experience plugins.
+- `examples/` — small integration examples.
+- `docs/` — public documentation.
+
 ## Project status
 
 MemoWeft is pre-1.0 and library-first. Core behavior is implemented and tested, but interfaces may still change between minor releases. Stable, experimental, and internal surfaces are documented in the [Memory Surface Contract](./docs/memory-surface-contract.md).

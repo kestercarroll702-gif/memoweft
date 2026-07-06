@@ -176,7 +176,7 @@
 ### 2.8 版本 / 配置
 
 57. **`MEMOWEFT_VERSION`** — stable 常量。`DLA_VERSION` 是 `@deprecated` 别名（保留、勿删）。依据 `src/index.ts:208-211`。
-58. **`MemoWeftConfig`（有哪些配置项）** — stable：identity / privacyMode / observedDefaults / consolidation / retrieval / attribution / background 等字段结构。**0.4.0 加可选 `language: 'zh' | 'en'`（additive 非破坏——旧宿主不传照跑；缺省 `'en'`，env `MEMOWEFT_LANG=zh` 或运行期设 `config.language` 切中文）+ 导出 `type Lang`（stable，供宿主设值）**。**但"怎么拿到 config"（`config` 单例访问）标 experimental**（作者拍板 ⑥，预留 P2-5 去单例）。`DlaConfig` 是 `@deprecated` 别名。`cloudReadDefault()` / `resolveLang()` stable（后者取当前库语言，只决定文本产出、绝不进置信度自算）。依据 `src/config.ts`。
+58. **`MemoWeftConfig`（有哪些配置项）** — stable：identity / privacyMode / observedDefaults / consolidation / retrieval / attribution / background 等字段结构。**0.4.0 加可选 `language: 'zh' | 'en'`（additive 非破坏——旧宿主不传照跑；缺省 `'en'`，env `MEMOWEFT_LANG=zh` 或运行期设 `config.language` 切中文）+ 导出 `type Lang`（stable，供宿主设值）**。**但“怎么拿到 config”（`config` 单例访问）标 experimental**，pre-1.0 期间可能调整。`DlaConfig` 是 `@deprecated` 别名。`cloudReadDefault()` / `resolveLang()` stable（后者取当前库语言，只决定文本产出、绝不进置信度自算）。依据 `src/config.ts`。
 
 ---
 
@@ -191,7 +191,7 @@
 7. **`RemoveEvidenceResult`：`removed=false && blockers 为空 = 目标不存在**（二义消歧）。拒绝只发生在有引用时（`blockers` 非空）；`removed=false` 且 `blockers=[]` 是"证据本就不存在"，不是"被拦下"。依据 `src/memory/managementApi.ts:55-57`、`:250`。
 8. **`resetSubject` v1 单人限制**：库内清理按 subject，但清向量索引走 `indexAll([])`，**清的是整张 vectors 表（所有 subject 的向量）**，不是只清本 subject。v1 单人单宿主无碍；多 subject 化时须换 subject 粒度。依据 `src/memory/managementApi.ts:435-438`。
 9. **无 `.env` 也能建 core**：缺模型配置时，"存证据 / 管理记忆"这类不碰模型的活仍可用；只有真调模型的读写路径（回话、语义召回、画像生成）才降级/报错。`health()` 告诉你哪些能力还在（`llmReady`/`embedReady`）。这是宿主判断"缺配时哪些能力还在"的关键承诺。依据 `src/core/createCore.ts:5-8`（工厂头注）、`:147-174`、`:269-280`（health）。
-10. **枚举取值集合的兜底责任在宿主**：`SourceKind` / `ContentType` / `FormedBy` / `CredStatus` / `EvidenceRelation`——**收窄（删取值）算破坏；加值不算破坏，但宿主须留 `default` 兜底分支**（作者拍板 ③）。宿主 `switch` 这些枚举时若无 `default`，加值后会漏分支——责任在宿主。依据本契约"破坏政策"节 + `src/evidence/model.ts:11`、`src/cognition/model.ts:15-32`。
+10. **枚举取值集合的兜底责任在宿主**：`SourceKind` / `ContentType` / `FormedBy` / `CredStatus` / `EvidenceRelation`——**收窄（删取值）算破坏；加值不算破坏，但宿主须留 `default` 兜底分支**。宿主 `switch` 这些枚举时若无 `default`，加值后会漏分支——责任在宿主。依据本契约“破坏政策”节 + `src/evidence/model.ts:11`、`src/cognition/model.ts:15-32`。
 
 ---
 
@@ -207,7 +207,7 @@
 - **`ManagementLogEntry`（读审计历史）** — 弱类型（`op`/`targetKind` 为 `string`），门面不暴露读路径；宿主经 `core.memory.*` 只写不经门面读审计历史。依据 `src/memory/managementLog.ts:23-33`。
 - **扩展点接口 `Retriever` / `Embedder` / `LLMClient`** — 可替换的注入点，接口签名以后可能演进。依据 `src/index.ts:88-105`。**新增（档2·非破坏）**：`LLMClient.tier?` 与 `LLMConfig.tier?`（`ModelTier='cloud'|'local'`，已导出）是可选字段，缺省视为 `cloud`；宿主自注入的 `LLMClient` 不带 tier 也照跑。
 - **插件契约 `MemoWeftPlugin` / `PluginContext` / `PluginPermissions` / hook 类型**（第 7 步·v2·**experimental**）— 从 `src/plugin/contract.ts` 导出；`createMemoWeftCore` 加可选 `plugins?`（不传 = 行为同旧）。pre-1.0 hook 签名可能演进（如加字段）。**权威定义与语义见 [`plugin-contract.md`](./plugin-contract.md)**，此处不重复。
-- **config 的"取用方式"（单例访问）** — "有哪些配置项"是 stable，"怎么拿到 config（`config` 单例）"是 experimental（作者拍板 ⑥，预留 P2-5 去单例）。依据 `src/config.ts`。
+- **config 的“取用方式”（单例访问）** — “有哪些配置项”是 stable，“怎么拿到 config（`config` 单例）”是 experimental，pre-1.0 期间可能调整。依据 `src/config.ts`。
 - **`EventInput` / `CognitionInput`** — 见"存疑定级"：宿主不直接构造的内部入参。
 
 ---
@@ -220,7 +220,7 @@
 
 对 **stable** 面（第一/二章列出的门面方法与数据形状），下列改动算破坏：**改字段名 / 删字段 / 改可空性（可选↔必填、可空↔非空）/ 改语义**（例：`confidence` 从 0~1000 量纲改成 0~1 概率）。
 
-### 5.2 破坏 stable 的三要件（作者拍板②）
+### 5.2 破坏 stable 的三要件
 
 允许在 **minor 版**破坏 stable，但**必须同时**满足三条，缺一不可：
 
@@ -230,7 +230,7 @@
 
 **不强制"保留整整一个版本再删"**：删除时机不设硬性冷却期，能留别名就留、留不了（如删字段）就按 ①② 标注 + 迁移说明走。
 
-### 5.3 枚举加值口径（作者拍板③）
+### 5.3 枚举加值口径
 
 对 `SourceKind` / `ContentType` / `FormedBy` / `CredStatus` / `EvidenceRelation` 等枚举：
 
@@ -252,7 +252,7 @@
 
 ## 六、存疑符号定级（回源确认结论）
 
-任务书点名的 6 处存疑符号，回源逐项落定：
+以下 6 处容易误判的符号，按源码使用方式逐项定级：
 
 | 符号 | 级 | 定级依据（指到源） |
 |---|---|---|

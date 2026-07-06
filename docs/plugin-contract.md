@@ -74,4 +74,4 @@ Core 是**无头库**、不画界面。插件管理界面（列已注册插件 /
 - v2 铺的是**基础设施**：现有 experience 插件靠 `systemPrompt`（无 hook）、活动窗口采集器走 `/api/observe`（不消费 `onObservation`）——**hook 目前没有生产消费者**，真实的 tool / hook 型采集器待后续。活体 demo 见 `examples/plugin-hook.ts`。
 - **不做**：运行时动态装卸外部插件包（模块加载 / 插件市场 / 沙箱）；会改管线的 hook；动态权限弹窗。
 
-关联：[记忆面契约](./memory-surface-contract.md) · [架构归位路线 §7](./internal/架构归位路线.md) · 示例 `examples/plugin-hook.ts`。
+关联：[记忆面契约](./memory-surface-contract.md) · [三层边界](./internal/boundaries.md) · 示例 `examples/plugin-hook.ts`。

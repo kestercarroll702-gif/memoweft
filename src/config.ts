@@ -26,7 +26,7 @@ export interface MemoWeftConfig {
     topK: number;
     /** 有效置信（衰减后）低于此值的认知不注入回话——淡了的情绪/过气的假设别硬塞（规则 8）。 */
     minEffectiveConfidence: number;
-    /** 召回相似度门控：query 与认知的余弦分低于此值 → 直接不注入（防 top-k 把不相关认知也召回硬塞，STATE.md 已标缺）。
+    /** 召回相似度门控：query 与认知的余弦分低于此值 → 直接不注入（防 top-k 把不相关认知也召回硬塞）。
      *  0 = 关闭（默认，先不改现有 dogfood 行为）；dogfood 时照 turn.recall 里的真实分数设一个能挡住噪声的下限（值随嵌入器变）。 */
     minSimilarity: number;
   };

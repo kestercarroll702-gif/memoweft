@@ -13,7 +13,13 @@ Start here if you want to integrate it into an AI app or understand how the memo
 - [`deployment.md`](./deployment.md) — cloud-first, cloud-guarded, and local or hybrid deployment.
 - [`INSTALL.md`](./INSTALL.md) — installation and environment configuration. [中文](./INSTALL.zh-CN.md)
 - [`reference-host.md`](./reference-host.md) — what the bundled demo host is and is not.
+- [`naming.md`](./naming.md) — public naming and positioning conventions.
 - [Examples](../examples/README.md) — runnable Core, memory-management, bundle, and plugin examples.
+
+## Developer utilities
+
+- `testbench/` — a local diagnostic harness launched with `npm run testbench`; it is not the reference host demo.
+- `bench/` — reproducible performance checks launched with `npm run bench`; see [`perf.md`](./perf.md).
 
 ## For contributors and agents
 
@@ -21,5 +27,6 @@ Start here if you want to integrate it into an AI app or understand how the memo
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md)
 - [`CURRENT.md`](../CURRENT.md)
 - [`ROADMAP.md`](../ROADMAP.md)
+- [`PUBLISHING.md`](./PUBLISHING.md)
 
-Internal planning logs and AI operation history are intentionally not part of the public documentation path.
+Maintainer-only boundary notes live under `docs/internal/`; task and operation logs are not retained.

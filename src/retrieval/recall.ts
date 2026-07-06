@@ -43,7 +43,7 @@ export async function recallCognitions(
   const out: RecalledCognitionItem[] = [];
   const hits = await deps.retriever.search(query, cfg.retrieval.topK);
   for (const h of hits) {
-    // 相似度门控（cell 7 / STATE.md）：这一轮问题跟这条认知不够像 → 别硬塞（防 top-k 召回不相关认知）。
+    // 相似度门控：这一轮问题跟这条认知不够像 → 别硬塞（防 top-k 召回不相关认知）。
     // 默认阈值 0 = 不筛（行为同旧）；调成非零后，低于阈值的召回直接跳过。
     if (h.score < cfg.retrieval.minSimilarity) continue;
     const c = deps.cognitionStore.get(h.id);
