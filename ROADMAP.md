@@ -1,43 +1,27 @@
 # Roadmap
 
-MemoWeft is **library-first**. The product is the memory/cognition **Core** (`memoweft` on npm), meant to be `import`ed by any host. The bundled reference host (`apps/memoweft-host`) is a **demo**, not the product. The Core's public API follows semver — while pre-1.0, breaking changes bump the minor.
+MemoWeft is **library-first**. This repository remains focused on the MemoWeft library, its public API, adapters, examples, and the bundled reference host demo. Product hosts should live outside the Core library scope.
 
-Priorities below; the further out, the more they may shift. Issues: <https://github.com/memoweft/memoweft/issues>. Detailed internal design lives in [`docs/internal/`](./docs/internal/).
+MemoWeft is pre-1.0. Public API stability tiers and the breaking-change policy are documented in the [Memory Surface Contract](./docs/memory-surface-contract.md).
 
-## 0.2.0 — durable schema ✅ (landed on `main`, ships in 0.2.0)
+## Current focus
 
-The one blocking item is done. Adding a schema change now means: add a `Migration` entry in `src/store/migrations.ts` **and** update the corresponding store's `SCHEMA` const — never an ad-hoc `ALTER`.
+- Make the public API easier to understand and integrate.
+- Keep documentation and runnable examples aligned with the shipped package.
+- Improve ecosystem adapters without adding runtime dependencies to Core.
+- Maintain the reference host as a clear, bounded demonstration of Core capabilities.
 
-- ✅ Schema versioning (`PRAGMA user_version`) + an ordered migration runner (`src/store/migrations.ts`).
-- ✅ Each migration in its own transaction (rolls back on failure); auto pre-migration backup for schema-changing migrations; dry-run mode.
-- ✅ Migration test: a `0.1.0`-shaped database (with data) opens losslessly and keeps every row (`tests/migrations.test.ts`).
-- Still open: a small CLI wrapper (`migrate` / `migrate --dry-run`) and orphan-row checks — nice-to-have, not blocking.
+## Next
 
-## 0.3.0 — hardening batch (current)
+- Recall quality v2: similarity thresholds, purpose and content filters, recall explanations, and negative feedback.
+- More integration examples and framework adapters.
+- Additional plugins that preserve the Core / Host / Plugin permission boundaries.
 
-Small-knife fixes from a full-repo audit — no new features. Privacy red-line B pushed into Core (observed evidence stays off-cloud by default, enforced at the write layer), a `prepublishOnly` release fuse, unified hardened JSON parsing, SQLite `busy_timeout`, repo cleanup, a SQLite **driver seam** (an optional `better-sqlite3` adapter so the library also runs on Node 20/22), and a public "always fully open-source" pledge. Current working scope lives in [`CURRENT.md`](./CURRENT.md).
+## Non-goals
 
-## Next — Memory Surface Contract v1
+- Turning the bundled reference host into the product.
+- Expanding this repository into a desktop-product roadmap.
+- Weakening the cognitive-discipline rules for convenience.
+- Splitting the library into open and closed feature tiers.
 
-The main theme after 0.3.0. Turn the surface a host actually touches — how it reads memory, writes evidence, and manages what's stored (`src/index.ts` exports, `createMemoWeftCore`, and the `core.recall` / `ingest*` / `memory.*` inputs and return shapes) — into a **documented, versioned contract**: what a host may depend on, which fields are stable, and how a breaking change is counted.
-
-### Adoption pre-package (rides along, not the version theme)
-
-Lead-gen material that can land alongside the contract work but isn't the default dev task:
-
-- **Minimal eval suite** (~20 conversation fixtures) asserting the discipline: conflicts exposed not overwritten, transient moods confidence-capped, recorded ≠ believed.
-- A **"vs. plain memory store" behavior comparison table** in the README, backed by the eval.
-- A short **demo GIF** for the README.
-- **Test coverage** + badge, **ESLint / Prettier / editorconfig**, `SECURITY.md`, issue & PR templates.
-
-## Later
-
-- **Recall quality v2** — similarity threshold, purpose / scope / contentType filters, recall explain, user negative feedback.
-- **Memory-graph front-end** — the backend payload already exists (`src/graph/`).
-- **Adapters** — LangChain / Vercel AI SDK / etc., so a host wires MemoWeft in a few lines.
-- **More plugins** — additional collectors and experiences.
-
-## Non-goals (for now)
-
-- Turning the reference host into a shipped desktop product. It stays a demo; **the library is the product**. This keeps priorities on API stability, adapters, and evidence — not product UX.
-- Open-core split — the library stays fully open source.
+Priorities may change as the public API approaches 1.0. Track concrete work in [GitHub issues](https://github.com/memoweft/memoweft/issues) and the active focus in [`CURRENT.md`](./CURRENT.md).
