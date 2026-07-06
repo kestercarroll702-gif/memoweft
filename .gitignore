@@ -31,3 +31,7 @@ Thumbs.db
 *.log
 .idea/
 .vscode/
+
+# ── Local tooling / scratch (never commit) ──
+mcp-publisher*
+dogfood*.mjs
