@@ -2,7 +2,7 @@
 
 这份文件讲**每次改代码都要守的硬规矩**。人和 AI 都适用。
 
-刚接手先读仓库根的 [`AGENTS.md`](AGENTS.md)（极简开工说明）和 [`CURRENT.md`](CURRENT.md)（现在在做什么）。`docs/internal/` 是可选的历史背景，不是必读。
+刚接手先读仓库根的 [`AGENTS.md`](AGENTS.md)（极简开工说明）和 [`CURRENT.md`](CURRENT.md)（现在在做什么）。`docs/internal/` 只保留可选的长期边界说明，不是必读。
 
 ---
 

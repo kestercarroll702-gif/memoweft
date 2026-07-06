@@ -68,7 +68,7 @@ const SESSIONS_DIR = join(dirname(DB_PATH), 'sessions');
 // 单条消息字符上限：挡异常客户端发超长串撑爆后续 updateProfile 的 prompt（正常长输入 2 万字符足够）。
 const MAX_MESSAGE_CHARS = 20000;
 
-// 采集摄入（/api/observe）：采集插件 → Host 审核 → Core（架构归位路线 §3）。
+// 采集摄入（/api/observe）：采集插件 → Host 审核 → Core（三层边界）。
 //   COLLECTOR_ENABLED：采集总开关（用户设置），env MEMOWEFT_HOST_COLLECTOR=off 则 Host 拒收（403）。缺省 on。
 //   MAX_OBSERVE_BATCH：单次 POST 最多几条 observation（挡异常客户端一次灌爆）。
 const COLLECTOR_ENABLED = (process.env.MEMOWEFT_HOST_COLLECTOR ?? 'on').toLowerCase() !== 'off';
@@ -342,7 +342,7 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // ── 采集观察摄入（采集器插件 → Host 审核 → Core，架构归位路线 §3）──
+    // ── 采集观察摄入（采集器插件 → Host 审核 → Core，遵循三层边界）──
     // 采集插件（如 @memoweft/collector-active-window）把窗口样本映射成 generic Observation 后 POST 这里。
     // Host 审核三件事：① 采集总开关（COLLECTOR_ENABLED，off 则 403 拒收）；
     //   ② 隐私红线——sanitizeObservation 强制剥掉授权位，observed 数据默认不上云（插件无权自行放行上云）；

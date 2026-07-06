@@ -2,7 +2,7 @@
  * MemoWeft 活动窗口采集器 · 独立运行器（Collector Plugin V1）。独立进程，零依赖。
  * 采样器按平台工厂化（现只 Windows；加 macOS/Linux 的口子见 src/samplerFactory.ts）。
  *
- * 数据流（架构归位路线 §3）：
+ * 数据流（遵循 Core / Host / Plugin 边界）：
  *   本运行器采窗口 → 映射成 generic Observation → POST Host /api/observe
  *     → Host 审核（剥上云授权 + 采集开关）→ core.ingestObservation → Core 落 observed 证据。
  *   采集插件【绝不直穿 Core / Store】，一律经 Host 审核这道门。
