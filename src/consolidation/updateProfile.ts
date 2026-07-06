@@ -65,6 +65,7 @@ export async function updateProfile(subjectId: string, deps: UpdateProfileDeps):
     evidenceStore: deps.evidenceStore,
     eventStore: deps.eventStore,
     llm: deps.llm,
+    config: deps.config, // 透传注入配置（缺省=单例）：event 摘要语言与 consolidate/attribute 一致
   });
   const t1 = Date.now();
   const consolidated = await consolidate(subjectId, {

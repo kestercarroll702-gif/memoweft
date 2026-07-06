@@ -85,6 +85,20 @@ const INDEX_HTML = join(import.meta.dirname, 'web', 'index.html');
 //   切换见 POST /api/experience：切完复用步4 的 activatedConvs.delete，让当前会话下一句重建实例、换上新人设。
 let activeExperienceId: string = DEFAULT_EXPERIENCE_ID;
 
+// 语言默认（Host 壳策略）：用户没显式设 MEMOWEFT_LANG 时，中文系统环境就默认用中文写记忆——
+//   中文用户开箱即中文、不必手配；显式 MEMOWEFT_LANG=en/zh 一律优先、绝不覆盖。
+//   只改 Host 侧单例 config.language（Core 缺省仍 en·进英文市场），不碰 Core 写路径逻辑。
+if (!process.env.MEMOWEFT_LANG) {
+  const envLocale = (process.env.LANG || process.env.LC_ALL || process.env.LC_MESSAGES || '').toLowerCase();
+  let preferZh = envLocale.startsWith('zh');
+  if (!preferZh) {
+    try {
+      preferZh = (Intl.DateTimeFormat().resolvedOptions().locale || '').toLowerCase().startsWith('zh');
+    } catch { /* Intl 不可用则维持默认 en */ }
+  }
+  if (preferZh) config.language = 'zh';
+}
+
 // plugins：把已注册插件传给 Core 让它烧 hook（experience 类无 hook 是 no-op；tool/collector 类在此生效）。
 const core = createMemoWeftCore({ dbPath: DB_PATH, plugins: ALL_PLUGINS });
 

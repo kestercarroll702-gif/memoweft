@@ -8,12 +8,15 @@ import type { EventStore } from '../event/store.ts';
 import type { Event } from '../event/model.ts';
 import type { LLMClient, ChatMessage } from '../llm/client.ts';
 import { filterReadableByTier } from '../evidence/privacy.ts';
-import { resolveLang, type Lang } from '../config.ts';
+import { resolveLang, type Lang, type MemoWeftConfig } from '../config.ts';
 
 export interface DistillDeps {
   evidenceStore: EvidenceStore;
   eventStore: EventStore;
   llm: LLMClient;
+  /** 可注入配置（config 去单例）：不传 = 用全局单例；传了则语言等文本产出跟随它——
+   *  与 consolidate / attribute 口径一致（否则运行期改语言会出现 event 旧语言、cognition 新语言的错位）。 */
+  config?: MemoWeftConfig;
 }
 
 export interface DistillResult {
@@ -67,7 +70,7 @@ export async function distill(subjectId: string, deps: DistillDeps): Promise<Dis
   //   【不算已覆盖】、留在 pending 下轮再扫——换本地模型 / 授权上云 / 重开推理授权后才被补消化。
   if (digestible.length === 0) return { event: null, pendingCount: pending.length, tierBlockedCount, llmCalls: 0 };
 
-  const lang = resolveLang();
+  const lang = resolveLang(deps.config);
   const lines = digestible.map((e) => `(${e.occurredAt.slice(0, 16)}) ${e.rawContent}`).join('\n');
   const userHead = lang === 'zh' ? '用户依次说了：' : 'The user said, in order:';
   const messages: ChatMessage[] = [
