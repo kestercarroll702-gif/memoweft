@@ -24,7 +24,7 @@ import { VectorRetriever } from '../retrieval/vectorRetriever.ts';
 import { OpenAICompatEmbedder, loadEmbedConfig, type Embedder } from '../retrieval/embedder.ts';
 import type { Retriever } from '../retrieval/retriever.ts';
 import { loadLLMPool, type LLMPool } from '../llm/pool.ts';
-import { OpenAICompatClient, type LLMClient } from '../llm/client.ts';
+import { OpenAICompatClient, type LLMClient, type UsageStats } from '../llm/client.ts';
 import { createMemoryManagementAPI, type MemoryManagementAPI } from '../memory/managementApi.ts';
 import { exportBundle, importBundle, validateBundle } from '../portable/index.ts';
 import type { MemoryBundle, ImportPlan, ValidateResult } from '../portable/model.ts';
@@ -120,6 +120,17 @@ export interface HealthReport {
   embedReady: boolean;
 }
 
+/** token 用量累计报告（档8·观测/计费·「宿主能算钱」）：本 core 至今累计，按 llm / embed 分桶 + 合计。
+ *  只给原始计数（宿主乘单价算钱），库不内置价目表。宿主要按对话/画像切分，调用前后取差值即可。 */
+export interface UsageReport {
+  /** 对话 + 写路径模型累计（chat/write 两用途去重后）。 */
+  llm: UsageStats;
+  /** 嵌入模型累计（自建 embedder 时有值；注入自定义 retriever 时为 0，embed 归宿主自管）。 */
+  embed: UsageStats;
+  /** llm + embed 合计。 */
+  total: UsageStats;
+}
+
 /** 统一 Core Facade（路线 §5.1 定稿形态 + close 资源收口）。 */
 export interface MemoWeftCore {
   /** 摄入用户消息 → spoken 证据（perceive + put，只存不答；先存后答纪律里"存"的那半）。 */
@@ -144,6 +155,8 @@ export interface MemoWeftCore {
   graph: MemoryGraphAPI;
   /** 健康自检（首启门）：基于本 core 实际持有的部件判断能否聊天 / 能否语义召回。 */
   health(): HealthReport;
+  /** token 用量累计（档8·观测/计费）：本 core 至今累计（llm/embed 分桶 + 合计）。端点常不回 usage 时对应桶为 0。 */
+  usage(): UsageReport;
   /** 关掉共享连接与自建的向量库连接（注入的 retriever 归调用方管，不动）。 */
   close(): void;
 }
@@ -156,6 +169,19 @@ function asPool(llm?: LLMPool | LLMClient): LLMPool {
   return { for: () => client };
 }
 
+const ZERO_USAGE: UsageStats = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callsWithUsage: 0 };
+
+/** 累加两份 usage（b 缺省——client/embedder 没实现 usage——则原样返回 a）。 */
+function sumUsage(a: UsageStats, b: UsageStats | undefined): UsageStats {
+  if (!b) return a;
+  return {
+    promptTokens: a.promptTokens + b.promptTokens,
+    completionTokens: a.completionTokens + b.completionTokens,
+    totalTokens: a.totalTokens + b.totalTokens,
+    callsWithUsage: a.callsWithUsage + b.callsWithUsage,
+  };
+}
+
 export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
   const cfg = options.config ?? globalConfig;
   const stores = openStores(options.dbPath, cfg);
@@ -165,6 +191,7 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
   // 召回器解析：注入 > 注入 embedder 建向量召回 > env 有嵌入配置建向量召回 > 空召回（降级不崩）。
   let retriever: Retriever;
   let ownsRetriever = false; // 只关自建的；注入的归调用方管
+  let embedderRef: Embedder | null = null; // 自建时持有，供 usage() 读 embed token；注入 retriever 时拿不到（宿主自管）
   if (options.retriever) {
     retriever = options.retriever;
   } else {
@@ -173,6 +200,7 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
       const ec = loadEmbedConfig();
       return ec ? new OpenAICompatEmbedder(ec) : null;
     })();
+    embedderRef = embedder;
     retriever = embedder ? new VectorRetriever(vectorDbPath, embedder) : new NullRetriever();
     ownsRetriever = true;
   }
@@ -362,6 +390,18 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
         llmReady: pool.for('chat') instanceof OpenAICompatClient,
         embedReady: retriever instanceof VectorRetriever,
       };
+    },
+
+    usage() {
+      // 累计总账（档8·观测/计费·「宿主能算钱」）：宿主要按对话/画像切分成本，自己在调用前后取 usage 差值即可
+      //   （同现有 llmCalls 走 callCount 差值的路子）。库只给累计原料、不替宿主切分、不内置价目表。
+      // llm：pool 的 chat/write 两用途 client 去重后累加——write 缺配回退 chat 时是同一实例，Set 去重防重复计。
+      const clients = new Set<LLMClient>([pool.for('chat'), pool.for('write')]);
+      let llm = ZERO_USAGE;
+      for (const c of clients) llm = sumUsage(llm, c.usage);
+      // embed：自建 embedder 时可读；注入 retriever 时拿不到（embedderRef=null），embed 归宿主自管、计 0。
+      const embed = embedderRef?.usage ?? ZERO_USAGE;
+      return { llm, embed, total: sumUsage(llm, embed) };
     },
 
     close() {

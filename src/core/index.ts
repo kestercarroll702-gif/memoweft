@@ -14,4 +14,5 @@ export {
   type PortableAPI,
   type MemoryGraphAPI,
   type HealthReport,
+  type UsageReport,
 } from './createCore.ts';

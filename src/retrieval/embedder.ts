@@ -7,10 +7,15 @@
  * 失败由上游容错（召回失败不挡回话、indexError 不回滚画像）。
  */
 import { resolveLang } from '../config.ts';
+import type { UsageStats } from '../llm/client.ts';
 
 export interface Embedder {
   /** 把一组文本编码成向量。 */
   embed(texts: string[]): Promise<number[][]>;
+  /** 累计嵌入调用次数（可选·档8·观测）：宿主自注入的 embedder 不带也照跑（缺省 undefined）。 */
+  readonly callCount?: number;
+  /** token 用量累计（可选·档8）：embedding 常是灌记忆的 token 大头，同 LLMClient.usage——读到才加、读不到跳过。 */
+  readonly usage?: UsageStats;
 }
 
 export interface EmbedConfig {
@@ -39,13 +44,26 @@ export function loadEmbedConfig(): EmbedConfig | null {
 
 export class OpenAICompatEmbedder implements Embedder {
   private readonly config: EmbedConfig;
+  private _callCount = 0;
+  private _usage: UsageStats = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callsWithUsage: 0 };
 
   constructor(cfg: EmbedConfig) {
     this.config = cfg;
   }
 
+  /** 累计嵌入调用次数（档8·观测）：空输入直接返回、不计数（未打网络）。 */
+  get callCount(): number {
+    return this._callCount;
+  }
+
+  /** token 用量累计（档8）：返回快照拷贝，防外部改内部计数。 */
+  get usage(): UsageStats {
+    return { ...this._usage };
+  }
+
   async embed(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return [];
+    this._callCount++;
     const url = `${this.config.baseUrl.replace(/\/$/, '')}/embeddings`;
     // 超时中断：嵌入端点挂起时别让 fetch 裸奔无限等（上游 LLM client 已有同款 120s 超时）。
     // 毫秒从 env 读、默认 60000；双前缀兼容旧名（与本文件 loadEmbedConfig 口径一致）。
@@ -80,7 +98,23 @@ export class OpenAICompatEmbedder implements Embedder {
           : `Embedding request failed ${res.status}: ${t.slice(0, 300)}`,
       );
     }
-    const data = (await res.json()) as { data?: Array<{ embedding?: number[] }> };
+    const data = (await res.json()) as {
+      data?: Array<{ embedding?: number[] }>;
+      // embeddings 响应的 usage 只有 prompt_tokens / total_tokens（无 completion——嵌入不生成）。
+      usage?: { prompt_tokens?: number; total_tokens?: number };
+    };
+    // token 用量（档8·观测/计费）：读到才加、读不到静默跳过（同 chat 口径，绝不因缺 usage 崩）。
+    const rawUsage = data.usage;
+    if (rawUsage) {
+      const p = typeof rawUsage.prompt_tokens === 'number' ? rawUsage.prompt_tokens : 0;
+      const t = typeof rawUsage.total_tokens === 'number' ? rawUsage.total_tokens : p;
+      this._usage = {
+        promptTokens: this._usage.promptTokens + p,
+        completionTokens: this._usage.completionTokens, // 嵌入无 completion，保持不变
+        totalTokens: this._usage.totalTokens + t,
+        callsWithUsage: this._usage.callsWithUsage + 1,
+      };
+    }
     const out = (data.data ?? []).map((d) => d.embedding ?? []);
     if (out.length !== texts.length) {
       throw new Error(

@@ -195,6 +195,13 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // token 用量累计（步8·观测/计费）：宿主拿累计计数（llm/embed 分桶 + 合计）乘单价算钱——库只给原料、不内置价目表。
+    //   端点常不回 usage（本地模型多见）时对应桶为 0；宿主要按对话/画像切分，自己在调用前后取差值即可。只读、不碰库。
+    if (req.method === 'GET' && url.pathname === '/api/usage') {
+      sendJson(res, 200, core.usage());
+      return;
+    }
+
     // 一轮对话：存证据 → 召回 → 回话（Core），再把这轮 user + assistant 落 Host 历史、排后台整理。
     if (req.method === 'POST' && url.pathname === '/api/chat') {
       const body = await readJson(req);
@@ -615,7 +622,7 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`  聊天历史 → ${SESSIONS_DIR}（跟随库路径）`);
   console.log(`  当前对话 → ${currentConvId}`);
   console.log(`  当前体验 → ${getExperience(activeExperienceId).name}（${activeExperienceId}）`);
-  console.log('  端点 → GET / · GET /api/health · POST /api/chat · POST /api/gen-env · GET /api/chat-history · GET /api/bg-status');
+  console.log('  端点 → GET / · GET /api/health · GET /api/usage · POST /api/chat · POST /api/gen-env · GET /api/chat-history · GET /api/bg-status');
   console.log('  记忆管理 → GET /api/cognition · GET /api/evidence · POST /api/cognition/{invalidate,delete} · POST /api/evidence/{authorization,delete}');
   console.log('  多对话 → POST /api/reset · GET /api/sessions · POST /api/session/{open,archive}');
   console.log('  体验 → GET /api/experiences · POST /api/experience（切人设：普通助手/星瑶）');
