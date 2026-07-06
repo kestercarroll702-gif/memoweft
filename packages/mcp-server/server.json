@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.memoweft/memoweft",
-  "description": "Expose a portable AI memory (recall, read-only views, and one safe write) as Model Context Protocol tools. Read-only plus a single verbatim-message write; destructive and authorization-changing operations are intentionally not exposed.",
+  "description": "Portable AI memory as MCP tools: recall, read-only views, and one safe write.",
   "version": "0.1.0",
   "repository": {
     "url": "https://github.com/memoweft/memoweft",
