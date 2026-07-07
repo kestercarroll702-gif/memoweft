@@ -130,6 +130,12 @@ core.close();
 
 ![MemoWeft reference host 演示——聊天、记忆实时成形、以及连接证据/事件/认知的记忆图谱](assets/reference-host-demo.gif)
 
+![MemoWeft reference host 聊天界面，包含记忆召回与记忆控制](assets/screenshot-chat.png)
+
+![MemoWeft reference host 记忆图谱，连接证据、事件与认知](assets/screenshot-memory-graph.png)
+
+![MemoWeft reference host 认知卡片，展示置信度与来源追溯](assets/screenshot-memory-manage.png)
+
 ## 生态适配器
 
 - [`@memoweft/mcp-server`](./packages/mcp-server) 通过 Model Context Protocol 暴露受控的 MemoWeft 读写工具。
