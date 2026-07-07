@@ -1,265 +1,267 @@
-# MemoWeft 记忆面契约 v1（Memory Surface Contract）
+# MemoWeft Memory Surface Contract v1
 
-> 面向宿主（`import 'memoweft'` 的那一方）。这是对宿主的**承诺书**：哪些能靠、哪些别碰、破了怎么办。
-> 单一事实源。与 `INSTALL` / `integration.md` 同级，宿主直接读。
-> 归属：总纲第 2 步；第 7 步插件契约、第 10 步 1.0 API 收口的共同地基。
+**English** | [简体中文](./memory-surface-contract.zh-CN.md)
 
-## 怎么读这份契约（三档 + 破坏政策）
+> For hosts (the side that does `import 'memoweft'`). This is a **promise document** to the host: what you can rely on, what not to touch, and what happens when a promise is broken.
+> Single source of truth. Peer to `INSTALL` / `integration.md`; hosts read it directly.
+> Belongs to: overall plan Step 2; the shared foundation for Step 7's plugin contract and Step 10's 1.0 API lock-down.
 
-**稳定性三档**：
+## How to read this contract (three tiers + break policy)
 
-- **stable（稳定面）**：宿主日常靠它做事、已由门面收口、形状定型。承诺"不随手改"。
-- **experimental（试验面）**：导出了、宿主可能碰，但**明说会变**；改了不算爽约（CHANGELOG 提一句即可）。
-- **internal（内部件）**：门面已收口、宿主没理由碰的散装实现件。导出还在（删属第 10 步），但**别依赖**。
+**Three stability tiers**:
 
-**破坏 stable 的政策（pre-1.0，中间偏松）**：
+- **stable**: the host relies on it day-to-day, it is already collected behind the facade, and its shape is settled. Promise: "won't be changed casually."
+- **experimental**: exported, the host may touch it, but **explicitly stated to change**; changing it is not a broken promise (a one-line CHANGELOG mention is enough).
+- **internal**: implementation pieces already collected behind the facade, that the host has no reason to touch. Still exported (deletion belongs to Step 10), but **don't depend on them**.
 
-- **什么算破坏**：改字段名 / 删字段 / 改可空性 / 改语义（例：`confidence` 量纲）。
-- **代价**：允许在 minor 版破，但必须 ① CHANGELOG 明确标注 ② 给一句迁移说明（旧→新怎么改）③ 能保旧名的走 `@deprecated` 别名（照 `DLA_VERSION` / `DlaConfig` 样板）。**不强制"保留整一个版本再删"**。
-- **枚举加值不算破坏**：给 `SourceKind` / `ContentType` / `CredStatus` 等**加新取值**不算破坏；**收窄（删取值）算破坏**。宿主对这些枚举**必须留 `default` 兜底分支**（漏分支的责任在宿主，见隐性契约第 10 条）。
-- **experimental 面**：minor 版随便改，CHANGELOG 提一句即可，不欠迁移说明。
+**Policy for breaking stable (pre-1.0, moderately loose)**:
+
+- **What counts as a break**: renaming a field / deleting a field / changing nullability / changing semantics (e.g. `confidence` units).
+- **Cost**: allowed to break in a minor version, but you must ① mark it clearly in the CHANGELOG ② give a one-line migration note (old→new, how to change) ③ where the old name can be kept, provide an `@deprecated` alias (follow the `DLA_VERSION` / `DlaConfig` template). **Not required to "keep it for a whole version before deleting."**
+- **Adding enum values is not a break**: **adding new values** to `SourceKind` / `ContentType` / `CredStatus` etc. is not a break; **narrowing (deleting values) is a break**. Hosts **must keep a `default` fallback branch** for these enums (missing a branch is the host's responsibility, see implicit contract item 10).
+- **experimental surface**: change freely in a minor version, a one-line CHANGELOG mention is enough, no migration note owed.
 
 ---
 
-## 一、门面方法专章（24 个宿主接触方法）
+## I. Facade methods chapter (24 host-facing methods)
 
-宿主主入口是 `createMemoWeftCore(options)`，拿到 `MemoWeftCore` 门面后经它的方法与三个子命名空间（`memory` / `portable` / `graph`）做事。**不要绕过门面直接拼底层 `Sqlite*Store` / 算子**。
+The host's main entry point is `createMemoWeftCore(options)`; after getting the `MemoWeftCore` facade, it does its work through the facade's methods and three sub-namespaces (`memory` / `portable` / `graph`). **Do not bypass the facade and directly assemble the underlying `Sqlite*Store` / operators.**
 
-计数：`createMemoWeftCore`(1) + 门面顶层 8 + `core.memory` 11 + `core.portable` 3 + `core.graph` 1 = **24**。全部 **stable**。
+Count: `createMemoWeftCore`(1) + facade top-level 8 + `core.memory` 11 + `core.portable` 3 + `core.graph` 1 = **24**. All **stable**.
 
-### 1.0 工厂
+### 1.0 Factory
 
 #### `createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore` — **stable**
-- **入参** `CreateCoreOptions`：`dbPath`（必填）、`llm?`（`LLMPool | LLMClient`）、`embedder?`、`retriever?`、`config?`、`vectorDbPath?`。
-- **返回**：`MemoWeftCore` 门面（下述 8 顶层方法 + `memory`/`portable`/`graph`/`health`/`close`）。
-- **隐性契约**：**无 `.env` 也能建 core**——缺模型配置不崩，只有真调模型的路径才降级/报错（见隐性契约第 9 条）。`vectorDbPath` 缺省与 `dbPath` 同库；一个 subject 一个向量实例的既有契约不变。
-- 依据：`src/core/createCore.ts:39-52`（入参）、`:155-174`（装配降级）。
+- **Input** `CreateCoreOptions`: `dbPath` (required), `llm?` (`LLMPool | LLMClient`), `embedder?`, `retriever?`, `config?`, `vectorDbPath?`.
+- **Returns**: the `MemoWeftCore` facade (the 8 top-level methods described below + `memory`/`portable`/`graph`/`health`/`close`).
+- **Implicit contract**: **a core can be built even without `.env`** — missing model config does not crash; only paths that actually call a model degrade/error (see implicit contract item 9). `vectorDbPath` defaults to the same store as `dbPath`; the existing contract of one vector instance per subject is unchanged.
+- Basis: `src/core/createCore.ts:39-52` (input), `:155-174` (assembly degradation).
 
-### 1.1 门面顶层 8 方法（`MemoWeftCore.*`）
+### 1.1 Facade top-level 8 methods (`MemoWeftCore.*`)
 
-| 方法 | 入参 | 返回 | 级 | 隐性行为契约 |
+| Method | Input | Returns | Tier | Implicit behavior contract |
 |---|---|---|---|---|
-| `ingestUserMessage(input)` | `UserMessageInput` | `Promise<Evidence>` | stable | 存 `spoken` 证据，只存不答（"先存后答"里"存"的那半）。 |
-| `ingestObservation(input)` | `ObservationInput` | `Promise<Evidence[]>` | stable | 存 `observed` 证据，**默认不上云**；带 `originId` 幂等；返回本次**新落库**的（幂等命中的不在内）。 |
-| `recall(input)` | `RecallInput` | `Promise<RecalledCognition[]>` | stable | 与 `Conversation` 同一段共享召回语义（invalid/archived/越界/衰减门控全走）。 |
-| `handleConversationTurn(input)` | `ConversationInput` | `Promise<TurnOutcome>` | stable | 存证据→召回→回话；同 `conversationId` 复用实例、窗口连续；`systemPrompt`/`seedTurns` 仅首次建实例生效（见隐性契约第 4 条）。 |
-| `dropConversation(conversationId)` | `string` | `void` | stable | 丢内存里的活跃会话实例（不碰库）；下次同 id 会重建（届时新 `systemPrompt`/`seedTurns` 才生效）；不存在的 id 静默略过。 |
-| `updateProfile(input?)` | `UpdateProfileInput` | `Promise<UpdateProfileResult>` | stable | 一键 distill→consolidate→attribute→重建召回索引。索引重建失败不回滚画像（`indexError` 报因）。 |
-| `health()` | — | `HealthReport` | stable | 基于本 core **实际持有的部件**判断，不重查 env：`llmReady`=持有真对话客户端；`embedReady`=持有向量召回器。注入的 stub/空召回器判 false。 |
-| `close()` | — | `void` | stable | 关共享连接 + 自建向量库连接；**注入的 retriever 归调用方管、不动**。 |
+| `ingestUserMessage(input)` | `UserMessageInput` | `Promise<Evidence>` | stable | Stores `spoken` evidence, only stores and does not reply (the "store" half of "store first, then reply"). |
+| `ingestObservation(input)` | `ObservationInput` | `Promise<Evidence[]>` | stable | Stores `observed` evidence, **does not upload to cloud by default**; idempotent via `originId`; returns what was **newly persisted** this time (idempotent hits are not included). |
+| `recall(input)` | `RecallInput` | `Promise<RecalledCognition[]>` | stable | Shares recall semantics with the same segment as `Conversation` (invalid/archived/out-of-scope/decay gating all apply). |
+| `handleConversationTurn(input)` | `ConversationInput` | `Promise<TurnOutcome>` | stable | Store evidence → recall → reply; same `conversationId` reuses the instance, window is continuous; `systemPrompt`/`seedTurns` only take effect when the instance is first created (see implicit contract item 4). |
+| `dropConversation(conversationId)` | `string` | `void` | stable | Drops the active conversation instance in memory (does not touch the store); the next call with the same id rebuilds it (at which point new `systemPrompt`/`seedTurns` take effect); a nonexistent id is silently skipped. |
+| `updateProfile(input?)` | `UpdateProfileInput` | `Promise<UpdateProfileResult>` | stable | One-shot distill→consolidate→attribute→rebuild recall index. A failed index rebuild does not roll back the profile (`indexError` reports the cause). |
+| `health()` | — | `HealthReport` | stable | Judged from the **parts this core actually holds**, not re-checking env: `llmReady`=holds a real conversation client; `embedReady`=holds a vector recaller. An injected stub/empty recaller is judged false. |
+| `close()` | — | `void` | stable | Closes the shared connection + self-created vector store connection; **an injected retriever is the caller's to manage and is not touched**. |
 
-依据：`src/core/createCore.ts:120-145`（接口）、`:181-287`（实现）。
+Basis: `src/core/createCore.ts:120-145` (interface), `:181-287` (implementation).
 
-### 1.2 `core.memory`（受控记忆管理 API，11 方法）
+### 1.2 `core.memory` (controlled memory management API, 11 methods)
 
-写操作都带 `reason`（必填，进审计表）；只读列取不落审计。缺省 `subjectId` = `config.identity.subjectId`（v1 单人单宿主）。
+Write operations all carry `reason` (required, goes into the audit table); read-only listing does not write audit records. Default `subjectId` = `config.identity.subjectId` (v1 single-person single-host).
 
-| 方法 | 入参 | 返回 | 级 | 隐性行为契约 |
+| Method | Input | Returns | Tier | Implicit behavior contract |
 |---|---|---|---|---|
-| `invalidateCognition(input)` | `InvalidateCognitionInput` | `Cognition \| null` | stable | 标失效（`invalidAt=now`）+ 审计；不存在返回 `null`（不审计）。 |
-| `updateEvidenceAuthorization(input)` | `UpdateEvidenceAuthorizationInput` | `Evidence \| null` | stable | 改授权位 + 审计（detail 记 before/after）；不存在返回 `null`；**零变更原样返回、不落审计**。 |
-| `removeEvidenceSafely(input)` | `RemoveEvidenceSafelyInput` | `RemoveEvidenceResult` | stable | 有引用且未 `force`→拒绝并返回影响面；`force`→事务内删证据+清链+审计。`removed=false && blockers 空 = 不存在`（见隐性契约第 7 条）。 |
-| `removeCognitionSafely(input)` | `RemoveCognitionSafelyInput` | `RemoveCognitionResult` | stable | 删认知连溯源链 + 审计；审计 detail **只存元数据、不存内容原文**。 |
-| `mergeCognition(input)` | `MergeCognitionInput` | `MergeCognitionResult` | stable | 仅同 subject；source 链搬到 target（去重）、target 置信重算、source 标失效不硬删。source/target 不存在、跨 subject、target 已失效/已归档 → **抛错**（什么都不改）。 |
-| `archiveCognition(input)` | `ArchiveCognitionInput` | `Cognition \| null` | stable | 归档（`archivedAt=now`）+ 审计；召回跳过 archived；数据保留可恢复；不存在返回 `null`。 |
-| `checkIntegrity()` | — | `IntegrityReport` | stable | 只读不改、不落审计、无 `reason`；报孤儿 join 行。 |
-| `listEvidence(input?)` | `ListMemoryInput` | `Evidence[]` | stable | 列某 subject 全部证据；只读、不落审计。 |
-| `listCognitions(input?)` | `ListMemoryInput` | `CognitionWithMeta[]` | stable | 列某 subject 全部认知，每条配溯源链 + **读时算**的 `effectiveConfidence`（不持久化，见隐性契约第 5 条）。 |
-| `listEvents(input?)` | `ListMemoryInput` | `EventWithEvidence[]` | stable | 列某 subject 全部事件，每条配覆盖的证据 id 列表。 |
-| `resetSubject(input)` | `ResetSubjectInput` | `ResetSubjectResult` | stable | 破坏性：清三层 + 清审计 + 清向量索引。库内四张表包在一个事务；`indexAll([])` 在事务外、**清整张 vectors 表**（v1 单人限制，见隐性契约第 8 条）。 |
+| `invalidateCognition(input)` | `InvalidateCognitionInput` | `Cognition \| null` | stable | Marks invalid (`invalidAt=now`) + audit; returns `null` if nonexistent (no audit). |
+| `updateEvidenceAuthorization(input)` | `UpdateEvidenceAuthorizationInput` | `Evidence \| null` | stable | Changes authorization bits + audit (detail records before/after); returns `null` if nonexistent; **a zero-change returns as-is with no audit record**. |
+| `removeEvidenceSafely(input)` | `RemoveEvidenceSafelyInput` | `RemoveEvidenceResult` | stable | Has references and not `force` → refused, returns impact set; `force` → deletes evidence + clears links + audit within a transaction. `removed=false && blockers empty = nonexistent` (see implicit contract item 7). |
+| `removeCognitionSafely(input)` | `RemoveCognitionSafelyInput` | `RemoveCognitionResult` | stable | Deletes cognition together with its provenance chain + audit; audit detail **stores only metadata, not the original content**. |
+| `mergeCognition(input)` | `MergeCognitionInput` | `MergeCognitionResult` | stable | Same subject only; source chain moved to target (deduplicated), target confidence recomputed, source marked invalid rather than hard-deleted. Source/target nonexistent, cross-subject, target already invalid/already archived → **throws** (changes nothing). |
+| `archiveCognition(input)` | `ArchiveCognitionInput` | `Cognition \| null` | stable | Archives (`archivedAt=now`) + audit; recall skips archived; data retained and recoverable; returns `null` if nonexistent. |
+| `checkIntegrity()` | — | `IntegrityReport` | stable | Read-only, no change, no audit record, no `reason`; reports orphan join rows. |
+| `listEvidence(input?)` | `ListMemoryInput` | `Evidence[]` | stable | Lists all evidence of a subject; read-only, no audit record. |
+| `listCognitions(input?)` | `ListMemoryInput` | `CognitionWithMeta[]` | stable | Lists all cognitions of a subject, each with its provenance chain + **read-time computed** `effectiveConfidence` (not persisted, see implicit contract item 5). |
+| `listEvents(input?)` | `ListMemoryInput` | `EventWithEvidence[]` | stable | Lists all events of a subject, each with the list of evidence ids it covers. |
+| `resetSubject(input)` | `ResetSubjectInput` | `ResetSubjectResult` | stable | Destructive: clears the three layers + clears audit + clears the vector index. The four in-store tables are wrapped in one transaction; `indexAll([])` is outside the transaction and **clears the entire vectors table** (v1 single-person limitation, see implicit contract item 8). |
 
-依据：`src/memory/managementApi.ts:143-177`（接口）、`:214-441`（实现）、`src/core/createCore.ts:249`（门面挂载）。
+Basis: `src/memory/managementApi.ts:143-177` (interface), `:214-441` (implementation), `src/core/createCore.ts:249` (facade mounting).
 
-> 陈旧注释提示：`createCore.ts:135` 与 `managementApi.ts:142` 的 doc 仍写"7 操作"，实际已是 **11**（批次5 步0 加了 4 个只读 list）。属陈旧注释，S2-2 或另立订正，本契约以 11 为准。
+> Stale-comment note: the docs at `createCore.ts:135` and `managementApi.ts:142` still say "7 operations", when it is actually **11** now (batch 5 step 0 added 4 read-only lists). This is a stale comment, to be corrected in S2-2 or separately; this contract uses 11 as authoritative.
 
-### 1.3 `core.portable`（便携记忆包，3 方法）
+### 1.3 `core.portable` (portable memory bundle, 3 methods)
 
-| 方法 | 入参 | 返回 | 级 | 隐性行为契约 |
+| Method | Input | Returns | Tier | Implicit behavior contract |
 |---|---|---|---|---|
-| `exportBundle(opts?)` | `ExportOptions & { subjectId? }` | `MemoryBundle` | stable | 导出某 subject 三层 + 溯源链为可版本化 JSON；不含向量索引/logs/.env/UI 状态。 |
-| `importBundle(bundle, opts)` | `MemoryBundle, ImportOptions` | `ImportPlan` | stable | `dryRun` 只算不写；`merge` 按 id/originId 去重写入（`ImportMode.replace` 留 V2，见 experimental）。 |
-| `validateBundle(bundle)` | `unknown` | `ValidateResult` | stable | 只校验结构，不写。 |
+| `exportBundle(opts?)` | `ExportOptions & { subjectId? }` | `MemoryBundle` | stable | Exports a subject's three layers + provenance chain as versionable JSON; does not include vector index/logs/.env/UI state. |
+| `importBundle(bundle, opts)` | `MemoryBundle, ImportOptions` | `ImportPlan` | stable | `dryRun` only computes, does not write; `merge` writes deduplicated by id/originId (`ImportMode.replace` reserved for V2, see experimental). |
+| `validateBundle(bundle)` | `unknown` | `ValidateResult` | stable | Only validates structure, does not write. |
 
-依据：`src/core/createCore.ts:100-104`（`PortableAPI`）、`:251-260`（实现）。
+Basis: `src/core/createCore.ts:100-104` (`PortableAPI`), `:251-260` (implementation).
 
-### 1.4 `core.graph`（图谱视图，1 方法）
+### 1.4 `core.graph` (graph view, 1 method)
 
-| 方法 | 入参 | 返回 | 级 | 隐性行为契约 |
+| Method | Input | Returns | Tier | Implicit behavior contract |
 |---|---|---|---|---|
-| `buildMemoryGraph(opts?)` | `BuildGraphOptions & { subjectId? }` | `MemoryGraphPayload` | stable | 后端统一产出力导向图 `{nodes, edges}`；`conflicts_with`/`corrects` 边 v1 不生成（数据未存，见 experimental）。 |
+| `buildMemoryGraph(opts?)` | `BuildGraphOptions & { subjectId? }` | `MemoryGraphPayload` | stable | Backend uniformly produces a force-directed graph `{nodes, edges}`; `conflicts_with`/`corrects` edges are not generated in v1 (data not stored, see experimental). |
 
-依据：`src/core/createCore.ts:107-109`（`MemoryGraphAPI`）、`:262-267`（实现）。
-
----
-
-## 二、关键数据形状专章（≥30 项）
-
-每项标 stable/experimental。"落库后完整形状"与"门面入参/返回"是 stable；`*Input`（宿主直接构造的入参）随门面稳定而 stable；只由内部算子产出、宿主不直接构造的中间入参标 experimental。
-
-### 2.1 三层落库形状（stable）
-
-1. **`Evidence`** — stable。证据落库完整形状：`id / subjectId / sourceKind / hostId / originId / occurredAt / recordedAt / rawContent / summary / allowLocalRead / allowCloudRead / allowInference / correctsEvidenceId`。依据 `src/evidence/model.ts:14-40`。
-2. **`EvidenceInput`** — stable（宿主经 `ingestUserMessage` 间接产；直接构造 `evidenceStore.put` 属 internal 路径）。`id/recordedAt` 由存储层生成，缺省授权位按 `sourceKind` 分流。依据 `src/evidence/model.ts:48-60`。
-3. **`SourceKind`** — stable 枚举：`'spoken' | 'inferred' | 'observed'`。加值不算破坏、须留 default。依据 `src/evidence/model.ts:11`。
-4. **`Event`** — stable。事件落库形状：`id / subjectId / summary / occurredAt / createdAt`。依据 `src/event/model.ts:10-18`。
-5. **`EventInput`** — **experimental**。宿主一般不直接构造（由 `distill` 内部产）；Host 侧无直接构造点（grep `apps/memoweft-host` 无命中）。依据 `src/event/model.ts:20-26`。
-6. **`EventWithEvidence`** — stable（`core.memory.listEvents` 返回项）：`Event + evidenceIds: string[]`。依据 `src/event/model.ts:28-30`。
-7. **`Cognition`** — stable。认知落库形状：`id / subjectId / content / contentType / formedBy / confidence(0~1000) / credStatus / scope / validAt / invalidAt / askedAt / archivedAt? / createdAt / updatedAt`。`askedAt` 字段本身 stable，其**写入时机**（M5 主动询问）属 experimental 面。依据 `src/cognition/model.ts:40-60`。
-8. **`CognitionInput`** — **experimental**。宿主不直接构造（`confidence`/`credStatus` 由 `consolidate` 算好后传入；Host grep 无命中）。依据 `src/cognition/model.ts:63-75`。
-9. **`ContentType`** — stable 枚举：`fact | preference | goal | project | state | trait | hypothesis | trend`。加值不算破坏、须留 default。依据 `src/cognition/model.ts:15-23`。
-10. **`FormedBy`** — stable 枚举：`stated | observed | ruled | inferred`。依据 `src/cognition/model.ts:26`。
-11. **`CredStatus`** — stable 枚举：`candidate | low | limited | stable | conflicted`。依据 `src/cognition/model.ts:29`。
-12. **`EvidenceRelation`** — stable 枚举：`support | contradict`。依据 `src/cognition/model.ts:32`。
-13. **`EvidenceLink`** — stable：`{ evidenceId, relation: EvidenceRelation }`。依据 `src/cognition/model.ts:34-37`。
-14. **`CognitionWithSources`** — stable：`Cognition + sources: EvidenceLink[]`。依据 `src/cognition/model.ts:78-80`。
-
-### 2.2 门面各方法入参形状
-
-15. **`CreateCoreOptions`** — stable：`dbPath` 必填 + `llm?/embedder?/retriever?/config?/vectorDbPath?`。依据 `src/core/createCore.ts:39-52`。
-16. **`UserMessageInput`** — stable：`content` + `subjectId?/hostId?/sourceKind?/originId?/occurredAt?`。依据 `:56-66`。
-17. **`ObservationInput`** — stable：`observations: Observation[]` + `subjectId?/hostId?`。依据 `:68-73`。
-18. **`RecallInput`** — stable：`query` + `subjectId?`。依据 `:75-78`。
-19. **`ConversationInput`** — stable：`message` + `conversationId?/subjectId?/hostId?/originId?/occurredAt?/systemPrompt?/seedTurns?`。依据 `:80-93`。
-20. **`UpdateProfileInput`** — stable：`subjectId?`。依据 `:95-97`。
-21. **`ListMemoryInput`** — stable：`subjectId?`。依据 `src/memory/managementApi.ts:115-117`。
-
-### 2.3 门面各方法返回形状
-
-22. **`TurnOutcome`** — stable：`reply / storedEvidence: Evidence / recall: RecalledCognition[] / llmCalls / error: string | null`。`error` 非空 = 回话降级但证据已落（见隐性契约第 6 条）。依据 `src/pipeline/conversation.ts:44-50`。
-23. **`RecalledCognition`** — stable（`recall`/`TurnOutcome.recall` 项）：`RelevantCognition + score + id?`。依据 `src/pipeline/conversation.ts:38-42`。
-24. **`UpdateProfileResult`** — stable：`distilled / consolidated / attributed / indexed / indexError: string | null / timings`。依据 `src/consolidation/updateProfile.ts:45-55`。
-25. **`UpdateProfileTimings`** — stable：`distillMs / consolidateMs / attributeMs / indexMs / totalMs`。依据 `:37-43`。
-26. **`HealthReport`** — stable：`llmReady / embedReady`。依据 `src/core/createCore.ts:112-117`。
-27. **`CognitionWithMeta`** — stable（`listCognitions` 项）：`Cognition + sources: EvidenceLink[] + effectiveConfidence`（读时算）。依据 `src/memory/managementApi.ts:120-125`。
-
-### 2.4 管理 API 入出参形状
-
-28. **`InvalidateCognitionInput`** — stable：`cognitionId + reason`。依据 `src/memory/managementApi.ts:22-26`。
-29. **`UpdateEvidenceAuthorizationInput`** — stable：`evidenceId + allowCloudRead? + allowInference? + reason`。依据 `:28-34`。
-30. **`RemoveEvidenceSafelyInput`** — stable：`evidenceId + reason + force?`。依据 `:36-41`。
-31. **`RemovalBlocker`** — stable：`kind: 'event'|'cognition' + id + relation?`。依据 `:44-51`。
-32. **`RemoveEvidenceResult`** — stable：`removed + blockers: RemovalBlocker[]`。依据 `:53-58`。
-33. **`RemoveCognitionSafelyInput`** — stable：`cognitionId + reason`。依据 `:60-63`。
-34. **`RemoveCognitionResult`** — stable：`removed + removedLinks: EvidenceLink[]`。依据 `:65-69`。
-35. **`MergeCognitionInput`** — stable：`sourceId + targetId + reason`。依据 `:71-77`。
-36. **`MergeCognitionResult`** — stable：`merged + movedLinks + duplicateLinks + target: Cognition + source: Cognition`。依据 `:79-89`。
-37. **`ArchiveCognitionInput`** — stable：`cognitionId + reason`。依据 `:91-94`。
-38. **`IntegrityIssue`** — stable：`kind + eventId? + cognitionId? + evidenceId + missing`。依据 `:97-104`。
-39. **`IntegrityReport`** — stable：`ok + issues: IntegrityIssue[] + checkedAt`。依据 `:106-110`。
-40. **`ResetSubjectInput`** — stable：`subjectId? + reason?`（`reason` 仅备语义、不落库）。依据 `:129-133`。
-41. **`ResetSubjectResult`** — stable：`evidenceRemoved / eventRemoved / cognitionRemoved / auditRemoved`。依据 `:135-140`。
-42. **`ManagementLogEntry`** — **experimental**（弱类型：`op`/`targetKind` 现为 `string`；门面**不暴露**读审计路径——Host 走 `core.memory.*` 写但不经门面读审计历史，只有底层 `SqliteManagementLog.list` 能读）：`op / targetKind / targetId / reason / detail: Record<string,unknown>|null / createdAt`。依据 `src/memory/managementLog.ts:23-33`。
-
-### 2.5 便携包形状
-
-43. **`MemoryBundle`** — stable：`format / schemaVersion / exportedAt / memoWeftVersion / subjectId / source{hostId,exportMode:'full'} / data{evidence,events,eventEvidence,cognitions,cognitionEvidence,unconsolidatedEventIds} / metadata{counts,notes}`。依据 `src/portable/model.ts:33-60`。
-44. **`EventEvidenceLink`** — stable：`{eventId, evidenceId}`。依据 `:20-23`。
-45. **`CognitionEvidenceLink`** — stable：`{cognitionId, evidenceId, relation}`。依据 `:26-30`。
-46. **`ImportMode`** — stable 类型，但 `'replace'` 取值 **experimental**（留 V2；现仅 `'dryRun' | 'merge'`）。依据 `:63`。
-47. **`ValidateResult`** — stable：`valid + errors[] + warnings[]`。依据 `:66-70`。
-48. **`ImportPlan`** — stable：`mode + valid + errors[] + warnings[] + counts{...} + duplicates{...}`。依据 `:73-92`。
-49. **`BUNDLE_FORMAT` / `BUNDLE_SCHEMA_VERSION`** — stable 常量：`'memoweft-bundle'` / `1`。依据 `:15-17`。
-
-### 2.6 图谱 payload 形状
-
-50. **`MemoryGraphPayload`** — stable：`subjectId / generatedAt / scope / depth / nodes / edges / stats`。依据 `src/graph/model.ts:71-79`。
-51. **`MemoryGraphNode`** — stable：`id / kind / label / summary? / (cognition:) contentType?/formedBy?/confidence?/credStatus? / (evidence:) sourceKind?/allowCloudRead?/allowInference? / 时间字段 / archivedAt? / val?/colorKey?`。依据 `:26-50`。
-52. **`MemoryGraphEdge`** — stable：`id / source / target / kind / label? / dashed?`。依据 `:52-59`。
-53. **`MemoryGraphStats`** — stable：`nodeCount / edgeCount / hiddenCount / activeCognitionCount / conflictedCount / hypothesisCount / observedEvidenceCount`。依据 `:61-69`。
-54. **`MemoryGraphNodeKind`** — stable 枚举：`subject|evidence|event|cognition`。依据 `:16`。
-55. **`MemoryGraphEdgeKind`** — stable 枚举，但 `conflicts_with`/`corrects` 两值 **experimental**（v1 未生成，数据未存）。依据 `:18-24`。
-
-### 2.7 感知输入形状
-
-56. **`Observation`** — stable（跨层契约"采集插件→Host→Core"）：`kind / occurredAt / content / originId? / meta? / allow*?`。**但**：`meta` 字段 **experimental**（本版仅承载不落库）、`kind` 是**开放集** experimental（现固定 `'active_window'`，以后加值）。依据 `src/perception/ingest.ts:19-34`。
-
-### 2.8 版本 / 配置
-
-57. **`MEMOWEFT_VERSION`** — stable 常量。`DLA_VERSION` 是 `@deprecated` 别名（保留、勿删）。依据 `src/index.ts:208-211`。
-58. **`MemoWeftConfig`（有哪些配置项）** — stable：identity / privacyMode / observedDefaults / consolidation / retrieval / attribution / background 等字段结构。**0.4.0 加可选 `language: 'zh' | 'en'`（additive 非破坏——旧宿主不传照跑；缺省 `'en'`，env `MEMOWEFT_LANG=zh` 或运行期设 `config.language` 切中文）+ 导出 `type Lang`（stable，供宿主设值）**。**但“怎么拿到 config”（`config` 单例访问）标 experimental**，pre-1.0 期间可能调整。`DlaConfig` 是 `@deprecated` 别名。`cloudReadDefault()` / `resolveLang()` stable（后者取当前库语言，只决定文本产出、绝不进置信度自算）。依据 `src/config.ts`。
+Basis: `src/core/createCore.ts:107-109` (`MemoryGraphAPI`), `:262-267` (implementation).
 
 ---
 
-## 三、隐性契约专章（宿主最易踩的坑）
+## II. Key data shapes chapter (≥30 items)
 
-1. **`confidence` 是 0~1000 量纲、由 MemoWeft 自算而非 LLM 自报**。别把它当 0~1 概率、也别信 LLM 回报的分数。依据 `src/cognition/model.ts:46-47`、`src/consolidation/confidence.ts:4`（"不采信 LLM 自报"）、`:24-34`。
-2. **管理写操作的 `reason` 必填是隐私审计契约**，不可放松为可选——审计表回答"我的记忆被怎么了"。依据 `src/memory/managementApi.ts:22-94`（各 Input 的 `reason: string` 非可选）、`managementLog.ts` schema `reason TEXT NOT NULL`。
-3. **observed 证据默认 `allowCloudRead=false`（隐私红线 B）**。摄入观察默认不上云；只有 `Observation` 显式给 `allowCloudRead:true` 才上云。依据 `src/perception/ingest.ts:7-10`、`:79-82`。
-4. **`systemPrompt` / `seedTurns` 仅首次建会话实例时生效**（换人设/重种续聊窗口须先 `dropConversation(id)` 再调，否则命中旧实例、新值被静默忽略）。依据 `src/core/createCore.ts:89-92`（入参注释）、`:207-234`（复用/重建逻辑）。
-5. **`effectiveConfidence` 是读时算的衍生值、不持久化**。库里存的是原始 `confidence`；`listCognitions` 返回的 `effectiveConfidence` = `confidence × 衰减因子`，每次读现算。依据 `src/memory/managementApi.ts:123-124`、`:397-405`。
-6. **`TurnOutcome.error` 非空 = 回话降级但证据已落（先存后答）**。宿主看到 `error != null` 应知"这轮没正常回话，但用户的话已存进证据库"，不要重试摄入（会重复落库或靠 originId 幂等）。依据 `src/pipeline/conversation.ts:44-50`、`:63-78`（存在前、召回失败当无召回照常）。
-7. **`RemoveEvidenceResult`：`removed=false && blockers 为空 = 目标不存在**（二义消歧）。拒绝只发生在有引用时（`blockers` 非空）；`removed=false` 且 `blockers=[]` 是"证据本就不存在"，不是"被拦下"。依据 `src/memory/managementApi.ts:55-57`、`:250`。
-8. **`resetSubject` v1 单人限制**：库内清理按 subject，但清向量索引走 `indexAll([])`，**清的是整张 vectors 表（所有 subject 的向量）**，不是只清本 subject。v1 单人单宿主无碍；多 subject 化时须换 subject 粒度。依据 `src/memory/managementApi.ts:435-438`。
-9. **无 `.env` 也能建 core**：缺模型配置时，"存证据 / 管理记忆"这类不碰模型的活仍可用；只有真调模型的读写路径（回话、语义召回、画像生成）才降级/报错。`health()` 告诉你哪些能力还在（`llmReady`/`embedReady`）。这是宿主判断"缺配时哪些能力还在"的关键承诺。依据 `src/core/createCore.ts:5-8`（工厂头注）、`:147-174`、`:269-280`（health）。
-10. **枚举取值集合的兜底责任在宿主**：`SourceKind` / `ContentType` / `FormedBy` / `CredStatus` / `EvidenceRelation`——**收窄（删取值）算破坏；加值不算破坏，但宿主须留 `default` 兜底分支**。宿主 `switch` 这些枚举时若无 `default`，加值后会漏分支——责任在宿主。依据本契约“破坏政策”节 + `src/evidence/model.ts:11`、`src/cognition/model.ts:15-32`。
+Each item is marked stable/experimental. "Complete post-persistence shape" and "facade input/return" are stable; `*Input` (inputs the host directly constructs) is stable as the facade is stable; intermediate inputs produced only by internal operators and not directly constructed by the host are marked experimental.
+
+### 2.1 Three-layer persistence shapes (stable)
+
+1. **`Evidence`** — stable. Complete post-persistence shape of evidence: `id / subjectId / sourceKind / hostId / originId / occurredAt / recordedAt / rawContent / summary / allowLocalRead / allowCloudRead / allowInference / correctsEvidenceId`. Basis `src/evidence/model.ts:14-40`.
+2. **`EvidenceInput`** — stable (the host produces it indirectly via `ingestUserMessage`; directly constructing `evidenceStore.put` is an internal path). `id/recordedAt` are generated by the storage layer, default authorization bits are routed by `sourceKind`. Basis `src/evidence/model.ts:48-60`.
+3. **`SourceKind`** — stable enum: `'spoken' | 'inferred' | 'observed'`. Adding values is not a break, must keep default. Basis `src/evidence/model.ts:11`.
+4. **`Event`** — stable. Event persistence shape: `id / subjectId / summary / occurredAt / createdAt`. Basis `src/event/model.ts:10-18`.
+5. **`EventInput`** — **experimental**. The host generally does not directly construct it (produced internally by `distill`); no direct construction point on the Host side (grep `apps/memoweft-host` has no hits). Basis `src/event/model.ts:20-26`.
+6. **`EventWithEvidence`** — stable (`core.memory.listEvents` return item): `Event + evidenceIds: string[]`. Basis `src/event/model.ts:28-30`.
+7. **`Cognition`** — stable. Cognition persistence shape: `id / subjectId / content / contentType / formedBy / confidence(0~1000) / credStatus / scope / validAt / invalidAt / askedAt / archivedAt? / createdAt / updatedAt`. The `askedAt` field itself is stable, but its **write timing** (M5 proactive asking) belongs to the experimental surface. Basis `src/cognition/model.ts:40-60`.
+8. **`CognitionInput`** — **experimental**. The host does not directly construct it (`confidence`/`credStatus` are computed by `consolidate` and passed in; Host grep has no hits). Basis `src/cognition/model.ts:63-75`.
+9. **`ContentType`** — stable enum: `fact | preference | goal | project | state | trait | hypothesis | trend`. Adding values is not a break, must keep default. Basis `src/cognition/model.ts:15-23`.
+10. **`FormedBy`** — stable enum: `stated | observed | ruled | inferred`. Basis `src/cognition/model.ts:26`.
+11. **`CredStatus`** — stable enum: `candidate | low | limited | stable | conflicted`. Basis `src/cognition/model.ts:29`.
+12. **`EvidenceRelation`** — stable enum: `support | contradict`. Basis `src/cognition/model.ts:32`.
+13. **`EvidenceLink`** — stable: `{ evidenceId, relation: EvidenceRelation }`. Basis `src/cognition/model.ts:34-37`.
+14. **`CognitionWithSources`** — stable: `Cognition + sources: EvidenceLink[]`. Basis `src/cognition/model.ts:78-80`.
+
+### 2.2 Input shapes of the facade methods
+
+15. **`CreateCoreOptions`** — stable: `dbPath` required + `llm?/embedder?/retriever?/config?/vectorDbPath?`. Basis `src/core/createCore.ts:39-52`.
+16. **`UserMessageInput`** — stable: `content` + `subjectId?/hostId?/sourceKind?/originId?/occurredAt?`. Basis `:56-66`.
+17. **`ObservationInput`** — stable: `observations: Observation[]` + `subjectId?/hostId?`. Basis `:68-73`.
+18. **`RecallInput`** — stable: `query` + `subjectId?`. Basis `:75-78`.
+19. **`ConversationInput`** — stable: `message` + `conversationId?/subjectId?/hostId?/originId?/occurredAt?/systemPrompt?/seedTurns?`. Basis `:80-93`.
+20. **`UpdateProfileInput`** — stable: `subjectId?`. Basis `:95-97`.
+21. **`ListMemoryInput`** — stable: `subjectId?`. Basis `src/memory/managementApi.ts:115-117`.
+
+### 2.3 Return shapes of the facade methods
+
+22. **`TurnOutcome`** — stable: `reply / storedEvidence: Evidence / recall: RecalledCognition[] / llmCalls / error: string | null`. Non-empty `error` = reply degraded but evidence already persisted (see implicit contract item 6). Basis `src/pipeline/conversation.ts:44-50`.
+23. **`RecalledCognition`** — stable (`recall`/`TurnOutcome.recall` item): `RelevantCognition + score + id?`. Basis `src/pipeline/conversation.ts:38-42`.
+24. **`UpdateProfileResult`** — stable: `distilled / consolidated / attributed / indexed / indexError: string | null / timings`. Basis `src/consolidation/updateProfile.ts:45-55`.
+25. **`UpdateProfileTimings`** — stable: `distillMs / consolidateMs / attributeMs / indexMs / totalMs`. Basis `:37-43`.
+26. **`HealthReport`** — stable: `llmReady / embedReady`. Basis `src/core/createCore.ts:112-117`.
+27. **`CognitionWithMeta`** — stable (`listCognitions` item): `Cognition + sources: EvidenceLink[] + effectiveConfidence` (read-time computed). Basis `src/memory/managementApi.ts:120-125`.
+
+### 2.4 Management API input/output shapes
+
+28. **`InvalidateCognitionInput`** — stable: `cognitionId + reason`. Basis `src/memory/managementApi.ts:22-26`.
+29. **`UpdateEvidenceAuthorizationInput`** — stable: `evidenceId + allowCloudRead? + allowInference? + reason`. Basis `:28-34`.
+30. **`RemoveEvidenceSafelyInput`** — stable: `evidenceId + reason + force?`. Basis `:36-41`.
+31. **`RemovalBlocker`** — stable: `kind: 'event'|'cognition' + id + relation?`. Basis `:44-51`.
+32. **`RemoveEvidenceResult`** — stable: `removed + blockers: RemovalBlocker[]`. Basis `:53-58`.
+33. **`RemoveCognitionSafelyInput`** — stable: `cognitionId + reason`. Basis `:60-63`.
+34. **`RemoveCognitionResult`** — stable: `removed + removedLinks: EvidenceLink[]`. Basis `:65-69`.
+35. **`MergeCognitionInput`** — stable: `sourceId + targetId + reason`. Basis `:71-77`.
+36. **`MergeCognitionResult`** — stable: `merged + movedLinks + duplicateLinks + target: Cognition + source: Cognition`. Basis `:79-89`.
+37. **`ArchiveCognitionInput`** — stable: `cognitionId + reason`. Basis `:91-94`.
+38. **`IntegrityIssue`** — stable: `kind + eventId? + cognitionId? + evidenceId + missing`. Basis `:97-104`.
+39. **`IntegrityReport`** — stable: `ok + issues: IntegrityIssue[] + checkedAt`. Basis `:106-110`.
+40. **`ResetSubjectInput`** — stable: `subjectId? + reason?` (`reason` is only for semantics, not persisted). Basis `:129-133`.
+41. **`ResetSubjectResult`** — stable: `evidenceRemoved / eventRemoved / cognitionRemoved / auditRemoved`. Basis `:135-140`.
+42. **`ManagementLogEntry`** — **experimental** (weakly typed: `op`/`targetKind` are currently `string`; the facade **does not expose** a path to read audit — the Host writes via `core.memory.*` but does not read audit history through the facade, only the underlying `SqliteManagementLog.list` can read): `op / targetKind / targetId / reason / detail: Record<string,unknown>|null / createdAt`. Basis `src/memory/managementLog.ts:23-33`.
+
+### 2.5 Bundle shapes
+
+43. **`MemoryBundle`** — stable: `format / schemaVersion / exportedAt / memoWeftVersion / subjectId / source{hostId,exportMode:'full'} / data{evidence,events,eventEvidence,cognitions,cognitionEvidence,unconsolidatedEventIds} / metadata{counts,notes}`. Basis `src/portable/model.ts:33-60`.
+44. **`EventEvidenceLink`** — stable: `{eventId, evidenceId}`. Basis `:20-23`.
+45. **`CognitionEvidenceLink`** — stable: `{cognitionId, evidenceId, relation}`. Basis `:26-30`.
+46. **`ImportMode`** — stable type, but the `'replace'` value is **experimental** (reserved for V2; currently only `'dryRun' | 'merge'`). Basis `:63`.
+47. **`ValidateResult`** — stable: `valid + errors[] + warnings[]`. Basis `:66-70`.
+48. **`ImportPlan`** — stable: `mode + valid + errors[] + warnings[] + counts{...} + duplicates{...}`. Basis `:73-92`.
+49. **`BUNDLE_FORMAT` / `BUNDLE_SCHEMA_VERSION`** — stable constants: `'memoweft-bundle'` / `1`. Basis `:15-17`.
+
+### 2.6 Graph payload shapes
+
+50. **`MemoryGraphPayload`** — stable: `subjectId / generatedAt / scope / depth / nodes / edges / stats`. Basis `src/graph/model.ts:71-79`.
+51. **`MemoryGraphNode`** — stable: `id / kind / label / summary? / (cognition:) contentType?/formedBy?/confidence?/credStatus? / (evidence:) sourceKind?/allowCloudRead?/allowInference? / time fields / archivedAt? / val?/colorKey?`. Basis `:26-50`.
+52. **`MemoryGraphEdge`** — stable: `id / source / target / kind / label? / dashed?`. Basis `:52-59`.
+53. **`MemoryGraphStats`** — stable: `nodeCount / edgeCount / hiddenCount / activeCognitionCount / conflictedCount / hypothesisCount / observedEvidenceCount`. Basis `:61-69`.
+54. **`MemoryGraphNodeKind`** — stable enum: `subject|evidence|event|cognition`. Basis `:16`.
+55. **`MemoryGraphEdgeKind`** — stable enum, but the two values `conflicts_with`/`corrects` are **experimental** (not generated in v1, data not stored). Basis `:18-24`.
+
+### 2.7 Perception input shapes
+
+56. **`Observation`** — stable (cross-layer contract "collector plugin→Host→Core"): `kind / occurredAt / content / originId? / meta? / allow*?`. **However**: the `meta` field is **experimental** (this version only carries it, does not persist), and `kind` is an **open set** experimental (currently fixed to `'active_window'`, more values added later). Basis `src/perception/ingest.ts:19-34`.
+
+### 2.8 Version / config
+
+57. **`MEMOWEFT_VERSION`** — stable constant. `DLA_VERSION` is an `@deprecated` alias (keep, do not delete). Basis `src/index.ts:208-211`.
+58. **`MemoWeftConfig` (what config items exist)** — stable: field structure of identity / privacyMode / observedDefaults / consolidation / retrieval / attribution / background etc. **0.4.0 adds an optional `language: 'zh' | 'en'` (additive, non-breaking — old hosts that don't pass it keep running; defaults to `'en'`, switch to Chinese via env `MEMOWEFT_LANG=zh` or by setting `config.language` at runtime) + exports `type Lang` (stable, for hosts to set values)**. **However, "how you obtain config" (`config` singleton access) is marked experimental** and may be adjusted during the pre-1.0 period. `DlaConfig` is an `@deprecated` alias. `cloudReadDefault()` / `resolveLang()` are stable (the latter reads the current store language, which only decides text output and never enters the confidence self-computation). Basis `src/config.ts`.
 
 ---
 
-## 四、experimental 清单专章（"以后要变"的集中列出）
+## III. Implicit contract chapter (the pitfalls hosts most easily step on)
 
-导出了、宿主可能碰，但**明说会变**，minor 版随便改（CHANGELOG 提一句即可，不欠迁移说明）。别把这些当稳定面依赖。
-
-- **`Observation.meta`** — 本版仅承载、不落库（Evidence 无 meta 列）；以后落库形状会变。依据 `src/perception/ingest.ts:28-29`。
-- **`Observation.kind`（开放集）** — 现固定 `'active_window'`，以后加 `'clipboard'`/`'device'` 等。依据 `src/perception/ingest.ts:23-24`。
-- **`ImportMode.replace`** — 现只支持 `'dryRun'|'merge'`，`'replace'` 留 V2。依据 `src/portable/model.ts:62-63`。
-- **图谱 `conflicts_with` / `corrects` 边** — v1 未生成（cognition↔cognition 链数据未存）；枚举保留、等数据模型补齐再产。依据 `src/graph/model.ts:7-12`、`:23-24`。
-- **`Cognition.askedAt`（写入时机）** — 字段本身稳定，但"何时写"（M5 主动询问 `proposeAsk` 发问后写）属试验期能力。依据 `src/cognition/model.ts:53`、`src/asking/proposeAsk.ts`。
-- **`ManagementLogEntry`（读审计历史）** — 弱类型（`op`/`targetKind` 为 `string`），门面不暴露读路径；宿主经 `core.memory.*` 只写不经门面读审计历史。依据 `src/memory/managementLog.ts:23-33`。
-- **扩展点接口 `Retriever` / `Embedder` / `LLMClient`** — 可替换的注入点，接口签名以后可能演进。依据 `src/index.ts:88-105`。**新增（档2·非破坏）**：`LLMClient.tier?` 与 `LLMConfig.tier?`（`ModelTier='cloud'|'local'`，已导出）是可选字段，缺省视为 `cloud`；宿主自注入的 `LLMClient` 不带 tier 也照跑。
-- **插件契约 `MemoWeftPlugin` / `PluginContext` / `PluginPermissions` / hook 类型**（第 7 步·v2·**experimental**）— 从 `src/plugin/contract.ts` 导出；`createMemoWeftCore` 加可选 `plugins?`（不传 = 行为同旧）。pre-1.0 hook 签名可能演进（如加字段）。**权威定义与语义见 [`plugin-contract.md`](./plugin-contract.md)**，此处不重复。
-- **config 的“取用方式”（单例访问）** — “有哪些配置项”是 stable，“怎么拿到 config（`config` 单例）”是 experimental，pre-1.0 期间可能调整。依据 `src/config.ts`。
-- **`EventInput` / `CognitionInput`** — 见"存疑定级"：宿主不直接构造的内部入参。
+1. **`confidence` is on a 0~1000 scale, computed by MemoWeft rather than self-reported by the LLM**. Don't treat it as a 0~1 probability, and don't trust the score the LLM reports back. Basis `src/cognition/model.ts:46-47`, `src/consolidation/confidence.ts:4` ("do not accept the LLM's self-report"), `:24-34`.
+2. **The required `reason` on management write operations is a privacy audit contract**, and must not be relaxed to optional — the audit table answers "what was done to my memory." Basis `src/memory/managementApi.ts:22-94` (each Input's `reason: string` is not optional), `managementLog.ts` schema `reason TEXT NOT NULL`.
+3. **observed evidence defaults to `allowCloudRead=false` (privacy red line B)**. Ingested observations default to not uploading to cloud; only when an `Observation` explicitly gives `allowCloudRead:true` does it go to cloud. Basis `src/perception/ingest.ts:7-10`, `:79-82`.
+4. **`systemPrompt` / `seedTurns` only take effect when the conversation instance is first created** (to change the persona/re-seed the continuation window you must first `dropConversation(id)` then call again, otherwise the old instance is hit and the new values are silently ignored). Basis `src/core/createCore.ts:89-92` (input comment), `:207-234` (reuse/rebuild logic).
+5. **`effectiveConfidence` is a read-time computed derived value, not persisted**. What's stored is the raw `confidence`; the `effectiveConfidence` returned by `listCognitions` = `confidence × decay factor`, computed fresh on each read. Basis `src/memory/managementApi.ts:123-124`, `:397-405`.
+6. **Non-empty `TurnOutcome.error` = reply degraded but evidence already persisted (store first, then reply)**. When the host sees `error != null` it should understand "this turn did not reply normally, but the user's message has been stored into the evidence store," and should not retry ingestion (which would either duplicate the persistence or rely on originId idempotency). Basis `src/pipeline/conversation.ts:44-50`, `:63-78` (store-before, a failed recall is treated as no recall and proceeds as usual).
+7. **`RemoveEvidenceResult`: `removed=false && blockers empty = target nonexistent`** (disambiguation). Refusal only happens when there are references (`blockers` non-empty); `removed=false` with `blockers=[]` means "the evidence never existed," not "it was blocked." Basis `src/memory/managementApi.ts:55-57`, `:250`.
+8. **`resetSubject` v1 single-person limitation**: in-store cleanup is by subject, but clearing the vector index goes through `indexAll([])`, which **clears the entire vectors table (all subjects' vectors)**, not just this subject. Harmless under v1 single-person single-host; when moving to multi-subject it must be changed to subject granularity. Basis `src/memory/managementApi.ts:435-438`.
+9. **A core can be built even without `.env`**: when model config is missing, work that doesn't touch a model — such as "storing evidence / managing memory" — is still usable; only read/write paths that actually call a model (reply, semantic recall, profile generation) degrade/error. `health()` tells you which capabilities remain (`llmReady`/`embedReady`). This is the key promise for the host to judge "which capabilities remain when config is missing." Basis `src/core/createCore.ts:5-8` (factory header comment), `:147-174`, `:269-280` (health).
+10. **The fallback responsibility for enum value sets is the host's**: `SourceKind` / `ContentType` / `FormedBy` / `CredStatus` / `EvidenceRelation` — **narrowing (deleting values) is a break; adding values is not a break, but the host must keep a `default` fallback branch**. If the host `switch`es these enums without a `default`, it will miss a branch after values are added — the responsibility is the host's. Basis this contract's "break policy" section + `src/evidence/model.ts:11`, `src/cognition/model.ts:15-32`.
 
 ---
 
-## 五、破坏性变更政策（pre-1.0，中间偏松）
+## IV. experimental list chapter (a consolidated list of "will change later")
 
-> 契约顶部「怎么读这份契约」已给一句话摘要；本章是**成文的政策全文**，宿主据此判断"某次升级会不会崩我的集成、要不要改代码"。
+Exported, the host may touch them, but **explicitly stated to change**, changeable freely in a minor version (a one-line CHANGELOG mention is enough, no migration note owed). Don't depend on these as a stable surface.
 
-### 5.1 什么算「破坏 stable」
-
-对 **stable** 面（第一/二章列出的门面方法与数据形状），下列改动算破坏：**改字段名 / 删字段 / 改可空性（可选↔必填、可空↔非空）/ 改语义**（例：`confidence` 从 0~1000 量纲改成 0~1 概率）。
-
-### 5.2 破坏 stable 的三要件
-
-允许在 **minor 版**破坏 stable，但**必须同时**满足三条，缺一不可：
-
-1. **① CHANGELOG 明确标注** —— 在 `CHANGELOG.md` 的 `Changed`（或 `Removed`）段点名写清破了哪个符号 / 哪个字段。
-2. **② 一句迁移说明** —— 旧→新怎么改（宿主照着一步能改完），写在 CHANGELOG 同一条里。
-3. **③ 能保旧名的走 `@deprecated` 别名** —— 凡是"改名 / 换常量"这类能留旧名的，保留旧名并挂 `@deprecated` 指向新名（**照现成样板**：`DLA_VERSION`（`src/index.ts:210` @deprecated 别名指向 `MEMOWEFT_VERSION`）、`DlaConfig`（`src/config.ts:136` @deprecated 别名指向 `MemoWeftConfig`）——这两处就是"已弃用样板"，别删）。
-
-**不强制"保留整整一个版本再删"**：删除时机不设硬性冷却期，能留别名就留、留不了（如删字段）就按 ①② 标注 + 迁移说明走。
-
-### 5.3 枚举加值口径
-
-对 `SourceKind` / `ContentType` / `FormedBy` / `CredStatus` / `EvidenceRelation` 等枚举：
-
-- **加新取值 ≠ 破坏** —— minor 版可加值。**但宿主必须对这些枚举留 `default` 兜底分支**（`switch` 没 `default`、加值后漏分支——**责任在宿主**，见隐性契约第 10 条）。
-- **收窄（删取值）= 破坏** —— 按 5.2 三要件走。
-
-### 5.4 experimental 面（松口径）
-
-对 **experimental** 面（第四章清单：`Observation.meta` / `Observation.kind` 开放集 / `ImportMode.replace` / 图谱 `conflicts_with`·`corrects` 边 / `Cognition.askedAt` 写入时机 / `Retriever`·`Embedder`·`LLMClient` 扩展点 / config 的取用方式 / `ManagementLogEntry` / `EventInput`·`CognitionInput` 等）：
-
-- **minor 版随便改**，改了不算爽约。
-- **CHANGELOG 提一句即可**，不欠迁移说明、不欠 `@deprecated` 别名。
-
-### 5.5 internal 面
-
-**别依赖**。导出还在只是本步"只标不删"（删属第 10 步）；一旦收口删除，不走 stable 的三要件，CHANGELOG 提一句即可。
+- **`Observation.meta`** — this version only carries it, does not persist (Evidence has no meta column); the persistence shape will change later. Basis `src/perception/ingest.ts:28-29`.
+- **`Observation.kind` (open set)** — currently fixed to `'active_window'`, later adding `'clipboard'`/`'device'` etc. Basis `src/perception/ingest.ts:23-24`.
+- **`ImportMode.replace`** — currently only supports `'dryRun'|'merge'`, `'replace'` reserved for V2. Basis `src/portable/model.ts:62-63`.
+- **Graph `conflicts_with` / `corrects` edges** — not generated in v1 (cognition↔cognition chain data not stored); the enum is reserved, to be produced once the data model is completed. Basis `src/graph/model.ts:7-12`, `:23-24`.
+- **`Cognition.askedAt` (write timing)** — the field itself is stable, but "when it's written" (written after M5 proactive asking `proposeAsk` asks) is an experimental-period capability. Basis `src/cognition/model.ts:53`, `src/asking/proposeAsk.ts`.
+- **`ManagementLogEntry` (reading audit history)** — weakly typed (`op`/`targetKind` are `string`), the facade does not expose a read path; the host writes via `core.memory.*` only and does not read audit history through the facade. Basis `src/memory/managementLog.ts:23-33`.
+- **Extension-point interfaces `Retriever` / `Embedder` / `LLMClient`** — replaceable injection points whose interface signatures may evolve later. Basis `src/index.ts:88-105`. **New (tier 2, non-breaking)**: `LLMClient.tier?` and `LLMConfig.tier?` (`ModelTier='cloud'|'local'`, already exported) are optional fields, defaulting to `cloud`; an `LLMClient` the host injects itself runs even without tier.
+- **Plugin contract `MemoWeftPlugin` / `PluginContext` / `PluginPermissions` / hook types** (Step 7 · v2 · **experimental**) — exported from `src/plugin/contract.ts`; `createMemoWeftCore` adds an optional `plugins?` (not passing it = same behavior as before). Pre-1.0 hook signatures may evolve (e.g. adding fields). **See [`plugin-contract.md`](./plugin-contract.md) for the authoritative definition and semantics**; not repeated here.
+- **config's "way of obtaining" (singleton access)** — "what config items exist" is stable, "how you obtain config (`config` singleton)" is experimental and may be adjusted during the pre-1.0 period. Basis `src/config.ts`.
+- **`EventInput` / `CognitionInput`** — see "questionable tier": internal inputs the host does not directly construct.
 
 ---
 
-## 六、存疑符号定级（回源确认结论）
+## V. Breaking-change policy (pre-1.0, moderately loose)
 
-以下 6 处容易误判的符号，按源码使用方式逐项定级：
+> The top of the contract, "How to read this contract," already gives a one-line summary; this chapter is the **full written policy text**, by which the host judges "will a given upgrade break my integration, do I need to change code."
 
-| 符号 | 级 | 定级依据（指到源） |
+### 5.1 What counts as "breaking stable"
+
+For the **stable** surface (the facade methods and data shapes listed in Chapters I/II), the following changes are breaks: **renaming a field / deleting a field / changing nullability (optional↔required, nullable↔non-nullable) / changing semantics** (e.g. `confidence` changed from a 0~1000 scale to a 0~1 probability).
+
+### 5.2 The three requirements for breaking stable
+
+Breaking stable is allowed in a **minor version**, but **all three** must be satisfied at once, none omitted:
+
+1. **① Clear CHANGELOG marking** — in the `Changed` (or `Removed`) section of `CHANGELOG.md`, name clearly which symbol / which field was broken.
+2. **② A one-line migration note** — old→new, how to change it (the host can finish the change in one step by following it), written in the same CHANGELOG entry.
+3. **③ Where the old name can be kept, provide an `@deprecated` alias** — for any "rename / swap constant" case where the old name can be kept, keep the old name with an `@deprecated` mark pointing to the new name (**follow the existing template**: `DLA_VERSION` (`src/index.ts:210` @deprecated alias pointing to `MEMOWEFT_VERSION`), `DlaConfig` (`src/config.ts:136` @deprecated alias pointing to `MemoWeftConfig`) — these two are the "already-deprecated template," don't delete them).
+
+**Not required to "keep it for a whole version before deleting"**: there is no hard cool-down period on deletion timing; keep an alias where you can, and where you can't (e.g. deleting a field) follow the ①② marking + migration note.
+
+### 5.3 Enum value-adding rule
+
+For enums like `SourceKind` / `ContentType` / `FormedBy` / `CredStatus` / `EvidenceRelation`:
+
+- **Adding new values ≠ break** — a minor version may add values. **But the host must keep a `default` fallback branch for these enums** (a `switch` with no `default` will miss a branch after values are added — **the responsibility is the host's**, see implicit contract item 10).
+- **Narrowing (deleting values) = break** — follow the three requirements in 5.2.
+
+### 5.4 experimental surface (loose rule)
+
+For the **experimental** surface (the Chapter IV list: `Observation.meta` / `Observation.kind` open set / `ImportMode.replace` / graph `conflicts_with`·`corrects` edges / `Cognition.askedAt` write timing / `Retriever`·`Embedder`·`LLMClient` extension points / config's way of obtaining / `ManagementLogEntry` / `EventInput`·`CognitionInput` etc.):
+
+- **Change freely in a minor version**, changing it is not a broken promise.
+- **A one-line CHANGELOG mention is enough**, no migration note owed, no `@deprecated` alias owed.
+
+### 5.5 internal surface
+
+**Don't depend on it**. Still exported only because this step is "mark-only, no deletion" (deletion belongs to Step 10); once collected and deleted, it does not follow the three requirements of stable, a one-line CHANGELOG mention is enough.
+
+---
+
+## VI. Questionable symbol tiering (conclusions confirmed back to source)
+
+The following 6 easily-misjudged symbols are tiered item by item according to their usage in the source:
+
+| Symbol | Tier | Tiering basis (pointed to source) |
 |---|---|---|
-| `AskProposal` / `AskPolicy` / `proposeAsk`（`src/asking/`）| **internal** | 门面 `MemoWeftCore`（`createCore.ts:120-145`）**不暴露** proposeAsk；Host（`apps/memoweft-host`）grep **无命中**。唯一直用点是**开发测试台** `testbench/server.mjs:25-26,463-464`——测试台是 dev 调试harness、非产品宿主，不构成对宿主的契约面。故定 internal（AskProposal/AskPolicy 是其入出参，随之 internal）。`revisitConflicts` 同理 internal。 |
-| `Cognition` / `Evidence` 领域形状 | **stable** | `recall`/`TurnOutcome.storedEvidence` 回吐整条 `Evidence`（`createCore.ts:122`、`conversation.ts:46`）；`listCognitions`/`listEvidence`/`listEvents` 把整条 `Cognition`/`Evidence`/`Event` 回吐给宿主（`managementApi.ts:167-171`）。回吐→升 stable。 |
-| `Conversation` 类 | **internal** | 门面 `handleConversationTurn` **内包** `Conversation`（`createCore.ts:207-228` 建实例、缓存、复用），宿主不直接 new。门面已收口→类判 internal。 |
-| `TurnOutcome` / `RecalledCognition` | **stable** | 作 `handleConversationTurn` / `recall` 的返回形状回吐宿主（`createCore.ts:126,128`）。→ stable。 |
-| `Observation`（`src/perception/ingest.ts`）| **stable**（`meta` 字段 experimental）| "采集插件→Host→Core"跨层契约，`ingestObservation` 入参（`createCore.ts:124`、`ingest.ts:19-34`）。`meta` 字段源码注明"本版仅承载不落库"→ 该字段 experimental。 |
-| `EventInput` / `CognitionInput` | **experimental** | 宿主一般不直接构造（由 distill/consolidate 内部产；Host grep 无直接构造点）。不列入宿主主面。依据 `event/model.ts:20-26`、`cognition/model.ts:63-75`。 |
-| `ManagementLogEntry` | **experimental** | 字段弱类型（`op`/`targetKind` 为 `string`，`managementLog.ts:23-33`）；门面不暴露读审计历史路径，Host 只经 `core.memory.*` 写、不经门面读审计。→ experimental。 |
+| `AskProposal` / `AskPolicy` / `proposeAsk` (`src/asking/`) | **internal** | The facade `MemoWeftCore` (`createCore.ts:120-145`) **does not expose** proposeAsk; the Host (`apps/memoweft-host`) grep has **no hits**. The only direct-use point is the **development testbench** `testbench/server.mjs:25-26,463-464` — the testbench is a dev debugging harness, not a product host, and does not constitute a contract surface to the host. Hence tiered internal (AskProposal/AskPolicy are its input/output, internal accordingly). `revisitConflicts` is internal for the same reason. |
+| `Cognition` / `Evidence` domain shapes | **stable** | `recall`/`TurnOutcome.storedEvidence` return the whole `Evidence` (`createCore.ts:122`, `conversation.ts:46`); `listCognitions`/`listEvidence`/`listEvents` return the whole `Cognition`/`Evidence`/`Event` to the host (`managementApi.ts:167-171`). Returned to the host → promoted to stable. |
+| `Conversation` class | **internal** | The facade `handleConversationTurn` **wraps** `Conversation` internally (`createCore.ts:207-228` creates the instance, caches, reuses); the host does not directly new it. The facade already collects it → the class is judged internal. |
+| `TurnOutcome` / `RecalledCognition` | **stable** | As the return shapes of `handleConversationTurn` / `recall`, returned to the host (`createCore.ts:126,128`). → stable. |
+| `Observation` (`src/perception/ingest.ts`) | **stable** (`meta` field experimental) | The "collector plugin→Host→Core" cross-layer contract, the input of `ingestObservation` (`createCore.ts:124`, `ingest.ts:19-34`). The `meta` field's source notes "this version only carries it, does not persist" → that field is experimental. |
+| `EventInput` / `CognitionInput` | **experimental** | The host generally does not directly construct them (produced internally by distill/consolidate; Host grep has no direct construction point). Not listed in the host's main surface. Basis `event/model.ts:20-26`, `cognition/model.ts:63-75`. |
+| `ManagementLogEntry` | **experimental** | Weakly typed fields (`op`/`targetKind` are `string`, `managementLog.ts:23-33`); the facade does not expose a path to read audit history, the Host writes only via `core.memory.*` and does not read audit through the facade. → experimental. |
