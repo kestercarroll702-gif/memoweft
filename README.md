@@ -132,11 +132,7 @@ The bundled host is a reference implementation that shows how an application can
 
 Read [what the reference host is and is not](./docs/reference-host.md).
 
-![MemoWeft reference host chat with memory recall and memory controls](assets/screenshot-chat.png)
-
-![MemoWeft reference host memory graph connecting evidence, events, and cognitions](assets/screenshot-memory-graph.png)
-
-![MemoWeft reference host cognition cards with confidence and source traces](assets/screenshot-memory-manage.png)
+![MemoWeft reference host demo — chatting, watching memory form, and the memory graph of evidence, events, and cognitions](assets/reference-host-demo.gif)
 
 ## Ecosystem adapters
 
