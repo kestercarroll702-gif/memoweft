@@ -30,7 +30,7 @@
  * 只绑 127.0.0.1：本服务无鉴权、直接读写个人画像，只开本机回环、杜绝外网面。
  */
 import { createServer, type IncomingMessage } from 'node:http';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createMemoWeftCore, config, type MemoryBundle, type Observation } from 'memoweft';
 import { createProfileScheduler } from './scheduler.ts';
@@ -39,9 +39,13 @@ import { credBand } from './confBand.ts';
 import { getExperience, listExperiences, listPlugins, ALL_PLUGINS, EXPERIENCE_IDS, DEFAULT_EXPERIENCE_ID } from './experiences/index.ts';
 import { buildEnvResponse } from './genEnv.ts';
 
-// 先读 .env（Node 不加 --env-file 不会自动读）：确保下面 DB_PATH / 纯库开关 / Core 构造都拿得到 .env 配置。
-//   loadEnvFile 幂等；没有 .env 抛错忽略。放在最顶部——否则 DB_PATH（下面就求值）读不到 .env 里的 MEMOWEFT_HOST_DB。
-try { process.loadEnvFile(); } catch { /* 没有 .env 或已加载，忽略 */ }
+// .env 固定在本 Host 目录（apps/memoweft-host/.env），用脚本自身位置定位、不受启动时 cwd 影响。
+//   （`npm start -w` 会把 cwd 切到本包目录，但从仓库根直接 `node …` 时 cwd 是根——写死路径避免"存一处读另一处"。）
+//   配置向导的「保存配置并启用」(/api/save-env) 写的就是这同一个文件，读写一致。
+const ENV_PATH = join(import.meta.dirname, '..', '.env');
+// 先读 .env（Node 不加 --env-file 不会自动读）：确保下面 DB_PATH / 纯库开关 / Core 构造都拿得到配置。
+//   loadEnvFile 幂等；没有该文件抛错忽略。放在最顶部——否则 DB_PATH（下面就求值）读不到 MEMOWEFT_HOST_DB。
+try { process.loadEnvFile(ENV_PATH); } catch { /* 没有 .env 或已加载，忽略 */ }
 
 // 纯库模式（MEMOWEFT_EXPERIENCE_UI=off）：Host 被当库 import 时不起网页——【在建任何库/目录之前】就退出，
 //   不 createMemoWeftCore、不建 host.db、不建 data 目录（纯库模式不该在磁盘留 Host 残留）。
@@ -445,6 +449,24 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/gen-env') {
       const body = await readJson(req); // 局部量，拼完即随栈回收；全程不 console.log(body)、不外泄
       sendJson(res, ...buildEnvResponse(body)); // 拼装是纯函数，key 只在其栈内流过
+      return;
+    }
+
+    // ── 配置向导·保存并启用：把 .env 写到固定位置（重启后生效） ──
+    // 与 gen-env 的区别：gen-env 只回文本、不落盘（隐私铁律的老默认）；save-env 是用户主动点「保存配置并启用」、
+    //   明示同意把配置（含 apiKey）写进本机 apps/memoweft-host/.env——该文件已被 git 忽略、不会上传，仅本地 demo 便利。
+    //   仍复用 buildEnvResponse 拼文本（纯函数 + 必填校验）；落盘只发生在这一步、只写 ENV_PATH 这一个文件，不进日志/缓存。
+    if (req.method === 'POST' && url.pathname === '/api/save-env') {
+      const body = await readJson(req);
+      const [code, payload] = buildEnvResponse(body);
+      if (code !== 200 || !('env' in payload)) { sendJson(res, code, payload); return; }
+      try {
+        writeFileSync(ENV_PATH, payload.env, 'utf8');
+      } catch (e) {
+        sendJson(res, 500, { error: '写入 .env 失败：' + (e instanceof Error ? e.message : String(e)) });
+        return;
+      }
+      sendJson(res, 200, { saved: true, path: ENV_PATH, env: payload.env });
       return;
     }
 

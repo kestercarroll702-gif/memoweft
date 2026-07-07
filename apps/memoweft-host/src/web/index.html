@@ -495,7 +495,7 @@
 <div id="wizard">
   <div class="wiz">
     <h1>先配一个模型，就能开始聊了</h1>
-    <p class="lead">MemoWeft 靠一个大模型来回话、并把你说的话记下来。填好下面第一组（必填），生成一段配置贴到项目里、重启，就能用了。你的密钥只用来生成这段文本，不会被保存在这里。</p>
+    <p class="lead">MemoWeft 靠一个大模型来回话、并把你说的话记下来。填好下面第一组（必填），点「保存配置并启用」，配置会写到本机项目下的 <code>.env</code> 文件（已被 git 忽略、不会上传），重启一次就能用了、以后不用再配。密钥只保存在你自己电脑上、仅本地使用。</p>
 
     <!-- 第 1 组：对话模型（必填） -->
     <div class="wiz-group">
@@ -570,20 +570,20 @@
     </div>
 
     <div class="wiz-actions">
-      <button id="wizGen">生成配置</button>
+      <button id="wizGen">保存配置并启用</button>
       <span id="wizErr"></span>
     </div>
 
-    <!-- 生成结果：只读 .env 文本 + 复制 + 保存引导 -->
+    <!-- 保存结果：已写盘提示 + 只读回显写入内容 + 复制（备用） -->
     <div id="wizResult">
-      <h2>把下面这段保存好</h2>
+      <h2>✓ 已保存，重启一次就能聊</h2>
+      <div class="wiz-save-hint">
+        配置已写入本机 <code>apps/memoweft-host/.env</code>（已被 git 忽略、不会上传）。<b>回到终端把 host 停掉（Ctrl+C），再 <code>npm start -w @memoweft/host</code> 启动一次</b>，就能开始聊了；以后不用再配。
+      </div>
       <textarea id="wizEnv" readonly spellcheck="false"></textarea>
       <div class="wiz-result-actions">
-        <button id="wizCopy">复制</button>
+        <button id="wizCopy">复制内容</button>
         <span id="wizCopied">已复制 ✓</span>
-      </div>
-      <div class="wiz-save-hint">
-        把上面内容保存到项目根目录的 <code>.env</code> 文件里，然后重启，就能开始聊了。
       </div>
     </div>
   </div>
@@ -817,8 +817,8 @@
   // ── 配置向导 ──
   function enterWizard() { document.body.classList.add('mode-wizard'); }
 
-  // 生成配置：收三组 9 字段 + 是否带界面 → POST /api/gen-env → 只读框展示返回的 .env 文本。
-  //   apiKey 只随这次请求发出去、不存在页面任何持久处；生成后由用户自行保存到 .env。
+  // 保存配置并启用：收三组 9 字段 + 是否带界面 → POST /api/save-env → 服务端写 .env、回显写入内容。
+  //   apiKey 随请求发出、写进本机项目下的 .env（已 gitignore）；页面不持久保存，重启后由 Core 读取生效。
   async function wizGenEnv() {
     const errBox = $('wizErr');
     errBox.style.display = 'none'; errBox.textContent = '';
@@ -838,7 +838,7 @@
     };
     $('wizGen').disabled = true;
     try {
-      const res = await fetch('/api/gen-env', {
+      const res = await fetch('/api/save-env', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       });
       const d = await res.json();
