@@ -1,114 +1,118 @@
 # Contributing to MemoWeft
 
-这份文件讲**每次改代码都要守的硬规矩**。人和 AI 都适用。
+**English** | [简体中文](./CONTRIBUTING.zh-CN.md)
 
-刚接手先读仓库根的 [`AGENTS.md`](AGENTS.md)（极简开工说明）和 [`CURRENT.md`](CURRENT.md)（现在在做什么）。`docs/internal/` 只保留可选的长期边界说明，不是必读。
+This document covers the **hard rules you must follow every time you change code**. They apply to both humans and AI.
 
----
-
-## 一句话规矩
-
-> 任何代码改动，交付前 **`npm run typecheck && npm test && npm run build` 三个必须全绿**。跑不过就没完成，不许提。
-
-这不是建议，是门槛。CI（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）会在 PR 上跑同样三步，红的合不进来。
+When you first pick this up, read the repo root [`AGENTS.md`](AGENTS.md) (minimal getting-started notes) and [`CURRENT.md`](CURRENT.md) (what's being worked on right now). `docs/internal/` only keeps optional long-term boundary notes; it is not required reading.
 
 ---
 
-## 环境要求
+## The rule in one sentence
 
-- **Node ≥ 24 开箱即用；Node 20/22 需 `npm i better-sqlite3`。** 存储底层用 SQLite，有两条驱动：Node ≥24 默认走内置 `node:sqlite`（该模块到 24 才转正），零额外依赖；Node 20/22 上内置模块不可用，装上可选的 `better-sqlite3` 即可跑（见 [`docs/INSTALL.md`](docs/INSTALL.md)）。开发库本身（跑 `.ts` 测试、原生剥类型）仍推荐 Node ≥24：Node 22 需 22.18+ 才默认支持原生剥 `.ts` 类型，Node 20 没有此能力（全套 `.ts` 测试在 20 上跑不了，CI 改用 dist 冒烟脚本验）。
-- **零 runtime 依赖**。runtime `dependencies` 永远为空——这是「零运行时依赖」的准确含义。`better-sqlite3` 是**可选 peer 依赖**（`peerDependenciesMeta.optional`），装不装用户自己定，可选 peer 不算破戒。开发时装依赖装的是 devDependencies：`typescript`、`@types/node`，外加仅供多版本测试矩阵用的 `better-sqlite3`（Node 24 默认走内置驱动，测零依赖路径时会先 `rm` 掉它）。
-- 想跑测试台 / 真实写路径，需要在 `.env` 配模型与嵌入器（见下方「配置」）。**但单元测试不需要任何 .env**——测试用假 LLM，纯离线，以 `npm test` 各 workspace 实际输出为准、`fail` 必须为 0。
+> For any code change, before you deliver it, **`npm run typecheck && npm test && npm run build` must all three be green**. If they don't pass, it's not done, and you may not submit it.
+
+This is not a suggestion, it's a gate. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same three steps on the PR, and anything red cannot be merged.
+
+---
+
+## Environment requirements
+
+- **Node ≥ 24 works out of the box; Node 20/22 need `npm i better-sqlite3`.** The storage layer uses SQLite, with two drivers: Node ≥24 defaults to the built-in `node:sqlite` (that module only became official in 24), zero extra dependencies; on Node 20/22 the built-in module is unavailable, so installing the optional `better-sqlite3` lets it run (see [`docs/INSTALL.md`](docs/INSTALL.md)). For developing the library itself (running `.ts` tests, native type stripping), Node ≥24 is still recommended: Node 22 needs 22.18+ to support native `.ts` type stripping by default, and Node 20 lacks this capability entirely (the full `.ts` test suite can't run on 20; CI instead verifies via a dist smoke script).
+- **Zero runtime dependencies.** The runtime `dependencies` are always empty—this is the precise meaning of "zero runtime dependencies." `better-sqlite3` is an **optional peer dependency** (`peerDependenciesMeta.optional`); whether to install it is up to the user, and an optional peer does not count as breaking the rule. Dependencies installed during development are devDependencies: `typescript`, `@types/node`, plus `better-sqlite3` used solely for the multi-version test matrix (Node 24 defaults to the built-in driver; when testing the zero-dependency path it is `rm`'d first).
+- To run the test bench / the real write path, you need to configure the model and embedder in `.env` (see "Configuration" below). **But unit tests need no `.env` at all**—the tests use a fake LLM, purely offline; go by the actual output of `npm test` in each workspace, and `fail` must be 0.
 
 ```bash
-npm ci            # 或 npm install
-npm run typecheck # 类型
-npm test          # Core 单元测试（离线，以实际输出为准、fail 必须为 0）
-npm run build     # 出 dist/
+npm ci            # or npm install
+npm run typecheck # types
+npm test          # Core unit tests (offline, go by actual output, fail must be 0)
+npm run build     # produces dist/
 ```
 
-Host 与采集插件各有独立测试：`npm test -w @memoweft/host`、`npm test -w @memoweft/collector-active-window`——同样以各 workspace 实际输出为准、`fail` 必须为 0。
+Host and collector plugins each have their own independent tests: `npm test -w @memoweft/host`, `npm test -w @memoweft/collector-active-window`—likewise, go by each workspace's actual output, and `fail` must be 0.
+
+> **Mirror-registry development (CI has a lockfile guardrail):** maintainers can keep using a domestic mirror registry for day-to-day local development; but **any `npm install` that will rewrite `package-lock.json`** must carry the official-registry prefix—`npm_config_registry=https://registry.npmjs.org npm install`—otherwise the mirror registry URL gets written into the lockfile, and CI's `lockfile registry guard` (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) will therefore go red. This repo does **not** commit a project-level `.npmrc`, so your local mirror configuration is unaffected.
 
 ---
 
-## 三绿护栏（提交前必跑）
+## The three-green guardrail (must run before submitting)
 
-| 命令 | 干什么 | 绿的标准 |
+| Command | What it does | Green standard |
 | --- | --- | --- |
-| `npm run typecheck` | `tsc` 全量类型检查（`src` + `tests`） | 无报错 |
-| `npm test` | `node --test tests/**/*.test.ts`，纯离线 | 以实际输出为准，`fail` 必须为 0（pass 数字随测试增减） |
-| `npm run build` | `tsc` 出 `dist/`（含 `.d.ts`） | 无报错、`dist/` 更新 |
+| `npm run typecheck` | `tsc` full type check (`src` + `tests`) | no errors |
+| `npm test` | `node --test tests/**/*.test.ts`, purely offline | go by actual output, `fail` must be 0 (the pass number grows/shrinks with the tests) |
+| `npm run build` | `tsc` produces `dist/` (including `.d.ts`) | no errors, `dist/` updated |
 
-三条要**按顺序都过**才算完成。别只跑 typecheck 就交。
-
----
-
-## 分支与提交约定
-
-- **别直接在默认分支（`main`）上改。** 开分支：
-  - `feat/<简述>` 新功能
-  - `fix/<简述>` 修 bug
-  - `docs/<简述>` 只改文档
-  - `chore/<简述>` 杂项（构建、配置、改名）
-- **小步提交，一个提交一件事。** 提交信息写清楚「改了什么 + 为什么」，别写 "update"、"fix" 这种没信息量的。
-- **禁止 `git commit --no-verify`、禁止跳过测试。** 护栏是给整个项目兜底的，绕过等于把风险塞给下一个接手的人。
-- PR 正文至少说清 **改了什么 / 为什么 / 怎么验的（贴三绿结果）**。
+All three must **pass in order** to count as done. Don't submit after running only typecheck.
 
 ---
 
-## 依赖最小化（默认拒绝新依赖）
+## Branch and commit conventions
 
-这是刻在 `package.json` 里的原则（见地图 cell 11）：
-
-- 存储用 `node:sqlite`、HTTP 用 `node:http`、日志/文件用 `node:fs`——**能用 Node 内置就绝不加包**。
-- 想加任何新依赖（包括 dev 依赖），先在 issue 里说清**为什么内置的搞不定**，由作者拍板。默认答案是「不加」。
-- runtime `dependencies` 目标永远是空的。宿主 `npm install memoweft` 时不该被拖进一堆传递依赖。
-
----
-
-## 认知层是核心，别顺手动
-
-品牌名、文档、注释、构建配置——这些随便改，改错了三绿能兜住。但下面这些属于**核心机制**，动它们之前必须先在 issue 里摊开权衡、由作者（PM）确认，不许「顺手优化」：
-
-- 三层数据模型（evidence → event → cognition）
-- 认知纪律：记≠信（LLM 推的先当低置信候选）、禁止系统自证（助手输出/用户沉默不算证据）、冲突先暴露不自动消解、把握度 MemoWeft 自算不听 LLM 自报、分型过期（情绪快忘/明确偏好不忘）
-- 置信度算法、衰减半衰期、读写解耦逻辑
-- 公共 API 签名（`src/index.ts` 导出的东西）——宿主可能已经在用，破坏性改名要保留 deprecated 别名（例如 `DLA_VERSION` / `DlaConfig` 就是这么留的）
-
-判断标准很简单：**拿不准这算不算「核心」，就当它是，先问。**
+- **Don't change things directly on the default branch (`main`).** Open a branch:
+  - `feat/<short description>` new feature
+  - `fix/<short description>` bug fix
+  - `docs/<short description>` docs-only changes
+  - `chore/<short description>` miscellaneous (build, config, renames)
+- **Small commits, one thing per commit.** Write commit messages that clearly state "what changed + why"; don't write uninformative ones like "update" or "fix".
+- **`git commit --no-verify` is forbidden, and skipping tests is forbidden.** The guardrail backstops the whole project; bypassing it just hands the risk to whoever picks this up next.
+- The PR body must at minimum make clear **what changed / why / how it was verified (paste the three-green results)**.
 
 ---
 
-## 文档同步（改完必做）
+## Dependency minimization (new dependencies are rejected by default)
 
-代码和文档一起动，别只绿了代码：
+This is a principle carved into `package.json` (see map cell 11):
 
-- 改动了**当前主线的进展 / 边界** → 更新 [`CURRENT.md`](CURRENT.md)。
-- 有值得记的**历史 / 决策** → 写进提交说明；对外里程碑补进 [`CHANGELOG.md`](CHANGELOG.md)。
-- 改了**对外能力 / 用法** → 同步对外文档（`README`、`docs/` 下的 architecture / integration 等）。
-
-「代码绿了但文档没跟上」= 没做完。
+- Use `node:sqlite` for storage, `node:http` for HTTP, `node:fs` for logging/files—**if a Node built-in can do it, never add a package**.
+- To add any new dependency (including dev dependencies), first explain in an issue **why the built-in can't handle it**, and let the author make the call. The default answer is "don't add it."
+- The runtime `dependencies` goal is always to be empty. When a host runs `npm install memoweft`, it should not be dragged into a pile of transitive dependencies.
 
 ---
 
-## 环境变量 / 配置
+## The cognition layer is core, don't touch it on a whim
 
-- 改名后**双认前缀**：代码读每个 env 键都先读 `MEMOWEFT_*` 主名、读不到再回退旧名 `DLA_*`。文档一律写 `MEMOWEFT_*`，并注明 `DLA_*` 仍向后兼容。
-- **别碰 `.env`**（含用户真实密钥），也别删 / 改 `DLA_*` 旧键——只新增 `MEMOWEFT_*`，让代码同时认两套。
-- 涉及的键：`MEMOWEFT_LLM_*`、`MEMOWEFT_WRITE_LLM_*`、`MEMOWEFT_EMBED_*`（各自兼容对应 `DLA_*`）。
-- 默认 SQLite 文件名 `./dla.db` 不改（改了会脱离根目录已有数据文件）；物理目录名 `DLA_rebuild` 不改。
+Brand names, docs, comments, build config—change these freely; if you get them wrong, the three-green catches it. But the following belong to **core mechanisms**, and before touching them you must first lay out the trade-offs in an issue and get confirmation from the author (PM); no "optimizing on a whim" allowed:
+
+- The three-layer data model (evidence → event → cognition)
+- Cognitive discipline: records are not beliefs (LLM inferences are first treated as low-confidence candidates), no self-corroboration (the assistant's own output / user silence is not evidence), conflicts are exposed first, never auto-resolved, confidence is computed by MemoWeft, never taken from the LLM's self-report, typed staleness (emotions forgotten quickly / explicit preferences never forgotten)
+- The confidence algorithm, decay half-life, read/write decoupling logic
+- Public API signatures (the things exported from `src/index.ts`)—hosts may already be using them, so breaking renames must keep a deprecated alias (for example, `DLA_VERSION` / `DlaConfig` were kept this way)
+
+The criterion is simple: **if you're unsure whether something counts as "core," treat it as such and ask first.**
 
 ---
 
-## 提交前自查清单
+## Doc synchronization (mandatory after changes)
 
-- [ ] `npm run typecheck` 绿
-- [ ] `npm test` 绿（`fail 0`）
-- [ ] `npm run build` 绿，`dist/` 是新的
-- [ ] 没加新依赖（或已在 issue 里获批）
-- [ ] 没擅自动核心机制 / 破坏公共 API
-- [ ] 相关文档已同步（CURRENT.md / 对外 docs / 里程碑进 CHANGELOG）
-- [ ] 没碰 `.env`、没删 `DLA_*` 旧键、没改物理目录名与 `./dla.db`
-- [ ] PR 正文写清了「改了什么 / 为什么 / 怎么验的（贴三绿）」
+Code and docs move together; don't just get the code green:
 
-License：MIT（见仓库根 [`LICENSE`](LICENSE)）。提交贡献即表示同意以 MIT 许可你的改动。
+- Changed the **current mainline's progress / boundaries** → update [`CURRENT.md`](CURRENT.md).
+- Have **history / decisions** worth recording → write them into the commit message; for public milestones add them to [`CHANGELOG.md`](CHANGELOG.md).
+- Changed **public capabilities / usage** → sync the public docs (`README`, architecture / integration under `docs/`, etc.).
+
+"Code is green but docs didn't keep up" = not done.
+
+---
+
+## Environment variables / configuration
+
+- After a rename, **recognize both prefixes**: when reading each env key, the code reads the primary `MEMOWEFT_*` name first, and falls back to the old `DLA_*` name if not found. Docs always write `MEMOWEFT_*`, and note that `DLA_*` remains backward-compatible.
+- **Don't touch `.env`** (which contains the user's real keys), and don't delete / change the old `DLA_*` keys—only add `MEMOWEFT_*`, letting the code recognize both sets.
+- Keys involved: `MEMOWEFT_LLM_*`, `MEMOWEFT_WRITE_LLM_*`, `MEMOWEFT_EMBED_*` (each backward-compatible with the corresponding `DLA_*`).
+- The default SQLite filename `./dla.db` doesn't change (changing it would break away from the existing data file in the root); the physical directory name `DLA_rebuild` doesn't change.
+
+---
+
+## Pre-submission self-check list
+
+- [ ] `npm run typecheck` green
+- [ ] `npm test` green (`fail 0`)
+- [ ] `npm run build` green, `dist/` is fresh
+- [ ] No new dependencies added (or already approved in an issue)
+- [ ] Did not touch core mechanisms / break the public API without authorization
+- [ ] Relevant docs synced (CURRENT.md / public docs / milestones into CHANGELOG)
+- [ ] Did not touch `.env`, did not delete old `DLA_*` keys, did not change the physical directory name or `./dla.db`
+- [ ] The PR body clearly states "what changed / why / how it was verified (paste the three-green)"
+
+License: MIT (see repo root [`LICENSE`](LICENSE)). Submitting a contribution means you agree to license your changes under MIT.
