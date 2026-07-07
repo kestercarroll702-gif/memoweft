@@ -1,346 +1,348 @@
-# MemoWeft 架构总览
+# MemoWeft Architecture Overview
 
-> 本文是**对外可读**的架构文档：从三层数据模型、读写双路径，到认知纪律的落地方式，逐一对照真实代码讲清楚。
-> 宿主接入见 [integration.md](./integration.md)，稳定性边界见 [memory-surface-contract.md](./memory-surface-contract.md)。更细的机制口径（置信度算法、冲突闭环、隐私授权语义）直接对照源码：`src/consolidation/confidence.ts`、`src/consolidation/consolidate.ts`、`src/evidence/privacy.ts`。
+**English** | [简体中文](./architecture.zh-CN.md)
 
-MemoWeft = **Memo（记忆）+ Weft（织布的纬线）**。织布有经线（warp，稳定的规则）和纬线（weft，横穿的证据）；纬线把一条条线**编织**成整块布。这库做的正是这件事：把零散的证据一条条**编织**成一块"认知之布"——对一个人的理解。
+> This is the **externally readable** architecture document: from the three-layer data model, to the read/write dual paths, to how cognitive discipline is put into practice, it walks through everything against the real code.
+> For host integration see [integration.md](./integration.md); for the stability boundary see [memory-surface-contract.md](./memory-surface-contract.md). For finer mechanism specifics (confidence algorithm, conflict closed loop, privacy authorization semantics), go straight to the source: `src/consolidation/confidence.ts`, `src/consolidation/consolidate.ts`, `src/evidence/privacy.ts`.
 
----
-
-## 1. 它是什么 / 不是什么
-
-MemoWeft 是套在大模型/Agent **外部**的"用户认知与上下文框架"，以 **TypeScript 库**的形式被宿主应用 `import`。
-
-- **它做**：持续接收用户授权的对话与行为证据 → 沉淀成【独立于模型、可追溯、可演化、可迁移】的认知资产 → 需要时提供带置信度和边界的用户上下文。
-- **它不做**：不做聊天/角色/UI，不替宿主定语气或隐私策略。语气、角色、是否开口问、云端还是本地、给不给上云——都是**宿主 + 用户**的决定；库只负责"留好口、可切换"。
-
-一句话：**库给"对用户的理解"，宿主决定"怎么用这份理解"。**
-
-### 1.1 三层边界（Core / Host / Plugin）
-
-MemoWeft 使用三层边界：**Core 负责记忆怎么正确存在，Host 负责用户怎么使用和管理，Plugin 负责扩展能力。** Core 不长眼睛也不长脸；Host 不绕过 Core 直接改底层数据；插件只能请求，Host 审核，Core 执行记忆规则。
-每层“负责什么 / 不负责什么”见 [docs/internal/boundaries.md](./internal/boundaries.md)，插件权限与 hook 契约见 [plugin-contract.md](./plugin-contract.md)。
+MemoWeft = **Memo (memory) + Weft (the weft thread of weaving)**. Weaving has a warp (stable rules) and a weft (evidence threaded crosswise); the weft **weaves** thread after thread into a whole cloth. This library does exactly that: it **weaves** scattered evidence, one thread at a time, into a "cloth of cognition" — an understanding of a person.
 
 ---
 
-## 2. 三层数据模型
+## 1. What it is / is not
 
-MemoWeft 的核心是把"关于一个人的信息"拆成三层，从**原始事实**逐层情境化、判断化，且**层层可溯源**：
+MemoWeft is a "user cognition and context framework" that sits **outside** the LLM/Agent, taking the form of a **TypeScript library** that host applications `import`.
+
+- **What it does**: continuously receives user-authorized conversation and behavioral evidence → settles it into cognitive assets that are [model-independent, traceable, evolvable, portable] → provides user context with confidence and boundaries when needed.
+- **What it does not do**: it does not do chat/persona/UI, and it does not set tone or privacy policy on the host's behalf. Tone, persona, whether to speak up and ask, cloud versus local, whether to allow uploads to the cloud — all are decisions for the **host + user**; the library only ensures the "seams are left open and switchable."
+
+In one line: **the library provides "the understanding of the user," the host decides "how to use that understanding."**
+
+### 1.1 Three-layer boundary (Core / Host / Plugin)
+
+MemoWeft uses a three-layer boundary: **Core is responsible for how memory correctly exists, Host is responsible for how the user uses and manages it, and Plugin is responsible for extension capabilities.** Core grows neither eyes nor a face; Host does not bypass Core to directly alter the underlying data; plugins can only request, Host reviews, and Core enforces the memory rules.
+For "what each layer is / is not responsible for" see [docs/internal/boundaries.md](./internal/boundaries.md); for plugin permissions and the hook contract see [plugin-contract.md](./plugin-contract.md).
+
+---
+
+## 2. The three-layer data model
+
+The core of MemoWeft is to split "information about a person" into three layers, contextualizing and judging it layer by layer from **raw facts**, with **each layer traceable**:
 
 ```mermaid
 flowchart LR
-  E["evidence 证据层<br/>原始事实·唯一真相<br/>（说了/做了什么）"]
-  V["event 事件层<br/>情境化摘要<br/>（一段对话串成一个事件）"]
-  C["cognition 认知层<br/>判断·多维画像<br/>（对用户的理解）"]
-  E -->|"distill 事件化"| V
-  V -->|"consolidate 画像化"| C
-  C -.->|"每条判断挂回支撑/反对它的证据 id"| E
+  E["evidence layer<br/>raw facts · single source of truth<br/>(what was said / done)"]
+  V["event layer<br/>contextualized summary<br/>(a stretch of conversation strung into one event)"]
+  C["cognition layer<br/>judgments · multi-dimensional profile<br/>(the understanding of the user)"]
+  E -->|"distill into events"| V
+  V -->|"consolidate into profile"| C
+  C -.->|"each judgment hangs back onto the evidence ids that support/oppose it"| E
 ```
 
-三层各自的职责边界很硬：**记 ≠ 信**。evidence 只存"用户说了/做了什么"（事实），cognition 才存"对用户的判断"；判断永远能溯回它依据的那几条原话。
+The responsibility boundaries of the three layers are hard: **records are not beliefs**. evidence only stores "what the user said / did" (facts); only cognition stores "judgments about the user"; a judgment can always be traced back to the few original words it rests on.
 
-### 2.1 evidence（证据层）—— 唯一真相
+### 2.1 evidence (evidence layer) — single source of truth
 
-代码：`src/evidence/model.ts`、`src/evidence/store.ts`
+Code: `src/evidence/model.ts`, `src/evidence/store.ts`
 
-只存**原料**，不存任何判断（置信度/可信状态/适用范围都不在这层）。字段全是"关于证据的事实"：
+Stores only **raw material**, no judgments (confidence / credibility status / scope of applicability are none of them at this layer). Every field is a "fact about the evidence":
 
-| 字段 | 类型 | 含义 |
+| Field | Type | Meaning |
 |---|---|---|
-| `id` | string | 主键（`randomUUID`） |
-| `subjectId` | string | 哪个用户的证据 |
-| `sourceKind` | `'spoken' \| 'inferred' \| 'observed'` | 来源种类——**来源强度分层**：亲口 > 推测 > 观察 |
-| `hostId` | string | 来自哪个宿主 |
-| `originId` | string \| null | 原始消息号，**幂等防重**；有唯一索引 |
-| `occurredAt` | string(ISO) | 事情**实际发生**时间 |
-| `recordedAt` | string(ISO) | MemoWeft **收到并存下**的时间 |
-| `rawContent` | string | 用户原话 / 原始观察 |
-| `summary` | string | 召回用摘要；v1 = `rawContent` |
-| `allowLocalRead` | boolean | 能否提供给本地 Agent |
-| `allowCloudRead` | boolean | 能否发送给云端模型（**隐私授权位**） |
-| `allowInference` | boolean | 能否据此推测画像/动机 |
-| `correctsEvidenceId` | string \| null | 若在纠正旧记录，指向旧证据 |
+| `id` | string | Primary key (`randomUUID`) |
+| `subjectId` | string | Which user's evidence |
+| `sourceKind` | `'spoken' \| 'inferred' \| 'observed'` | Source kind — **source-strength tiering**: spoken > inferred > observed |
+| `hostId` | string | Which host it came from |
+| `originId` | string \| null | Original message id, **idempotent de-duplication**; has a unique index |
+| `occurredAt` | string(ISO) | When the thing **actually happened** |
+| `recordedAt` | string(ISO) | When MemoWeft **received and stored** it |
+| `rawContent` | string | The user's original words / raw observation |
+| `summary` | string | Summary for recall; v1 = `rawContent` |
+| `allowLocalRead` | boolean | Whether it may be provided to a local Agent |
+| `allowCloudRead` | boolean | Whether it may be sent to a cloud model (**privacy authorization bit**) |
+| `allowInference` | boolean | Whether the profile/motive may be inferred from it |
+| `correctsEvidenceId` | string \| null | If correcting an old record, points to the old evidence |
 
-**双时态**（借 Graphiti）：`occurredAt`（发生时）和 `recordedAt`（存入时）分开——"昨晚玩到 3:30"发生在昨晚，但可能今天才被录进来，两个时间都留着，归因才能贴合"昨晚"。
+**Bitemporal** (borrowed from Graphiti): `occurredAt` (when it happened) and `recordedAt` (when it was stored) are separated — "played until 3:30 last night" happened last night, but may only be recorded today; both times are kept so that attribution can hew to "last night."
 
-### 2.2 event（事件层）—— 情境化摘要
+### 2.2 event (event layer) — contextualized summary
 
-代码：`src/event/model.ts`、`src/event/store.ts`
+Code: `src/event/model.ts`, `src/event/store.ts`
 
-事件 = 一段对话的"情境化摘要"，通过 `event_evidence` 关系表挂回它覆盖的原话证据。画像从事件生成（带上下文），但溯源仍落到原话证据。
+An event = a "contextualized summary" of a stretch of conversation, hung back onto the original-word evidence it covers via the `event_evidence` relation table. The profile is generated from events (with context), but tracing still lands on the original-word evidence.
 
-- `Event`：`id / subjectId / summary / occurredAt / createdAt`；`occurredAt` = 覆盖证据里最早的发生时间。
-- 存储侧还带一个 `consolidated` 标志位，用于"这个事件消化进画像了没"（增量更新的基础）。
-- **红线**：事件摘要只含【用户的话 + 情境】，**不含助手回话**（禁止系统自证，见 §4.2）。
+- `Event`: `id / subjectId / summary / occurredAt / createdAt`; `occurredAt` = the earliest occurred time among the covered evidence.
+- The storage side also carries a `consolidated` flag, used for "has this event been consolidated into the profile yet" (the basis for incremental updates).
+- **Red line**: the event summary contains only [the user's words + context], **not the assistant's replies** (no self-corroboration, see §4.2).
 
-### 2.3 cognition（认知层）—— 判断·多维画像
+### 2.3 cognition (cognition layer) — judgments · multi-dimensional profile
 
-代码：`src/cognition/model.ts`、`src/cognition/store.ts`
+Code: `src/cognition/model.ts`, `src/cognition/store.ts`
 
-一条 `Cognition` 就是"对用户的一条判断"，多条判断组成多维画像。授权位**不在这层**（挂在 evidence），这层只存判断。
+One `Cognition` is "one judgment about the user"; multiple judgments make up a multi-dimensional profile. The authorization bits are **not at this layer** (they hang on evidence); this layer stores only judgments.
 
-| 字段 | 类型 | 含义 |
+| Field | Type | Meaning |
 |---|---|---|
-| `contentType` | `fact \| preference \| goal \| project \| state \| trait \| hypothesis \| trend` | 内容类型（多维之一，不互斥） |
-| `formedBy` | `stated \| observed \| ruled \| inferred` | 形成方式 = 来源强度（亲口 > 观察 > 规则 > LLM 推测） |
-| `confidence` | number(0~1000) | 把握度，**MemoWeft 自算，非 LLM 自报** |
-| `credStatus` | `candidate \| low \| limited \| stable \| conflicted` | 可信状态 |
-| `scope` | string \| null | 适用场景；null = 通用 |
-| `validAt / invalidAt` | string \| null | 生效/失效时间锚；**失效标记而非删除**（保留可溯源） |
-| `askedAt` | string \| null | 主动询问时间戳；"问过不再问"去重用 |
+| `contentType` | `fact \| preference \| goal \| project \| state \| trait \| hypothesis \| trend` | Content type (one of many dimensions, not mutually exclusive) |
+| `formedBy` | `stated \| observed \| ruled \| inferred` | Formed-by = source strength (spoken > observed > ruled > LLM inferred) |
+| `confidence` | number(0~1000) | Confidence, **computed by MemoWeft, not self-reported by the LLM** |
+| `credStatus` | `candidate \| low \| limited \| stable \| conflicted` | Credibility status |
+| `scope` | string \| null | Applicable scenario; null = general |
+| `validAt / invalidAt` | string \| null | Take-effect / expire time anchor; **mark as invalid rather than delete** (kept traceable) |
+| `askedAt` | string \| null | Timestamp of proactive asking; used for "already asked, don't ask again" de-duplication |
 
-溯源链存在 `cognition_evidence` 表：每条认知靠哪些证据 `support`（支持）或 `contradict`（反对）。这是"每条判断都能指到具体原话"的物理落点。
+The trace chain lives in the `cognition_evidence` table: which evidence each cognition rests on to `support` or `contradict` it. This is the physical landing point for "every judgment can point to specific original words."
 
-两种特殊类型值得单独说：
-- `hypothesis`（可解释假设）：归因产物，从证据推"为什么"，**低置信、挂证据、可推翻**。
-- `trend`（跨会话趋势）：反复出现的状态聚成的持续模式（如"最近持续低落"），基于**客观频率**用规则聚出（`formedBy=ruled`），比"特质"可信，会随好转衰减。
+Two special types are worth calling out on their own:
+- `hypothesis` (explainable hypothesis): a product of attribution, inferring "why" from evidence, **low confidence, hangs evidence, can be overturned**.
+- `trend` (cross-session trend): a sustained pattern formed by repeatedly recurring states (e.g. "persistently low lately"), aggregated by rule based on **objective frequency** (`formedBy=ruled`), more credible than a "trait," and decays as things improve.
 
 ---
 
-## 3. 读写双路径（读写解耦）
+## 3. Read/write dual paths (read/write decoupling)
 
-MemoWeft 的核心工程决策：**读同步轻、写攒批异步**。聊天时只做轻量的"存证据 + 召回注入"，重活（把对话消化成画像）攒批到后台慢慢做，不挡聊天。
+MemoWeft's core engineering decision: **reads synchronous and light, writes batched and asynchronous**. During chat it only does the lightweight "store evidence + recall injection"; the heavy work (digesting conversation into a profile) is batched and done slowly in the background, without blocking chat.
 
 ```mermaid
 flowchart TB
-  subgraph READ["读路径（同步·轻）· Conversation.handle"]
-    U["用户消息"] --> P["perceive 感知<br/>包装成证据入参"]
-    P --> S1["store.put 存证据<br/>（只存用户亲口，先存后答）"]
-    S1 --> R1["retriever.search 召回相关认知"]
-    R1 --> G["衰减门控 + 失效过滤<br/>effectiveConfidence ≥ 门槛"]
-    G --> A["reply 回话<br/>带最近窗口 + 注入画像"]
+  subgraph READ["read path (synchronous · light) · Conversation.handle"]
+    U["user message"] --> P["perceive<br/>wrap into an evidence input"]
+    P --> S1["store.put stores evidence<br/>(only the user's own words, store before answering)"]
+    S1 --> R1["retriever.search recalls relevant cognition"]
+    R1 --> G["decay gating + invalidity filtering<br/>effectiveConfidence ≥ threshold"]
+    G --> A["reply<br/>with recent window + injected profile"]
   end
-  subgraph WRITE["写路径（异步·重）· updateProfile"]
-    D["distill 事件化"] --> CO["consolidate 画像化<br/>new/reinforce/correct/conflict"]
-    CO --> AT["attribute 归因<br/>产可解释假设"]
-    AT --> IX["retriever.indexAll 重建召回索引"]
+  subgraph WRITE["write path (asynchronous · heavy) · updateProfile"]
+    D["distill into events"] --> CO["consolidate into profile<br/>new/reinforce/correct/conflict"]
+    CO --> AT["attribute<br/>produce explainable hypotheses"]
+    AT --> IX["retriever.indexAll rebuilds the recall index"]
   end
-  S1 -. "证据攒够一批/歇久了" .-> D
-  IX -. "新画像马上能被召回" .-> R1
+  S1 -. "enough evidence for a batch / idle long enough" .-> D
+  IX -. "new profile can be recalled right away" .-> R1
 ```
 
-### 3.1 读路径（`src/pipeline/conversation.ts`）
+### 3.1 Read path (`src/pipeline/conversation.ts`)
 
-`Conversation.handle(userMsg)` 一轮做三件事：
+`Conversation.handle(userMsg)` does three things per turn:
 
-1. **感知 → 存证据**：`perceive` 把用户消息包装成 `EvidenceInput`（默认 `spoken`），`store.put` 落库。**只存用户的话，助手回话不落证据**。**先存后答**——回话失败了证据也已在库。
-2. **召回相关认知**：`retriever.search(userMsg, topK)` 找 top-k 相关认知。这一步**失败不挡回话**（当作无召回照常答）。召回结果还要过两道关：
-   - 失效过滤：`invalidAt` 非空的（被纠正/过期的）不注入，哪怕索引还没重建。
-   - **衰减门控**：把握度用**有效置信** `effectiveConfidence`（见 §4.4），低于 `minEffectiveConfidence` 的（淡了的情绪、过气的假设）直接不注入。
-3. **回话**：`reply` 带最近几轮工作记忆窗口（`WorkingMemory`，纯内存 N 轮）+ 注入召回到的画像，调一次对话模型。注入时**把握度透明给模型**（"低置信的只是假设，别当定论"）。
+1. **Perceive → store evidence**: `perceive` wraps the user message into an `EvidenceInput` (default `spoken`), and `store.put` lands it. **Only the user's words are stored; the assistant's replies are not landed as evidence.** **Store before answering** — even if the reply fails, the evidence is already in the store.
+2. **Recall relevant cognition**: `retriever.search(userMsg, topK)` finds the top-k relevant cognitions. This step **does not block the reply if it fails** (treated as no recall, answering as usual). The recall results still pass through two gates:
+   - Invalidity filtering: those with a non-empty `invalidAt` (corrected/expired) are not injected, even if the index has not been rebuilt yet.
+   - **Decay gating**: confidence uses **effective confidence** `effectiveConfidence` (see §4.4); those below `minEffectiveConfidence` (faded emotions, stale hypotheses) are simply not injected.
+3. **Reply**: `reply` carries the recent working-memory window of a few turns (`WorkingMemory`, pure in-memory N turns) + injects the recalled profile, and makes one call to the conversation model. On injection, **confidence is made transparent to the model** ("low-confidence ones are just hypotheses, don't take them as settled").
 
-> 读路径全程**不写画像**——它只读认知、存原始证据。把对话消化成画像是写路径的活。
+> The read path **never writes the profile** throughout — it only reads cognition and stores raw evidence. Digesting conversation into a profile is the write path's job.
 
-### 3.2 写路径（`src/consolidation/updateProfile.ts`）
+### 3.2 Write path (`src/consolidation/updateProfile.ts`)
 
-`updateProfile` 把本来分散的四步合成一个入口（宿主只调这一个），依次：`distill → consolidate → attribute → indexAll`。每步耗时记进 `timings`，供诊断"慢在哪步"。索引重建失败**不回滚画像**（索引是读路径优化，失败降级不报错）。
+`updateProfile` combines what were four separate steps into a single entry point (the host calls only this one), in order: `distill → consolidate → attribute → indexAll`. Each step's elapsed time is recorded into `timings`, for diagnosing "which step is slow." An index-rebuild failure **does not roll back the profile** (the index is a read-path optimization; on failure it degrades without erroring).
 
-四步详见 §4。
+The four steps are detailed in §4.
 
 ---
 
-## 4. 写路径四步 + 认知纪律
+## 4. The four write-path steps + cognitive discipline
 
-认知纪律是 MemoWeft 的核心差异——不是"多记点"，而是"**怎么记才不失真**"。五条纪律贯穿写路径每一步。
+Cognitive discipline is MemoWeft's core differentiator — it is not "record more," but "**how to record without distortion**." Five disciplines run through every step of the write path.
 
-### 4.1 记 ≠ 信（LLM 推的先当低置信候选）
+### 4.1 Records are not beliefs (what the LLM infers starts as a low-confidence candidate)
 
-落点：`src/consolidation/confidence.ts`
+Landing point: `src/consolidation/confidence.ts`
 
-**把握度由 MemoWeft 按规则算，绝不采信 LLM 自报。** `computeConfidence` 的规则（参数都在 `config.ts`，跑起来后校准）：
+**Confidence is computed by MemoWeft according to rules; the LLM's self-report is never trusted.** The rules of `computeConfidence` (all parameters are in `config.ts`, calibrated once it's running):
 
 ```
-把握度 = 起步分(按 formedBy) + 支持证据加分(封顶) − 反对证据扣分
+confidence = base score (by formedBy) + supporting-evidence bonus (capped) − opposing-evidence penalty
 ```
 
-- **起步分按形成方式**（`baseByFormedBy`）：`stated:600 > ruled:450 > observed:350 > inferred:200`——LLM 推测（inferred）起步最低。
-- 每多一条支持证据 `+supportStep(40)`，最多 `supportCap(5)` 条；每条反对证据 `−contradictPenalty(120)`。
-- 结果钳在 `[minConfidence(50), 1000]`，恒 > 0。
-- `deriveCredStatus` 按阈值把分数映成 `candidate/low/limited/stable`；有反对证据直接 `conflicted`。
+- **Base score by formed-by** (`baseByFormedBy`): `stated:600 > ruled:450 > observed:350 > inferred:200` — LLM inference (inferred) starts lowest.
+- Each additional supporting evidence `+supportStep(40)`, up to `supportCap(5)` pieces; each opposing evidence `−contradictPenalty(120)`.
+- The result is clamped to `[minConfidence(50), 1000]`, always > 0.
+- `deriveCredStatus` maps the score to `candidate/low/limited/stable` by threshold; any opposing evidence directly makes it `conflicted`.
 
-**第一步 distill**（`src/distillation/distill.ts`）：把"还没整理成事件"的近期证据，按时间排好，让写路径模型总结成一段带情境的事件摘要。
+**Step one distill** (`src/distillation/distill.ts`): takes the recent evidence "not yet organized into events," orders it by time, and has the write-path model summarize it into a contextualized event summary.
 
-### 4.2 禁止系统自证（助手输出/用户沉默不算证据）
+### 4.2 No self-corroboration (the assistant's output / the user's silence is not evidence)
 
-落点：贯穿 distill / consolidate / attribute 的 prompt 与数据流。
+Landing point: runs through the prompts and data flow of distill / consolidate / attribute.
 
-- 只有**用户消息**落证据；助手回话永不落库（`conversation.ts`：助手回话不入证据）。
-- distill 的 prompt 明令"不要出现助手的话、不加推测评价"；事件摘要只含用户内容。
-- consolidate / attribute 里，**每条认知的支撑只能从"喂进 prompt 的真实原话 id"里选**——`validEvidence` 集合白名单校验，LLM 编的 id 一律丢弃，引不出真实原话的候选**直接跳过、不落库**（"无溯源不落认知"）。
-- 提问（`proposeAsk`）本身不入证据；只有用户的**回答**才是新证据。
+- Only **user messages** land as evidence; the assistant's replies are never landed (`conversation.ts`: assistant replies do not enter evidence).
+- distill's prompt explicitly orders "do not let the assistant's words appear, do not add speculative commentary"; the event summary contains only user content.
+- In consolidate / attribute, **each cognition's support can only be chosen from the "real original-word ids fed into the prompt"** — a `validEvidence` allowlist validation; ids fabricated by the LLM are all discarded, and a candidate that cannot cite real original words is **skipped directly, not landed** ("no trace, no cognition").
+- Asking (`proposeAsk`) itself does not enter evidence; only the user's **answer** is new evidence.
 
-### 4.3 冲突先暴露、不自动消解
+### 4.3 Conflicts are exposed first, never auto-resolved
 
-落点：`src/consolidation/consolidate.ts`
+Landing point: `src/consolidation/consolidate.ts`
 
-**第二步 consolidate**（画像化·增量+反证）：把【未消化的新事件 + 现有画像】给写路径模型，判断新材料对画像意味着什么，输出四类操作：
+**Step two consolidate** (into profile · incremental + counter-evidence): gives [undigested new events + existing profile] to the write-path model, judges what the new material means for the profile, and outputs four kinds of operations:
 
-| 操作 | 含义 | 处理 |
+| Operation | Meaning | Handling |
 |---|---|---|
-| `new` | 新材料里有、画像没有 | 新增认知（须有可溯源原话，否则跳过） |
-| `reinforce` | 新原话印证现有认知 | 补挂证据、重算把握度升 |
-| `correct` | 用户**明确纠正/否定**某条认知 | 旧的标 `invalidAt` **失效保留**、采纳新的（纠正闭环） |
-| `conflict` | 矛盾但**非明确纠正**（如行为 vs 旧偏好） | 标 `conflicted`，**两条都留、挂上 contradict 证据、不替换** |
+| `new` | Present in the new material, absent from the profile | Add a new cognition (must have traceable original words, otherwise skip) |
+| `reinforce` | New original words corroborate an existing cognition | Attach evidence, recompute confidence upward |
+| `correct` | The user **explicitly corrects/negates** a cognition | Mark the old one `invalidAt` **kept-as-invalid**, adopt the new one (correction closed loop) |
+| `conflict` | Contradictory but **not an explicit correction** (e.g. behavior vs. old preference) | Mark `conflicted`, **keep both, attach contradict evidence, do not replace** |
 
-关键区别：`correct` 是用户主动澄清 → 旧的让位；`conflict` 是"观察到的行为和旧偏好对不上，但用户没说要改" → **只暴露矛盾，不替宿主决定谁对**。这就是"冲突先暴露不自动消解"的物理落点。
+The key distinction: `correct` is the user actively clarifying → the old one gives way; `conflict` is "the observed behavior doesn't match the old preference, but the user hasn't said to change it" → **only expose the contradiction, do not decide who's right on the host's behalf**. This is the physical landing point for "conflicts are exposed first, never auto-resolved."
 
-### 4.4 分型时间策略（情绪快忘 / 明确偏好不忘）
+### 4.4 Per-type time strategy (emotions forgotten fast / explicit preferences not forgotten)
 
-落点：`src/background/decay.ts`（衰减）+ `src/background/expire.ts`（过期）+ `confidence.ts`（临时类封顶）
+Landing point: `src/background/decay.ts` (decay) + `src/background/expire.ts` (expiry) + `confidence.ts` (transient-type cap)
 
-不同类型的认知，"过期速度"不一样——**不能一刀切"越久越不信"**：
+Different types of cognition have different "expiry speeds" — **you can't apply a one-size-fits-all "the older, the less trusted"**:
 
-- **临时类封顶**（`confidence.ts`）：`transientTypes`（如 `state`）置信封顶 `transientCap(300)`、`deriveCredStatus` 里永不进"稳定/有限"——临时情绪重复 ≠ 稳定特质，不能越攒越像定论。
-- **读时衰减**（`decay.ts`）：有效置信 = `confidence × 2^(−age/半衰期)`，按距上次印证 `updatedAt` 算。**读时算、不持久化**（`confidence` 字段保持"证据强度"语义不动）。半衰期（天）按类型分：`state:1.5 / hypothesis:2 / goal,project:14 / trend:7 / trait:60`；`fact/preference` 不列 = 不衰减（明确偏好久不提也不自动忘）。
-- **自然过期**（`expire.ts`）：只有临时类会自然失效——距上次印证超 `expireAfterDays`（`state:7 / hypothesis:14 / trend:30`）就标 `invalidAt`；稳定类**永不自动失效**。失效 = 标记保留可溯源，不删。
+- **Transient-type cap** (`confidence.ts`): `transientTypes` (e.g. `state`) have confidence capped at `transientCap(300)`, and in `deriveCredStatus` never reach "stable/limited" — a repeated transient emotion ≠ a stable trait, and can't grow more and more like a settled conclusion.
+- **Decay at read time** (`decay.ts`): effective confidence = `confidence × 2^(−age/half-life)`, computed by the distance from the last corroboration `updatedAt`. **Computed at read time, not persisted** (the `confidence` field keeps its "evidence-strength" semantics unchanged). Half-lives (days) are split by type: `state:1.5 / hypothesis:2 / goal,project:14 / trend:7 / trait:60`; `fact/preference` are not listed = do not decay (an explicit preference is not auto-forgotten even if unmentioned for a long time).
+- **Natural expiry** (`expire.ts`): only transient types expire naturally — once the distance from the last corroboration exceeds `expireAfterDays` (`state:7 / hypothesis:14 / trend:30`) they are marked `invalidAt`; stable types **never auto-expire**. Invalidation = a mark kept traceable, not a delete.
 
-### 4.5 把握度 MemoWeft 自算（不听 LLM 自报）
+### 4.5 Confidence is computed by MemoWeft (never taking the LLM's self-report)
 
-见 §4.1——这是纪律 1 的另一面，值得单列强调：**任何时候 confidence 都是库按规则算的**，LLM 只提供"内容候选 + 引用哪些证据"，从不决定"这条有多可信"。
+See §4.1 — this is the other face of discipline 1, worth listing on its own to stress: **at any time confidence is computed by the library according to rules**; the LLM only provides "content candidates + which evidence to cite," and never decides "how credible this one is."
 
-**第三步 attribute（归因）**（`src/attribution/attribute.ts`）：从一条 `state` 现象（如"昨晚没睡好"）出发，拉时间窗内的证据（含 `observed` "游戏到 3:30"），让模型推"为什么"，产出**可解释假设**：
+**Step three attribute (attribution)** (`src/attribution/attribute.ts`): starting from one `state` phenomenon (e.g. "didn't sleep well last night"), it pulls the evidence within the time window (including `observed` "gamed until 3:30"), has the model infer "why," and produces **explainable hypotheses**:
 
-- 假设只当假设：`formedBy=inferred`、置信封顶 `hypothesisCap(250)`——**低声说，不让它越攒越像定论**。
-- 只归因**反复出现**（支撑 ≥ `minPhenomenonSupport`）的现象，一次最多 `maxPhenomenaPerRun(1)` 个（防归因爆炸）。
-- 原因必须是**行为/客观观察**，**禁止"用一个抱怨解释另一个抱怨"**（state 证据只能当现象侧、不能当原因）。
-- 单条假设最多挂 `maxCausesPerHypothesis(2)` 条原因证据；LLM 编的 id 一律丢弃（禁止自证）。
-
----
-
-## 5. 召回
-
-代码：`src/retrieval/`
-
-召回底座是**可替换 seam**（`Retriever` 接口），两个方法：`indexAll`（替换式重建索引）+ `search`（top-k）。三种实现：
-
-- `NullRetriever`：空实现——没配嵌入器时降级用它，`search` 返回 `[]`（回话不注入画像，不报错）。
-- `VectorRetriever`：SQLite 存向量 + **JS 余弦相似度**，单人几千条够用，**零原生依赖**（不上 sqlite-vec）。`indexAll` 替换式重建、`search` 嵌入 query 后算余弦取 top-k。
-- 未来可换 Mem0 等，只要实现接口。
-
-`Embedder` 同样可替换（`OpenAICompatEmbedder` 打 OpenAI 兼容 `/embeddings`）；配置缺失时 `loadEmbedConfig` 返回 `null`，召回自动降级为空、不崩。
-
-**索引由写路径重建**：`updateProfile` 末步 `indexAll` 只索引**未失效**的认知（被纠正/过期的不再被召回）。读路径只 `search`，让新画像更新完马上能被召回。
+- Hypotheses stay hypotheses: `formedBy=inferred`, confidence capped at `hypothesisCap(250)` — **spoken quietly, not allowed to grow more and more like a settled conclusion**.
+- Only attributes **recurring** phenomena (support ≥ `minPhenomenonSupport`), at most `maxPhenomenaPerRun(1)` per run (to prevent attribution explosion).
+- The cause must be a **behavior / objective observation**, and **"explaining one complaint with another complaint" is forbidden** (state evidence can only be on the phenomenon side, not the cause side).
+- A single hypothesis attaches at most `maxCausesPerHypothesis(2)` cause-evidence pieces; ids fabricated by the LLM are all discarded (no self-corroboration).
 
 ---
 
-## 6. 攒批更新（治"勤"）
+## 5. Recall
 
-写路径是重活（要调几次模型），故意**不挡聊天**：聊天即记证据，停下来后台慢慢消化。
+Code: `src/retrieval/`
 
-- 库侧：`config.profileUpdate` 给出策略参数 `batchSize(5)` 和 `idleMinutes(30)`，并暴露一次性入口 `updateProfile`。
-- **触发调度归宿主**：库不自己跑定时器。参考实现见测试台 `testbench/server.mjs` 的 `scheduleBackgroundUpdate`——**攒够 `batchSize` 条新对话【立即】排更新；否则重置空闲计时、歇够 `idleMinutes` 没动静再更新一次，先到先触发**。同一用户的画像更新用一把锁串行（不能并发消化同一批事件）。
+The recall foundation is a **replaceable seam** (the `Retriever` interface), with two methods: `indexAll` (replacement-style index rebuild) + `search` (top-k). Three implementations:
+
+- `NullRetriever`: an empty implementation — used as a fallback when no embedder is configured; `search` returns `[]` (the reply injects no profile, without erroring).
+- `VectorRetriever`: SQLite stores vectors + **JS cosine similarity**, plenty for a single person's few thousand entries, **zero native dependencies** (does not use sqlite-vec). `indexAll` rebuilds by replacement; `search` embeds the query and then computes cosine to take top-k.
+- In the future it can be swapped for Mem0 etc., as long as the interface is implemented.
+
+`Embedder` is likewise replaceable (`OpenAICompatEmbedder` calls the OpenAI-compatible `/embeddings`); when configuration is missing, `loadEmbedConfig` returns `null`, and recall automatically degrades to empty without crashing.
+
+**The index is rebuilt by the write path**: `updateProfile`'s final step `indexAll` only indexes **non-invalidated** cognitions (corrected/expired ones are no longer recalled). The read path only does `search`, so a newly updated profile can be recalled right after the update completes.
+
+---
+
+## 6. Batched updates (curing "diligence")
+
+The write path is heavy work (requiring several model calls), so it deliberately **does not block chat**: chatting records evidence, and once stopped the background digests it slowly.
+
+- Library side: `config.profileUpdate` gives the strategy parameters `batchSize(5)` and `idleMinutes(30)`, and exposes the one-shot entry `updateProfile`.
+- **Trigger scheduling belongs to the host**: the library does not run a timer itself. For a reference implementation see `scheduleBackgroundUpdate` in the testbench's `testbench/server.mjs` — **once `batchSize` new conversations have accumulated, queue an update [immediately]; otherwise reset the idle timer, and update once after being idle for `idleMinutes` with no activity, whichever comes first triggers**. Profile updates for the same user are serialized with a single lock (the same batch of events cannot be digested concurrently).
 
 ```mermaid
 flowchart LR
-  M["聊完一轮"] --> C{"攒够 batchSize?"}
-  C -->|是| U["立即排 updateProfile"]
-  C -->|否| T["重置空闲计时器"]
-  T -->|"歇够 idleMinutes"| U
-  U --> BG["distill→consolidate→attribute→index<br/>（+ 趋势聚合 + 自然过期）"]
+  M["finished a turn"] --> C{"batchSize reached?"}
+  C -->|yes| U["queue updateProfile immediately"]
+  C -->|no| T["reset idle timer"]
+  T -->|"idle for idleMinutes"| U
+  U --> BG["distill→consolidate→attribute→index<br/>(+ trend aggregation + natural expiry)"]
 ```
 
-周期后台还会顺带跑 `aggregateTrends`（跨会话趋势聚合，规则筛够频才调模型）和 `expire`（临时类自然过期）。
+The periodic background also runs, along the way, `aggregateTrends` (cross-session trend aggregation, calling the model only when the rules screen for enough frequency) and `expire` (natural expiry of transient types).
 
 ---
 
-## 7. 可切换部件（模型口、嵌入口、召回口）
+## 7. Switchable parts (model seam, embedding seam, recall seam)
 
-MemoWeft 把"外部依赖"都收进可替换的 seam，宿主按需切换：
+MemoWeft gathers all "external dependencies" into replaceable seams that the host switches as needed:
 
-### 7.1 llmPool —— 按用途切换模型
+### 7.1 llmPool — switch models by purpose
 
-代码：`src/llm/pool.ts`、`src/llm/client.ts`
+Code: `src/llm/pool.ts`, `src/llm/client.ts`
 
-对话和写路径共用一个大模型会互相拖累（写路径拖慢"更新画像"）。`LLMPool` 按**用途**分流：
+Having conversation and the write path share one large model would drag each other down (the write path slows down "updating the profile"). `LLMPool` splits by **purpose**:
 
-- `pool.for('chat')`：对话大模型（质量优先），env `MEMOWEFT_LLM_*`。
-- `pool.for('write')`：写路径小快模型（省时省钱），env `MEMOWEFT_WRITE_LLM_*`；**缺配则自动回退 chat**，行为同旧、不强制。
+- `pool.for('chat')`: the conversation large model (quality first), env `MEMOWEFT_LLM_*`.
+- `pool.for('write')`: the write-path small-and-fast model (saving time and money), env `MEMOWEFT_WRITE_LLM_*`; **if unconfigured it automatically falls back to chat**, same behavior as before, not forced.
 
-`LLMClient` 是抽象接口（`chat(messages) + callCount`），`OpenAICompatClient` 用内置 `fetch` 打 OpenAI 兼容 `/chat/completions`，**不装 SDK**（依赖取向：小而可换）。换模型只动这一处。
+`LLMClient` is an abstract interface (`chat(messages) + callCount`), and `OpenAICompatClient` uses the built-in `fetch` to call the OpenAI-compatible `/chat/completions`, **installing no SDK** (dependency stance: small and swappable). Switching models touches only this one place.
 
-> **留好的口**：`LLMPool` 不写死"俩固定 client"，而是"按维度选 client"。当前维度 = 用途(chat/write)；将来"按证据 `allowCloudRead` 路由本地/云端"只需在此之上加一个 tier(local/cloud) 维度（如 `forEvidence(ev)`），不用重构。
+> **A seam left open**: `LLMPool` does not hard-code "two fixed clients," but "selects a client by dimension." The current dimension = purpose (chat/write); a future "route local/cloud by the evidence's `allowCloudRead`" only needs a tier (local/cloud) dimension added on top of this (e.g. `forEvidence(ev)`), with no refactor.
 
-### 7.2 双前缀 env 兼容（改名保守）
+### 7.2 Dual-prefix env compatibility (conservative renaming)
 
-代码：`client.ts` 的 `readEnvWithFallback` + `embedder.ts`
+Code: `readEnvWithFallback` in `client.ts` + `embedder.ts`
 
-品牌从 DLA 改名 MemoWeft，但 env 读取**双前缀兼容**：每个键先读 `MEMOWEFT_*`、读不到回退 `DLA_*`。用户现有只含 `DLA_*` 的 `.env` 零改动继续工作。九个变量都走这套：`MEMOWEFT_LLM_{BASE_URL,API_KEY,MODEL}`、`MEMOWEFT_WRITE_LLM_{...}`、`MEMOWEFT_EMBED_{...}`，旧名一一兜底。
-
----
-
-## 8. 隐私 / 授权位（allowCloudRead）
-
-代码：`src/evidence/privacy.ts`、`src/perception/ingest.ts`
-
-隐私（用云端还是本地模型）是**宿主 + 用户的选择**，库不替宿主做安全策略，只做到"授权位真生效 + 留好切换口"。
-
-- **三个授权位挂在 evidence**：`allowLocalRead`（给本地 Agent）、`allowCloudRead`（发云端模型）、`allowInference`（据此推画像）。
-- **写路径的隐私关**：`filterReadableByTier(items, tier)` 按当前写模型的 tier 把"该 tier 不许读"的证据挡在【喂给该模型的材料】之外（tier=cloud 筛 `allowCloudRead`、tier=local 筛 `allowLocalRead`）。distill / consolidate / attribute 等取证据喂 LLM 前都过这道关——被挡的证据既不进 prompt、也进不了合法支撑集合。另有 `allowInference` 门（distill / consolidate / attribute 三处一致）：`inference=false` 的证据不进画像，与 tier 无关。
-- **默认值跟随配置**：`cloudReadDefault` 跟 `privacyMode` 走（隐私模式下默认不上云）。
-- **行为观察更保守**：`observedDefaults = { local:true, cloud:false, inference:true }`——`ingestObservations` 摄入的 `observed` 证据默认**本地可读、不上云、可推画像**；`Observation` 显式给了授权位则尊重显式值。
-
-> ✅ 已落地（档2·第 6 步）：写路径隐私关升级为 `filterReadableByTier(items, tier)`——**按当前写模型的 tier 决定筛哪个授权位**，不再假设"永远云端"。tier 由 `MEMOWEFT_WRITE_LLM_TIER`（缺省 `cloud`）声明、绑在 `LLMClient` 实例上（`pool.for('write')` 缺配回退对话模型时自然继承其 tier，杜绝"标 local 实跑云端"）。tier=local 时本地写模型消化 `observed`（默认不上云）成画像——"行为观察"采集线由此真闭环。配套：distill 只覆盖当前 tier 真消化的证据（被挡的留 pending 可再扫）；`allowInference` 门在三处一致。
+The brand was renamed from DLA to MemoWeft, but env reading is **dual-prefix compatible**: each key is first read as `MEMOWEFT_*`, and if not found falls back to `DLA_*`. A user's existing `.env` containing only `DLA_*` continues to work with zero changes. All nine variables follow this pattern: `MEMOWEFT_LLM_{BASE_URL,API_KEY,MODEL}`, `MEMOWEFT_WRITE_LLM_{...}`, `MEMOWEFT_EMBED_{...}`, each old name backstopped one by one.
 
 ---
 
-## 9. 行为感知摄入（多源证据入口）
+## 8. Privacy / authorization bits (allowCloudRead)
 
-代码：`src/perception/ingest.ts`（通用摄入口，属 Core）；真实采集属独立插件包 `plugins/collector-active-window/`。
+Code: `src/evidence/privacy.ts`, `src/perception/ingest.ts`
 
-除了对话，MemoWeft 也定义了"行为观察怎么进来"：`ingestObservations` 把外部采集器标准化好的 `Observation`（`kind + occurredAt + content + 可选授权位`）批量落成 `sourceKind='observed'` 的证据，带 `originId` 幂等去重。
+Privacy (using a cloud or a local model) is a **choice of the host + user**; the library does not make security policy on the host's behalf, only ensures "the authorization bits truly take effect + a switch seam is left open."
 
-**边界**：Core 只定义“观察怎么进来 + 怎么授权”，**不在 Core 里写“怎么从操作系统抓”**——那是采集插件的职责。真实采集（活动窗口采样、采集循环）位于独立插件包 `@memoweft/collector-active-window`，经 Host `/api/observe`（Host 审核 → `core.ingestObservation`）落库，不直穿 Core。这保证 Core 自身干净、可移植。详见 [三层边界](./internal/boundaries.md)。
+- **Three authorization bits hang on evidence**: `allowLocalRead` (given to a local Agent), `allowCloudRead` (sent to a cloud model), `allowInference` (infer the profile from it).
+- **The write path's privacy gate**: `filterReadableByTier(items, tier)` uses the current write model's tier to keep evidence that "this tier is not permitted to read" out of [the material fed to that model] (tier=cloud screens `allowCloudRead`, tier=local screens `allowLocalRead`). distill / consolidate / attribute etc. all pass through this gate before taking evidence to feed the LLM — blocked evidence neither enters the prompt nor enters the legal support set. There is also an `allowInference` gate (consistent across distill / consolidate / attribute): evidence with `inference=false` does not enter the profile, independent of tier.
+- **Default values follow the configuration**: `cloudReadDefault` follows `privacyMode` (in privacy mode, defaults to not uploading to the cloud).
+- **Behavioral observation is more conservative**: `observedDefaults = { local:true, cloud:false, inference:true }` — the `observed` evidence ingested by `ingestObservations` defaults to **locally readable, not uploaded to the cloud, profile-inferable**; if an `Observation` explicitly gives authorization bits, the explicit values are respected.
 
----
-
-## 10. 存储与可观测
-
-- **存储**：三层各一个 `Sqlite*Store`，底层 SQLite 走一个**驱动接缝**（`src/store/driver.ts` 定接口，`src/store/nodeSqliteDriver.ts` 顶层急切选驱动）：Node ≥24 默认用内置 `node:sqlite`（零第三方 DB 依赖），不可用时回落到可选的 `better-sqlite3`（`src/store/betterSqlite3Driver.ts`，Node 20/22 需 `npm i` 装它）。默认库文件 `./dla.db`（品牌改名但**默认库名不改**，避免脱离已有数据文件）；测试传 `':memory:'`。旧库自动做幂等迁移（补 `asked_at` / `consolidated` 列）。
-- **可观测**：`src/obs/runLog.ts` 的 `RunLogger` 把每轮对话、每次画像更新（含各步 `timings`）落盘，供诊断"慢在哪步"。
+> ✅ Already landed (tier 2 · step 6): the write path's privacy gate is upgraded to `filterReadableByTier(items, tier)` — **it decides which authorization bit to screen by the current write model's tier**, no longer assuming "always cloud." The tier is declared by `MEMOWEFT_WRITE_LLM_TIER` (default `cloud`), bound to the `LLMClient` instance (when `pool.for('write')` falls back to the conversation model on missing config, it naturally inherits that model's tier, eliminating "marked local but actually running cloud"). When tier=local, a local write model digests `observed` (default not uploaded to the cloud) into a profile — the "behavioral observation" collection line thus truly closes the loop. Accompanying: distill only covers evidence the current tier actually digested (blocked ones stay pending, to be re-scanned); the `allowInference` gate is consistent across the three places.
 
 ---
 
-## 11. 一张图总览
+## 9. Behavioral perception ingestion (multi-source evidence entry)
+
+Code: `src/perception/ingest.ts` (the general ingestion entry, belonging to Core); real collection belongs to the independent plugin package `plugins/collector-active-window/`.
+
+Besides conversation, MemoWeft also defines "how behavioral observations come in": `ingestObservations` batch-lands the `Observation`s (`kind + occurredAt + content + optional authorization bits`) standardized by an external collector into `sourceKind='observed'` evidence, with `originId` idempotent de-duplication.
+
+**Boundary**: Core only defines "how observations come in + how they are authorized," and **does not write "how to grab them from the operating system" inside Core** — that is the collector plugin's responsibility. Real collection (active-window sampling, the collection loop) lives in the independent plugin package `@memoweft/collector-active-window`, landed via Host `/api/observe` (Host reviews → `core.ingestObservation`), not piercing Core directly. This ensures Core itself stays clean and portable. See [the three-layer boundary](./internal/boundaries.md) for details.
+
+---
+
+## 10. Storage and observability
+
+- **Storage**: each of the three layers has one `Sqlite*Store`, and the underlying SQLite goes through a **driver seam** (`src/store/driver.ts` defines the interface, `src/store/nodeSqliteDriver.ts` eagerly selects the driver at the top level): Node ≥24 defaults to the built-in `node:sqlite` (zero third-party DB dependency), and when unavailable falls back to the optional `better-sqlite3` (`src/store/betterSqlite3Driver.ts`, which Node 20/22 needs to `npm i` to install). The default DB file is `./dla.db` (the brand was renamed but the **default DB name is not changed**, to avoid detaching from an existing data file); tests pass `':memory:'`. Old databases are automatically migrated idempotently (adding the `asked_at` / `consolidated` columns).
+- **Observability**: `RunLogger` in `src/obs/runLog.ts` writes each conversation turn and each profile update (including each step's `timings`) to disk, for diagnosing "which step is slow."
+
+---
+
+## 11. One diagram overview
 
 ```mermaid
 flowchart TB
-  subgraph HOST["宿主应用 · 决定语气/角色/隐私策略"]
+  subgraph HOST["host application · decides tone/persona/privacy policy"]
     direction LR
-    IN["用户对话 + 行为观察"]
-    OUT["带把握度的用户上下文"]
+    IN["user conversation + behavioral observation"]
+    OUT["user context with confidence"]
   end
 
-  IN --> CONV["Conversation.handle（读·同步轻）"]
-  IN --> ING["ingestObservations（行为摄入）"]
+  IN --> CONV["Conversation.handle (read · synchronous light)"]
+  IN --> ING["ingestObservations (behavioral ingestion)"]
 
-  CONV --> EV[("evidence 证据层<br/>SqliteEvidenceStore")]
+  CONV --> EV[("evidence layer<br/>SqliteEvidenceStore")]
   ING --> EV
-  CONV --> RET["Retriever.search 召回"]
+  CONV --> RET["Retriever.search recall"]
   RET --> OUT
 
-  EV -->|"distill"| EVT[("event 事件层<br/>SqliteEventStore")]
-  EVT -->|"consolidate + attribute"| COG[("cognition 认知层<br/>SqliteCognitionStore")]
-  COG -->|"indexAll"| IDX["向量索引"]
+  EV -->|"distill"| EVT[("event layer<br/>SqliteEventStore")]
+  EVT -->|"consolidate + attribute"| COG[("cognition layer<br/>SqliteCognitionStore")]
+  COG -->|"indexAll"| IDX["vector index"]
   IDX --> RET
 
-  LLM["llmPool：chat 大模型 / write 小模型"] -.-> CONV
+  LLM["llmPool: chat large model / write small model"] -.-> CONV
   LLM -.-> EVT
-  PRIV["filterReadableByTier：按写模型 tier 筛 allowCloud/LocalRead"] -.-> EVT
+  PRIV["filterReadableByTier: screen allowCloud/LocalRead by write-model tier"] -.-> EVT
 
-  UP["updateProfile（写·异步重·攒批触发）"] -.-> EVT
+  UP["updateProfile (write · asynchronous heavy · batch-triggered)"] -.-> EVT
 ```
 
 ---
 
-## 附：经线 / 纬线对照（隐喻集中处）
+## Appendix: warp / weft correspondence (where the metaphor is concentrated)
 
-MemoWeft 用"织布"作隐喻——全文只在此处集中说明，其余按术语讲：
+MemoWeft uses "weaving" as a metaphor — the whole document explains it concentrated only here, and everything else is told in terms of terminology:
 
-| 织布 | MemoWeft | 对应 |
+| Weaving | MemoWeft | Corresponds to |
 |---|---|---|
-| **经线（warp）** | 稳定的规则与骨架 | 认知纪律、置信度算法、分型半衰期、三层数据模型 |
-| **纬线（weft）** | 横穿的一条条证据 | 用户每一句话、每一次行为观察 |
-| **编织（weave）** | 写路径 distill→consolidate→attribute | 把碎片证据织进认知 |
-| **一整块布** | 认知之布 = 多维用户画像 | cognition 层 |
+| **Warp** | Stable rules and skeleton | Cognitive discipline, confidence algorithm, per-type half-life, three-layer data model |
+| **Weft** | Each piece of evidence threaded crosswise | Every sentence the user says, every behavioral observation |
+| **Weave** | Write path distill→consolidate→attribute | Weaving fragmentary evidence into cognition |
+| **A whole cloth** | Cloth of cognition = multi-dimensional user profile | The cognition layer |
 
-规则（经）稳定，证据（纬）不断横穿——织出的这块布，就是对一个人可追溯、可演化、可迁移的理解。
+The rules (warp) are stable, the evidence (weft) keeps threading crosswise — the cloth woven from this is a traceable, evolvable, portable understanding of a person.
