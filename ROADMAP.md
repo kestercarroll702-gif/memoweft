@@ -1,27 +1,28 @@
-# Roadmap
+# ROADMAP
 
-MemoWeft is **library-first**. This repository remains focused on the MemoWeft library, its public API, adapters, examples, and the bundled reference host demo. Product hosts should live outside the Core library scope.
+MemoWeft 是 **library-first** 的可移植 AI 长期记忆库。公共 API 稳定分层与破坏性变更策略见 [`docs/memory-surface-contract.md`](./docs/memory-surface-contract.md)。具体推进见 `PROJECT_PLAN.md` 与 `CURRENT.md`。
 
-MemoWeft is pre-1.0. Public API stability tiers and the breaking-change policy are documented in the [Memory Surface Contract](./docs/memory-surface-contract.md).
+## Now(本轮升级,对应 PROJECT_PLAN.md Phase 1–6)
 
-## Current focus
+- 召回更准(Phase 1)· 固化更可信(Phase 2,真实模型质量线)· 适配器更稳(Phase 3)· demo 更锋利(Phase 4)· 文档更不绕(Phase 5)· 公开基准(Phase 6,常态化)
 
-- Make the public API easier to understand and integrate.
-- Keep documentation and runnable examples aligned with the shipped package.
-- Improve ecosystem adapters without adding runtime dependencies to Core.
-- Maintain the reference host as a clear, bounded demonstration of Core capabilities.
+## Next(本轮之后优先考虑)
 
-## Next
+- 更多适配器(OpenAI Agents / LangChain / LlamaIndex),待 adapter-kit 被证明后批量做
+- Reranker 实装(Phase 1 若时间紧,`Reranker` 接口先留 no-op,实装下放此处)
+- 召回质量 v2:相似度阈值、purpose/content 过滤、召回解释、负反馈
+- 保持 Core / Host / Plugin 权限边界的新插件
 
-- Recall quality v2: similarity thresholds, purpose and content filters, recall explanations, and negative feedback.
-- More integration examples and framework adapters.
-- Additional plugins that preserve the Core / Host / Plugin permission boundaries.
+## Later(明确不在本轮;想法只进不丢)
 
-## Non-goals
+- Python 移植与跨语言一致性
+- REST server、多租户、pgvector / Postgres 后端
+- 托管 SaaS、Web 管理界面、多模态证据、CRDT 同步
+- 大规模新增适配器(本轮至多新增一个作为契约套件试金石)
+- 把参考宿主做成产品 / 扩成桌面产品路线
+- 拆分开源 / 闭源功能分层
+- IDEA-xxx <一句话>(来源 Phase/日期)
 
-- Turning the bundled reference host into the product.
-- Expanding this repository into a desktop-product roadmap.
-- Weakening the cognitive-discipline rules for convenience.
-- Splitting the library into open and closed feature tiers.
+## Non-goals(纪律)
 
-Priorities may change as the public API approaches 1.0. Track concrete work in [GitHub issues](https://github.com/memoweft/memoweft/issues) and the active focus in [`CURRENT.md`](./CURRENT.md).
+不把参考宿主变成产品;不把本仓库扩成桌面产品路线图;不为便利削弱认知纪律;不拆分开闭源分层。
