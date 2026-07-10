@@ -9,14 +9,14 @@
 | 项 | 值 |
 | --- | --- |
 | 生成命令 | `node bench/eval-retrieval.mjs --ablation` |
-| commit | `6221364` |
+| commit | `f073a99` |
 | Node | 24.15.0 |
 | 平台 | win32/x64 |
-| 生成时间 | 2026-07-10T03:48:43.601Z |
+| 生成时间 | 2026-07-10T04:00:16.219Z |
 | topK | 10 |
 | 黄金集 | tests/retrieval/golden.json（36 条 cognition，65 条 case） |
 | 确定性自检 | vector-only ✓ / keyword-only ✓ / hybrid ✓（三臂各两遍逐位相等） |
-| 真实臂 | opt-in 请求但调用失败（fetch failed）— pending，待联网 nightly |
+| 真实臂 | opt-in 已跑（model=bge-m3）：real-vector overall Recall@5=0.9667，real-hybrid overall Recall@5=0.9667（非确定，未做两遍自检） |
 
 三臂定义：
 
@@ -142,6 +142,6 @@ hybrid 看是否被 keyword 的空召回拖累、还是仍由 vector 兜住。
 ## 备注
 
 - **确定性臂**：vector-only（HashEmbedder）/ keyword-only（FTS5 BM25）/ hybrid（RRF），全部离线、无网络、无随机、无系统时钟；每个数字可由生成命令逐位复现。
-- **真实臂仍 opt-in**：opt-in 请求但调用失败（fetch failed）— pending，待联网 nightly
+- **真实臂仍 opt-in**：opt-in 已跑（model=bge-m3）：real-vector overall Recall@5=0.9667，real-hybrid overall Recall@5=0.9667（非确定，未做两遍自检）
 - **API 决策交回 Integrator 守门**：本报告只呈现数据（增益 Δ、+10% 判定），是否把 hybrid 接进公共 API（§14.4b）由 Integrator 裁决，评测不代拍板。
 - 默认 `node bench/eval-retrieval.mjs` 仍产出 vector-only 基线（retrieval-baseline.md），行为与数字不变。
