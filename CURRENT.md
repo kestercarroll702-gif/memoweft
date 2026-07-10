@@ -1,32 +1,34 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-10 | 所在 Phase:0 奠基**已收尾**(tag: `phase-0-start` @ `5a66dcb` → `phase-0-done`)
+更新于:2026-07-10 | 所在 Phase:**1 召回更准(进行中)**(tag: `phase-0-done`;Phase 1 未打 start tag,trunk 直推)
 
-> 总纲见 `PROJECT_PLAN.md`;关键决策 `DECISIONS.md`;校准事实 `docs/internal/phase0-calibration.md`。
+> 总纲 `PROJECT_PLAN.md`;决策 `DECISIONS.md`;校准 `docs/internal/phase0-calibration.md`;检索基线 `bench/retrieval-baseline.md`。
 
 ## 正在进行
 
-- **Phase 0 收尾,待人类验收**;Phase 1(召回更准)计划待确认后开工(铁律 5)。
+- **14.3 BM25/FTS5 关键词通道**(next)。测量地基(14.1/14.2)已入库、基线已定 —— 满足"先测量后优化",可动优化。
 
-## 刚完成(Phase 0 六步,附证据)
+## 刚完成(最近 5 条,附证据)
 
-- **0.6 CI 补强**(`7cddc03`):ci.yml 加 `API Freeze Check` 步 + workflow 级 `SKIP_LIVE_LLM=1`;新建 `nightly.yml` 骨架(schedule+dispatch,`test:live --if-present` 空跑至 Phase 2);补 `scripts/api-snapshot.d.mts` 修 typecheck。**三绿:typecheck ✓ / test 223/223 ✓ / build ✓;lint exit0(6 个既有 warning,非本轮)**。
-- **0.5 治理文件**(`a1eb500`):`PROJECT_PLAN.md` 入仓;AGENTS.md 升级为 Integrator 章程(diff 已展示待人类过目);新建 CLAUDE.md;ROADMAP.md 重置;DECISIONS.md(D-0001…0005)。
-- **0.4 `.claude/` 包**(`2ea9b94`):6 子代理 + settings.json + protect.py;**stdin 16 场景全过**;两条拦截原文入库;force-push 加固 + UTF-8(D-0004);hooks 需重启激活。
-- **0.3 API 冻结**(`d8cbafa`):api-snapshot.mjs + api-freeze 测试 + 快照 184 行 + api:update/check;变更流程演练通过。
-- **0.2 校准**(`71f03db`):`docs/internal/phase0-calibration.md`;检索真瓶颈在读侧(改写 Phase 1 打法);5 处文档不符已列。
-- **0.1 基线**:222/222 绿;FTS5 中文 ≥3 字(D-0001);mimo 连通 OK。
-- 工作区清理:`e10dfc1` / `5a66dcb`。
+- **14.2 检索基线入库**:`bench/eval-retrieval.mjs`(双臂脚本,真实臂 opt-in 默认离线)+ `bench/retrieval-baseline.md`。**vector-only 基线**:overall Recall@5 **0.7154** / Hit@5 0.7692 / MRR@10 0.6608;direct **0.962**、paraphrase **0.500**、multihop 0.633;zh 0.810、**en 0.042**;**9 条纯 2 字中文 direct = 1.000**(向量 char-bigram 兜住 trigram 够不着的 2 字词,证 D-0001)。确定性自检通过。
+- **14.1 HashEmbedder**(commit `0af9dd2`):确定性词袋哈希(FNV-1a + CJK 单字/bigram + L2 归一化),零网络零成本。
+- **黄金集 golden.json**(`0af9dd2`):自包含 36 认知/65 用例(direct/paraphrase/multihop≈40:37:23,中文 57、英文 8 跨语言 ground truth,8 种 ContentType 全覆盖)。
+- Phase 0 收尾(`bad79fe`,tag `phase-0-done`)。
 
 ## 阻塞(等人类或等依赖)
 
-- 无。等人类:① Phase 0 验收 ② Phase 1 计划确认(GO)③ AGENTS.md 过目。
+- 无。真实嵌入臂需联网 + 本地 `.env` 的 `MEMOWEFT_EMBED_*`(仓库已有 gitignored `.env`,model=bge-m3,但当前环境 fetch 失败)→ 联网时 `EVAL_REAL_ARM=1 npm run bench:retrieval` 补真实臂。
 
 ## 下一步(按序)
 
-1. **人类验收 Phase 0**(§12 核对表已附)。
-2. **确认 Phase 1 计划**后开工:先测量后优化——HashEmbedder 确定性臂 + 黄金检索集 + 基线报告,再上 BM25/FTS + RRF hybrid。重心按 D-0005 放**检索读侧**。
-3. Phase 1 期间:mimo key 需 live 时放进 gitignored `.env`;若要 hooks 机器强制生效则重启会话。
+1. **14.3 BM25 关键词通道**(FTS5 trigram):`keywordSearch(query,k)` 与向量检索同签名;失效/过期过滤策略、tokenizer 体积记 DECISIONS(D-0001 补数)。降级链 node:sqlite→better-sqlite3→纯 TS BM25。
+2. **14.4 RRF 融合 hybrid + `mode` 开关**:`mode:'vector'|'keyword'|'hybrid'`;若进公共 API 走第 13 章变更流程(**本轮第一个合法 API 变更,正好演练**)。
+3. **14.5 增量索引**(嵌入侧已有,重心读侧全表余弦,D-0005)+ 1 万条验证;**14.6 三臂消融** → `bench/retrieval-after.md` 与基线同格式对比。
+
+## Phase 1 靶子(基线 → 目标)
+
+- overall Recall@5 **0.7154 → ≥0.787**(+10%);中文用例组单独达标;P95 延迟劣化 ≤20%。
+- 主缺口:**paraphrase 0.500(语义)+ en 0.042(跨语言)** —— 靠真实嵌入臂 + BM25/RRF hybrid 补。
 
 ## 本轮范围冻结(铁律 4)
 
