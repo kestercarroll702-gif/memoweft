@@ -6,13 +6,18 @@
 
 ## 正在进行
 
-- 即将进入 **0.4 `.claude/` 多智能体配置包**(6 子代理 + hooks/protect.py)。0.1/0.2/0.3 已完成(见下)。
+- **0.5 治理文件落地**(PROJECT_PLAN 入仓、AGENTS 升级、CLAUDE 入口、ROADMAP 重置、DECISIONS 新建)。0.1–0.4 已完成(见下)。
 
 ## 刚完成(最近 5 条,附证据)
 
-- **0.3 公共 API 冻结机制**(§13):`scripts/api-snapshot.mjs`(用 TypeScript 编译器 API 枚举 `src/index.ts` 导出面、形状级渲染、按名排序、过滤 private/protected;零新增依赖)+ `tests/api/api-freeze.test.ts` + 首版快照 `tests/api/api-surface.snapshot`(184 行)+ `npm run api:update`/`api:check`。**变更流程演练通过**:加临时导出 → `api:check` exit 1(红)→ 回滚 → exit 0(绿)。全量 **223/223 绿**。
-- **0.2 校准侦察**(scout×3,报告 `docs/internal/phase0-calibration.md`)。三条净结论:① 置信度/衰减**精确数值已核实**,铁律 3b(置信度只由规则算)/3d(证据 ID 白名单)在代码中成立;② **检索真瓶颈在读侧**——每次查询 O(N) 读全表 + JSON.parse + JS 余弦,而"增量索引"嵌入侧**已有**(sha256 diff)→ 改写 Phase 1 打法(重心放检索侧);③ 适配器只依赖 6 个门面方法,注入格式须同锁 Core+适配器两处,mcp-server 的 `health()` 注释与实现不符。**5 处文档不符**已列报告(铁律 7)。
-- **0.1 基线**:`npm test` 222/222 全绿(node v24.15.0);FTS5+trigram 可用,**中文需 ≥3 字符**(D-0001 待记);mimo 连通验证 OK(key 未持久化)。
+- **0.4 `.claude/` 多智能体包**(附录 I):6 子代理(`.claude/agents/*.md`)+ `settings.json` + `hooks/protect.py`。**stdin 实测 16 场景全过**。两条关键拦截原文:
+  - eval Edit → `BLOCKED by protect.py: 铁律1:tests/eval/ 既有测试禁止修改。测试不过=实现有错;新增用例请创建新文件。`
+  - npm publish → `BLOCKED by protect.py: 铁律8/9:发布、强推与破坏性命令必须由人类亲自执行。`
+  - **两处对文档的合理偏离(D-0004)**:① force-push 原正则漏拦 `git push origin main --force`,已加固为"含 git push + force 标志即拦"(3 变体已验);② stderr 强制 UTF-8(否则 Windows 下拦截理由乱码);③ hook 命令用 `python`(非 `python3`,避 WindowsApps Store 别名)。
+  - **hooks 本会话未热加载**(探针 `twine upload` 未被拦):本 harness 下 hooks 需**重启会话**才激活(与文档 I.5.2 一致)。stdin 16 场景为本会话验收证据。
+- **0.3 API 冻结机制**(§13):`scripts/api-snapshot.mjs`(TS 编译器 API,零新依赖,过滤 private)+ `tests/api/api-freeze.test.ts` + 首版快照 184 行 + `npm run api:update`/`api:check`。变更流程演练通过(加导出→exit1→回滚→exit0)。全量 **223/223 绿**。
+- **0.2 校准侦察**(报告 `docs/internal/phase0-calibration.md`):置信度/衰减精确数值(铁律 3b/3d 成立);**检索真瓶颈在读侧全表余弦扫描**(嵌入侧已增量)→ 改写 Phase 1 打法;适配器只依赖 6 门面方法;5 处文档不符已列。
+- **0.1 基线**:222/222 绿(node v24.15.0);FTS5 中文需 ≥3 字符;mimo 连通 OK。
 - **工作区清理**:`e10dfc1` 版本同步 0.5.1;`5a66dcb` gitignore 杂物。
 
 ## 阻塞(等人类或等依赖)
@@ -21,9 +26,17 @@
 
 ## 下一步(按序)
 
-1. **0.4 `.claude/` 多智能体包**(附录 I):6 子代理 + settings.json + hooks/protect.py。**解释器指向 Windows 可用 `python`**(D-0004),protect.py 喂 stdin 跑七场景,两条关键拦截记本文件。
-2. **0.5 治理文件**:`PROJECT_PLAN.md` 入仓;AGENTS.md 升级为 Integrator 章程(diff 给人类);新建 CLAUDE.md 入口;ROADMAP.md 重置;新建 DECISIONS.md(D-0001 FTS5 / D-0002 协作模式=务实混合 / D-0003 demo=改造 testbench / D-0004 hook 解释器 / D-0005 mimo 推理模型 + 向量层在迁移体系外)。
-3. **0.6 CI 补强**:api-freeze、lint/typecheck、SKIP_LIVE_LLM、真 key 用例统一跳过、nightly 骨架。
+1. **0.5 治理文件**:`PROJECT_PLAN.md` 入仓;AGENTS.md 升级为 Integrator 章程(diff 给人类过目);新建 CLAUDE.md 入口;ROADMAP.md 重置(第 3 章非目标 → Later);新建 DECISIONS.md(D-0001…D-0005)。
+2. **0.6 CI 补强**:核实 `.github/workflows` 现状 → 追加 api-freeze/lint/typecheck、`SKIP_LIVE_LLM`、真 key 用例统一跳过、nightly 骨架。
+3. Phase 0 收尾:逐条核对 §12 验收 → 打 `phase-0-done` → 请人类验收。
+
+## 待记决策(0.5 落地 DECISIONS.md)
+
+- D-0001 FTS5 tokenizer:trigram 可用,中文 ≥3 字符阈值;短中文靠向量兜底。
+- D-0002 协作模式=务实混合(Agent/Workflow 委派 + .claude 落地供以后会话)。
+- D-0003 Phase 4 demo=改造现有 testbench(非新建)。
+- D-0004 hook 落地适配:python 解释器 + force-push 正则加固 + stderr UTF-8;hooks 需重启激活。
+- D-0005 检索现状修正(向量=JSON 文本、在迁移体系外、嵌入已增量、真瓶颈在读侧全表余弦);mimo 为推理模型。
 
 ## 本轮范围冻结(铁律 4)
 
