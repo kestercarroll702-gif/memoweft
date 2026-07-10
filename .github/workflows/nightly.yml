@@ -1,0 +1,41 @@
+# MemoWeft Nightly · 真实模型质量线(Phase 2 test:live + 检索真实臂)
+#
+# 分工(PROJECT_PLAN §15.4):CI 主干 = 录制夹具 = 确定性;nightly + 本地 = 真实模型 = 真实性。
+# 本文件是【骨架】:schedule 每日触发 + 手动 workflow_dispatch。
+#   Phase 2 的 `npm run test:live` 接入后自动启用——现在用 `--if-present` 空跑,脚本未定义时不报错、nightly 保持绿。
+# 真实 key 由 GitHub secrets 注入(MEMOWEFT_LLM_* / MEMOWEFT_EMBED_*),CI 只引用 secret 名、绝不写死。
+
+name: Nightly Live
+
+on:
+  schedule:
+    - cron: '0 18 * * *' # 每日 UTC 18:00
+  workflow_dispatch:
+
+jobs:
+  live:
+    name: 真实模型端到端 (test:live)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Phase 2 定义 test:live 后本步自动生效;当前脚本未定义 → --if-present 空跑、job 绿。
+      - name: Live tests (Phase 2 起启用)
+        run: npm run test:live --if-present
+        env:
+          MEMOWEFT_LLM_BASE_URL: ${{ secrets.MEMOWEFT_LLM_BASE_URL }}
+          MEMOWEFT_LLM_API_KEY: ${{ secrets.MEMOWEFT_LLM_API_KEY }}
+          MEMOWEFT_LLM_MODEL: ${{ secrets.MEMOWEFT_LLM_MODEL }}
+          MEMOWEFT_EMBED_BASE_URL: ${{ secrets.MEMOWEFT_EMBED_BASE_URL }}
+          MEMOWEFT_EMBED_API_KEY: ${{ secrets.MEMOWEFT_EMBED_API_KEY }}
+          MEMOWEFT_EMBED_MODEL: ${{ secrets.MEMOWEFT_EMBED_MODEL }}

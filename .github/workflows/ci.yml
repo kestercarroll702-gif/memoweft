@@ -30,6 +30,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# CI 主干走确定性:标记跳过需真实 key 的 live 用例(Phase 2 起 test:live 的真实覆盖由 nightly 承担)。
+env:
+  SKIP_LIVE_LLM: '1'
+
 jobs:
   guardrails:
     name: 三绿护栏 (Node 24 · 零依赖路径)
@@ -83,6 +87,11 @@ jobs:
 
       - name: Core Typecheck
         run: npm run typecheck
+
+      # API 冻结(铁律 2 机器强制):公共导出面与 tests/api/api-surface.snapshot 逐字比对。
+      #   api-freeze 也在下面 Core Test 里作为一条测试跑;本步给更快、更清晰的失败信号。
+      - name: API Freeze Check
+        run: npm run api:check
 
       # Core Test 换成带原生覆盖率的版本（--experimental-test-coverage）：
       #   是【替换】不是追加——追加会让同一批 .ts 被跑两遍（普通一遍 + coverage 一遍），白翻倍 CI 时长。
