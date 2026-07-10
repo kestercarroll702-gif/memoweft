@@ -5,20 +5,23 @@
  *   1) 结构性断言（程序判，先跑，不调 LLM）：从每个场景的 expect 逐项判 + 三条不变量（每场景都查）。
  *   2) 要点语义匹配（LLM-as-judge，后跑）：每个 shouldFormGist / shouldNotFormGist 用 judge 判，
  *      温度 0、跑 3 次取多数。产出 gistRecall / overInferRate。
- * 汇总落 bench/consolidation-baseline.md。**先入库基线，才谈优化。**
+ * 汇总落 bench/consolidation-baseline.{md,json}（全量）或 bench/runs/*（部分跑）。**先入库基线，才谈优化。**
  *
  * 直接从 src 的 .ts import（Node ≥24 原生剥类型，无需 build）。只读依赖，绝不改 src/tests。
  *
  * 用法：
- *   node bench/eval-consolidation.mjs             # 真实全量跑（慢，约 场景数×30s + judge 调用；由 Integrator 执行）
- *   node bench/eval-consolidation.mjs --limit 1   # 只跑前 N 个场景（dev 起跑 / 冒烟）
- *   node bench/eval-consolidation.mjs --selftest  # 离线自检（mock LLM + 内联 stub），必须退出 0；CI/无 key 也能验逻辑
+ *   node bench/eval-consolidation.mjs                        # 真实全量跑（慢；实测 82–141s/场景 + judge 调用，全量 42 场景约 77 分钟；由 Integrator 执行）
+ *   node bench/eval-consolidation.mjs --limit N              # 只跑前 N 个场景（dev 起跑 / 冒烟）——PARTIAL，写 bench/runs/，绝不碰基线
+ *   node bench/eval-consolidation.mjs --discipline <name>    # 只跑某 discipline（如 chitchat-negative）——PARTIAL，写 bench/runs/，绝不碰基线
+ *   node bench/eval-consolidation.mjs --out <prefix>         # 覆盖产物前缀：写 <prefix>.md 与 <prefix>.json
+ *   node bench/eval-consolidation.mjs --compare a.json b.json# 纯离线比对两份 run JSON（a=before, b=after）：不调模型、不读 .env、不加载语料
+ *   node bench/eval-consolidation.mjs --selftest             # 离线自检（mock LLM + 内联 stub），必须退出 0；CI/无 key 也能验逻辑
  *
  * 纪律：被测模型 = mimo（new OpenAICompatClient() 自动读根 .env）；judge 复用同端点但【温度 0】；
  *       置信度由系统按规则自算，语料从不给期望置信数值；judge 判分提示词内联为带版本号常量（见 JUDGE_PROMPT_V1）。
  *       真实模型非确定、慢——本报告数字是 nightly / 本地跑的一次快照，不做 CI 断言。不粉饰。
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -29,10 +32,13 @@ import { NullRetriever } from '../src/retrieval/nullRetriever.ts';
 import { updateProfile } from '../src/consolidation/updateProfile.ts';
 import { OpenAICompatClient, loadLLMConfig } from '../src/llm/client.ts';
 import { config } from '../src/config.ts';
+import { promptVersions } from '../src/prompts/registry.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CORPUS_PATH = resolve(HERE, '../tests/consolidation-corpus/corpus.json');
-const REPORT_PATH = resolve(HERE, 'consolidation-baseline.md');
+const BASELINE_MD_PATH = resolve(HERE, 'consolidation-baseline.md');
+const BASELINE_JSON_PATH = resolve(HERE, 'consolidation-baseline.json');
+const RUNS_DIR = resolve(HERE, 'runs');
 const GEN_CMD = 'node bench/eval-consolidation.mjs';
 /** judge 每个要点跑几次取多数（温度 0，防真模型抖动）。 */
 const JUDGE_RUNS = 3;
@@ -320,11 +326,13 @@ function aggregate(summaries) {
   };
 }
 
-function collectMeta(corpus, scenarios, llmCfg) {
+function collectMeta(corpus, scenarios, llmCfg, filter) {
   const judgeCalls = scenarios.reduce(
     (a, s) => a + JUDGE_RUNS * ((s.expect?.shouldFormGists ?? []).length + (s.expect?.shouldNotFormGists ?? []).length),
     0,
   );
+  const limit = filter?.limit ?? null;
+  const discipline = filter?.discipline ?? null;
   return {
     commit: (() => {
       try {
@@ -341,6 +349,12 @@ function collectMeta(corpus, scenarios, llmCfg) {
     scenarioCount: scenarios.length,
     totalScenarios: corpus.scenarios.length,
     judgeCalls,
+    // §15.3 归因：本轮用了哪版提示词 / judge / 模型，以及是否只跑了部分场景（决定产物落盘与可比性）。
+    promptVersions: promptVersions(),
+    judgePromptVersion: JUDGE_PROMPT_V1.version,
+    judgeModel: llmCfg.model, // 目前同被测 model，仅温度 0 覆写；显式记下以防日后 judge 换端点。
+    partial: Boolean(limit) || Boolean(discipline),
+    filter: { limit, discipline },
   };
 }
 
@@ -348,11 +362,27 @@ function collectMeta(corpus, scenarios, llmCfg) {
 const pct = (n) => (n === null ? 'n/a' : (n * 100).toFixed(1) + '%');
 const f2 = (n) => (n === null ? 'n/a' : n.toFixed(2));
 const checksInline = (checks) => checks.map((c) => `${c.pass ? '✓' : '✗'}${c.name}`).join(' · ');
+/** `{consolidate:'v2',distill:'v1'}` → `consolidate@v2 · distill@v1`（按 id 字母序，确定性）。 */
+const formatPromptVersions = (pv) => Object.keys(pv ?? {}).sort().map((k) => `${k}@${pv[k]}`).join(' · ');
+/** 把 filter 打成人读串：`discipline=chitchat-negative, limit=5`；无过滤 → `无`。 */
+function describeFilter(filter) {
+  const p = [];
+  if (filter?.discipline) p.push(`discipline=${filter.discipline}`);
+  if (filter?.limit) p.push(`limit=${filter.limit}`);
+  return p.length ? p.join(', ') : '无';
+}
+/** 带符号数字（正数补 +），供 Δ 展示。null → 'n/a'。 */
+const signed = (n, digits) => (n === null || n === undefined ? 'n/a' : (n >= 0 ? '+' : '') + n.toFixed(digits));
 
 function buildReport(summaries, agg, meta) {
   const L = [];
   L.push('# 固化质量评测基线报告 — Phase 2 §15.2');
   L.push('');
+  if (meta.partial) {
+    L.push(`> ⚠ **PARTIAL RUN：只跑了 ${meta.scenarioCount}/${meta.totalScenarios} 场景（filter=${describeFilter(meta.filter)}）。**`);
+    L.push('> **这不是基线，不可与全量基线直接比较。** 本产物写在 `bench/runs/` 下，未覆盖 `bench/consolidation-baseline.*`。');
+    L.push('');
+  }
   L.push('> 逐场景跑【真实模型】固化（updateProfile），两级比对：结构性断言（程序判，先跑）+ 要点语义匹配');
   L.push('> （LLM-as-judge，温度 0、3 次多数，后跑）。**先入库基线，才谈优化。** 真实模型非确定、慢，');
   L.push('> 本报告是 nightly / 本地跑的一次快照，不做 CI 断言，也不代表可复现的固定数字。');
@@ -361,14 +391,16 @@ function buildReport(summaries, agg, meta) {
   L.push('');
   L.push('| 项 | 值 |');
   L.push('| --- | --- |');
-  L.push(`| 生成命令 | \`${GEN_CMD}${meta.scenarioCount < meta.totalScenarios ? ` --limit ${meta.scenarioCount}` : ''}\` |`);
+  const cmdSuffix = `${meta.filter?.discipline ? ` --discipline ${meta.filter.discipline}` : ''}${meta.filter?.limit ? ` --limit ${meta.filter.limit}` : ''}`;
+  L.push(`| 生成命令 | \`${GEN_CMD}${cmdSuffix}\` |`);
   L.push(`| commit | \`${meta.commit}\` |`);
   L.push(`| Node | ${meta.node} |`);
   L.push(`| 平台 | ${meta.platform}/${meta.arch} |`);
   L.push(`| 生成时间 | ${meta.generatedAt} |`);
   L.push(`| 被测 model（固化） | ${meta.model}（mimo，new OpenAICompatClient() 读根 .env） |`);
-  L.push(`| judge model | ${meta.model}（复用同端点，温度 0 覆写） |`);
-  L.push(`| judge 提示词版本 | ${JUDGE_PROMPT_V1.version}（每要点 ${JUDGE_RUNS} 次取多数） |`);
+  L.push(`| judge model | ${meta.judgeModel}（复用同端点，温度 0 覆写） |`);
+  L.push(`| judge 提示词版本 | ${meta.judgePromptVersion}（每要点 ${JUDGE_RUNS} 次取多数） |`);
+  L.push(`| 被测提示词版本 | ${formatPromptVersions(meta.promptVersions)} |`);
   L.push(`| 语料 | tests/consolidation-corpus/corpus.json（跑 ${meta.scenarioCount}/${meta.totalScenarios} 场景） |`);
   L.push('');
   L.push('## 总分');
@@ -417,7 +449,7 @@ function buildReport(summaries, agg, meta) {
   L.push('## 备注');
   L.push('');
   L.push('- **真实模型非确定**：被测 mimo 与 judge 均为真实 LLM，重跑分数会抖；judge 已用温度 0 + 3 次多数压抖，但仍非逐位可复现。');
-  L.push('- **慢 + 耗 token**：每场景约 30s 固化（distill+consolidate+attribute 三次真调）；judge 另需 3×(要点数) 次短调用。全量跑由 Integrator 在 nightly / 本地执行。');
+  L.push('- **慢 + 耗 token**：每场景实测 82–141s 固化（distill+consolidate+attribute 三次真调，见 bench/consolidation-baseline-run.log）；judge 另需 3×(要点数) 次短调用。全量 42 场景约 77 分钟，由 Integrator 在 nightly / 本地执行。');
   L.push('- **结构断言是硬判**（程序判、与模型无关），可信度高；**要点判分是软判**（LLM-as-judge），仅供趋势参考，改 judge 提示词版本后不可跨版本比。');
   L.push('- **置信度由系统按规则自算**，语料从不给期望置信数值；不变量②/③ 正是守"记≠信 / 证据白名单"这两条纪律。');
   L.push('- **先入库基线，才谈优化**：本报告是 §15.2 优化前的对照基准；任何提示词 / 参数改动后，重跑本命令产出 after 报告对比。');
@@ -444,18 +476,221 @@ function printConsole(summaries, agg, meta) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// 产物落盘路径 + commit 正文摘要
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * 决定本轮 md/json 落哪。
+ *   --out <prefix> → <prefix>.{md,json}（最高优先）。
+ *   全量（!partial）→ bench/consolidation-baseline.{md,json}（沿用现路径，前一版由 git 提供）。
+ *   部分（partial）→ bench/runs/<date>-<sha>-consolidation-<discipline|limitN>.{md,json}（绝不碰基线）。
+ */
+function resolveOutputPaths(meta, outPrefix) {
+  if (outPrefix) return { md: `${outPrefix}.md`, json: `${outPrefix}.json` };
+  if (!meta.partial) return { md: BASELINE_MD_PATH, json: BASELINE_JSON_PATH };
+  mkdirSync(RUNS_DIR, { recursive: true });
+  const date = meta.generatedAt.slice(0, 10); // YYYY-MM-DD
+  const parts = [];
+  if (meta.filter?.discipline) parts.push(meta.filter.discipline);
+  if (meta.filter?.limit) parts.push(`limit${meta.filter.limit}`);
+  const tag = parts.join('-') || 'partial';
+  const base = resolve(RUNS_DIR, `${date}-${meta.commit}-consolidation-${tag}`);
+  return { md: `${base}.md`, json: `${base}.json` };
+}
+
+/** 单跑（after 快照）的 commit 正文摘要：无 before 就不打箭头，只给当前数。 */
+function commitSummarySingle(agg, meta) {
+  return `结构断言 ${pct(agg.structRate)}(${agg.structPass}/${agg.structTotal})；全绿 ${agg.scenariosPassed}/${meta.scenarioCount}；errored ${agg.errored}；avgGistRecall ${f2(agg.avgGistRecall)}；avgOverInferRate ${f2(agg.avgOverInferRate)}`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// --compare：纯离线前后对比（不调任何模型 / 不读 .env / 不加载语料）
+// ══════════════════════════════════════════════════════════════════════════
+
+const rateOf = (g) => (g && g.structTotal ? g.structPass / g.structTotal : null);
+const subOrNull = (x, y) => (x === null || x === undefined || y === null || y === undefined ? null : x - y);
+
+/**
+ * 纯函数：比对两份 run JSON（a=before, b=after），返回结构化 diff。
+ * 不做任何 IO / 不调模型——正因如此可离线自检（见 selftest 第 6 节）。
+ * 归因核心：promptChanges 逐条列出 `consolidate: v2 → v3`；warnings 在样本/模型/judge 不一致时高声喊「不可直接比」。
+ */
+function diffRuns(a, b) {
+  const am = a.meta ?? {};
+  const bm = b.meta ?? {};
+  const aAgg = a.agg ?? {};
+  const bAgg = b.agg ?? {};
+
+  const warnings = [];
+  if (am.scenarioCount !== bm.scenarioCount) warnings.push(`样本不同：${am.scenarioCount} → ${bm.scenarioCount} 场景，不可直接比。`);
+  if (Boolean(am.partial) !== Boolean(bm.partial)) warnings.push(`partial 不一致：before partial=${Boolean(am.partial)}, after partial=${Boolean(bm.partial)}，不可直接比。`);
+  if (am.model !== bm.model) warnings.push(`被测模型变了：${am.model} → ${bm.model}，分数不可直接归因到提示词。`);
+  if (am.judgePromptVersion !== bm.judgePromptVersion) warnings.push(`judge 提示词变了：${am.judgePromptVersion} → ${bm.judgePromptVersion}，软判分数（gistRecall/overInferRate）不可比。`);
+
+  // 提示词版本差异（归因核心）：并集里逐条比对。
+  const pvA = am.promptVersions ?? {};
+  const pvB = bm.promptVersions ?? {};
+  const promptChanges = [];
+  for (const id of [...new Set([...Object.keys(pvA), ...Object.keys(pvB)])].sort()) {
+    if (pvA[id] !== pvB[id]) promptChanges.push({ id, before: pvA[id] ?? '(缺)', after: pvB[id] ?? '(缺)' });
+  }
+
+  const structRateBefore = aAgg.structRate ?? null;
+  const structRateAfter = bAgg.structRate ?? null;
+  const overall = {
+    structPass: { before: aAgg.structPass ?? null, after: bAgg.structPass ?? null },
+    structTotal: { before: aAgg.structTotal ?? null, after: bAgg.structTotal ?? null },
+    structRate: {
+      before: structRateBefore,
+      after: structRateAfter,
+      deltaPP: subOrNull(structRateAfter, structRateBefore) === null ? null : subOrNull(structRateAfter, structRateBefore) * 100,
+    },
+    scenariosPassed: { before: aAgg.scenariosPassed ?? null, after: bAgg.scenariosPassed ?? null },
+    errored: { before: aAgg.errored ?? null, after: bAgg.errored ?? null },
+    avgGistRecall: { before: aAgg.avgGistRecall ?? null, after: bAgg.avgGistRecall ?? null, delta: subOrNull(bAgg.avgGistRecall, aAgg.avgGistRecall) },
+    avgOverInferRate: { before: aAgg.avgOverInferRate ?? null, after: bAgg.avgOverInferRate ?? null, delta: subOrNull(bAgg.avgOverInferRate, aAgg.avgOverInferRate) },
+  };
+
+  const aMap = new Map((aAgg.groups ?? []).map((g) => [g.discipline, g]));
+  const bMap = new Map((bAgg.groups ?? []).map((g) => [g.discipline, g]));
+  const byDiscipline = [...new Set([...aMap.keys(), ...bMap.keys()])].sort().map((d) => {
+    const ga = aMap.get(d);
+    const gb = bMap.get(d);
+    const ra = rateOf(ga);
+    const rb = rateOf(gb);
+    return {
+      discipline: d,
+      onlyIn: !ga ? 'after' : !gb ? 'before' : null,
+      structPass: { before: ga?.structPass ?? null, after: gb?.structPass ?? null },
+      structTotal: { before: ga?.structTotal ?? null, after: gb?.structTotal ?? null },
+      structRate: { before: ra, after: rb, deltaPP: subOrNull(rb, ra) === null ? null : subOrNull(rb, ra) * 100 },
+      gistRecall: { before: ga?.gistRecall ?? null, after: gb?.gistRecall ?? null, delta: subOrNull(gb?.gistRecall, ga?.gistRecall) },
+      overInferRate: { before: ga?.overInferRate ?? null, after: gb?.overInferRate ?? null, delta: subOrNull(gb?.overInferRate, ga?.overInferRate) },
+    };
+  });
+
+  return { warnings, promptChanges, overall, byDiscipline, meta: { before: am, after: bm } };
+}
+
+const SOFT_NOTE = '（软判·单跑高方差，仅供趋势；以结构硬指标为准 — D-0009）';
+
+/** 把 diffRuns 的结构化 diff 打成人读表（含可比性警示 / 提示词版本差异 / 总体 / 逐 discipline）。 */
+function printDiff(diff, beforePath, afterPath) {
+  const mb = diff.meta.before;
+  const ma = diff.meta.after;
+  const tag = (m) => `commit ${m.commit ?? '?'} · ${m.scenarioCount ?? '?'} 场景${m.partial ? '(PARTIAL)' : ''} · model ${m.model ?? '?'} · judge ${m.judgePromptVersion ?? '?'}`;
+  console.log('');
+  console.log('════════ 固化质量评测 · 前后对比（§15.3）════════');
+  console.log(`before(a): ${beforePath}`);
+  console.log(`           [${tag(mb)}]`);
+  console.log(`after (b): ${afterPath}`);
+  console.log(`           [${tag(ma)}]`);
+  console.log('');
+
+  if (diff.warnings.length) {
+    console.log('⚠ 可比性警示：');
+    for (const w of diff.warnings) console.log(`  - ${w}`);
+  } else {
+    console.log('（样本 / 模型 / judge 提示词一致，可比。）');
+  }
+  console.log('');
+
+  console.log('提示词版本变更（归因核心）：');
+  if (diff.promptChanges.length) {
+    for (const c of diff.promptChanges) console.log(`  ▶ ${c.id}: ${c.before} → ${c.after}`);
+  } else {
+    console.log('  （提示词版本无变化。）');
+  }
+  console.log('');
+
+  const o = diff.overall;
+  const passArrow = o.structTotal.before === o.structTotal.after
+    ? `${o.structPass.before}→${o.structPass.after}/${o.structTotal.after}`
+    : `${o.structPass.before}/${o.structTotal.before}→${o.structPass.after}/${o.structTotal.after}`;
+  console.log('── 总体（硬指标）──');
+  console.log(`结构断言   ${pct(o.structRate.before)}→${pct(o.structRate.after)}  (${passArrow})  Δ${signed(o.structRate.deltaPP, 1)}pp`);
+  console.log(`全绿场景   ${o.scenariosPassed.before} → ${o.scenariosPassed.after}  Δ${signed(subOrNull(o.scenariosPassed.after, o.scenariosPassed.before), 0)}`);
+  console.log(`errored    ${o.errored.before} → ${o.errored.after}  Δ${signed(subOrNull(o.errored.after, o.errored.before), 0)}`);
+  console.log('── 总体（软判）──');
+  console.log(`avgGistRecall     ${f2(o.avgGistRecall.before)} → ${f2(o.avgGistRecall.after)}  Δ${signed(o.avgGistRecall.delta, 2)}  ${SOFT_NOTE}`);
+  console.log(`avgOverInferRate  ${f2(o.avgOverInferRate.before)} → ${f2(o.avgOverInferRate.after)}  Δ${signed(o.avgOverInferRate.delta, 2)}  ${SOFT_NOTE}`);
+  console.log('');
+
+  console.log('── 按 discipline ──');
+  console.log(`软判列（gistRecall / overInferRate）同 ${SOFT_NOTE}`);
+  for (const g of diff.byDiscipline) {
+    if (g.onlyIn) {
+      console.log(`${g.discipline.padEnd(20)} （仅存在于 ${g.onlyIn}，无法对比）`);
+      continue;
+    }
+    const structCol = `${g.structPass.before}/${g.structTotal.before}→${g.structPass.after}/${g.structTotal.after} (Δ${signed(g.structRate.deltaPP, 1)}pp)`;
+    const gistCol = `gistRecall ${f2(g.gistRecall.before)}→${f2(g.gistRecall.after)}(Δ${signed(g.gistRecall.delta, 2)})`;
+    const overCol = `overInfer ${f2(g.overInferRate.before)}→${f2(g.overInferRate.after)}(Δ${signed(g.overInferRate.delta, 2)})`;
+    console.log(`${g.discipline.padEnd(20)} 结构 ${structCol.padEnd(28)} ${gistCol}  ${overCol}`);
+  }
+  console.log('════════════════════════════════════════════');
+}
+
+/** 前后对比的 commit 正文摘要：总体 + 结构有变化的 discipline（形如 chitchat 21/35→33/35）。 */
+function commitSummaryFromDiff(diff) {
+  const o = diff.overall;
+  const parts = [];
+  const passArrow = o.structTotal.before === o.structTotal.after
+    ? `${o.structPass.before}→${o.structPass.after}/${o.structTotal.after}`
+    : `${o.structPass.before}/${o.structTotal.before}→${o.structPass.after}/${o.structTotal.after}`;
+  parts.push(`结构断言 ${pct(o.structRate.before)}→${pct(o.structRate.after)}(${passArrow})`);
+  parts.push(`全绿 ${o.scenariosPassed.before}→${o.scenariosPassed.after}`);
+  for (const g of diff.byDiscipline) {
+    if (g.onlyIn) continue;
+    if (g.structPass.before === g.structPass.after && g.structTotal.before === g.structTotal.after) continue;
+    parts.push(`${g.discipline} ${g.structPass.before}/${g.structTotal.before}→${g.structPass.after}/${g.structTotal.after}`);
+  }
+  return parts.join('；');
+}
+
+/** --compare 入口：读两份 JSON、算 diff、打表、给 commit 摘要，然后 exit 0。全程无模型/无 .env/无语料。 */
+function runCompare(beforePath, afterPath) {
+  for (const [label, p] of [['before(a)', beforePath], ['after(b)', afterPath]]) {
+    if (!p) {
+      console.error('[eval-consolidation] --compare 需要两个 JSON：--compare <before.json> <after.json>');
+      process.exit(1);
+    }
+    if (!existsSync(p)) {
+      console.error(`[eval-consolidation] --compare ${label} 文件不存在: ${p}`);
+      process.exit(1);
+    }
+  }
+  const a = JSON.parse(readFileSync(beforePath, 'utf8'));
+  const b = JSON.parse(readFileSync(afterPath, 'utf8'));
+  const diff = diffRuns(a, b);
+  printDiff(diff, beforePath, afterPath);
+  console.log('');
+  console.log('── commit 正文摘要（可直接粘贴）──');
+  console.log(commitSummaryFromDiff(diff));
+  process.exit(0);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // 真实模式
 // ══════════════════════════════════════════════════════════════════════════
 
-async function mainReal({ limit, discipline }) {
+async function mainReal({ limit, discipline, outPrefix }) {
   if (!existsSync(CORPUS_PATH)) {
     console.error(`\n[eval-consolidation] 语料未就绪（test-author 并行产出中），无法起跑真实评测。\n  期望路径: ${CORPUS_PATH}`);
     process.exit(1);
   }
   const corpus = JSON.parse(readFileSync(CORPUS_PATH, 'utf8'));
   let scenarios = corpus.scenarios;
-  if (discipline) scenarios = scenarios.filter((s) => s.discipline === discipline);
-  if (limit && limit > 0) scenarios = scenarios.slice(0, limit);
+  if (discipline) {
+    scenarios = scenarios.filter((s) => s.discipline === discipline);
+    if (scenarios.length === 0) {
+      const known = [...new Set(corpus.scenarios.map((s) => s.discipline))].sort().join(' · ');
+      console.error(`[eval-consolidation] --discipline "${discipline}" 匹配到 0 个场景，无从评测。`);
+      console.error(`  语料里的纪律: ${known}`);
+      process.exit(1); // 不产出空报告：0 场景的"基线"比没有基线更危险
+    }
+  }
+  if (limit) scenarios = scenarios.slice(0, limit); // limit 已在入口校验为 ≥1 的整数
 
   // LLM 配置探测：无 key → 说明卡在哪，不算失败（退出 0，供 CI/无 key 环境）。
   let llmCfg;
@@ -470,7 +705,7 @@ async function mainReal({ limit, discipline }) {
   }
 
   const judge = new OpenAICompatClient({ ...llmCfg, temperature: 0 }); // 复用 mimo 端点，但温度 0
-  const meta = collectMeta(corpus, scenarios, llmCfg);
+  const meta = collectMeta(corpus, scenarios, llmCfg, { limit, discipline });
   console.log(`[eval-consolidation] 真实评测起跑：${meta.scenarioCount} 场景 · 被测 model=${meta.model} · judge 温度 0（${meta.judgeCalls} 次 judge 调用）`);
 
   const summaries = [];
@@ -497,8 +732,21 @@ async function mainReal({ limit, discipline }) {
 
   const agg = aggregate(summaries);
   printConsole(summaries, agg, meta);
-  writeFileSync(REPORT_PATH, buildReport(summaries, agg, meta), 'utf8');
-  console.log(`[eval-consolidation] 报告已写入 ${REPORT_PATH}`);
+
+  if (meta.partial) {
+    console.log(`⚠ PARTIAL RUN：只跑了 ${meta.scenarioCount}/${meta.totalScenarios} 场景（filter=${describeFilter(meta.filter)}）。`);
+    console.log('  这不是基线，不可与全量基线直接比较。产物写在 bench/runs/ 下，未污染 bench/consolidation-baseline.*。');
+    console.log('');
+  }
+
+  const paths = resolveOutputPaths(meta, outPrefix);
+  writeFileSync(paths.md, buildReport(summaries, agg, meta), 'utf8');
+  writeFileSync(paths.json, JSON.stringify({ meta, agg, summaries }, null, 2), 'utf8');
+  console.log(`[eval-consolidation] 报告已写入 ${paths.md}`);
+  console.log(`[eval-consolidation] 机读 JSON 已写入 ${paths.json}`);
+  console.log('');
+  console.log('── commit 正文摘要（可直接粘贴）──');
+  console.log(commitSummarySingle(agg, meta));
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -653,8 +901,72 @@ async function selftest() {
   ok((await judgeMajority(new MockJudge(['YES', 'YES', 'YES']), 'zh', 'q')).yes === true, 'YES×3 → 多数 YES');
   ok(parseYesNo('YES') === true && parseYesNo('  no.') === false && parseYesNo('Yes, there is one.') === true && parseYesNo('嗯') === false, 'parseYesNo 容错（大小写/标点/含糊保守判NO）');
 
+  // ── 6) diffRuns 纯函数（离线前后对比：上升 / 下降 / 样本不同 / 提示词版本变更） ──
+  console.log('[selftest] 6) diffRuns 纯函数（离线前后对比）');
+  const mkRun = (o = {}) => ({
+    meta: {
+      commit: o.commit ?? 'abc1234',
+      scenarioCount: o.scenarioCount ?? 42,
+      totalScenarios: 42,
+      partial: o.partial ?? false,
+      model: o.model ?? 'mimo',
+      judgePromptVersion: o.judgePromptVersion ?? 'v1',
+      promptVersions: o.promptVersions ?? { consolidate: 'v2', distill: 'v1' },
+    },
+    agg: {
+      structPass: o.structPass,
+      structTotal: o.structTotal,
+      structRate: o.structTotal ? o.structPass / o.structTotal : null,
+      scenariosPassed: o.scenariosPassed ?? 0,
+      errored: o.errored ?? 0,
+      avgGistRecall: o.avgGistRecall ?? null,
+      avgOverInferRate: o.avgOverInferRate ?? null,
+      groups: o.groups ?? [{ discipline: 'chitchat-negative', n: 7, structPass: o.chitPass ?? 21, structTotal: 35, gistRecall: null, overInferRate: o.chitOver ?? 0.3 }],
+    },
+    summaries: [],
+  });
+
+  // 6a) 分数上升：198→210/223，全绿 25→30
+  const up = diffRuns(
+    mkRun({ structPass: 198, structTotal: 223, scenariosPassed: 25, chitPass: 21 }),
+    mkRun({ structPass: 210, structTotal: 223, scenariosPassed: 30, chitPass: 33 }),
+  );
+  ok(up.overall.structRate.deltaPP > 0, `diffRuns 上升 → structRate ΔPP>0（实际 ${signed(up.overall.structRate.deltaPP, 1)}pp）`);
+  ok(up.overall.scenariosPassed.after === 30 && up.overall.scenariosPassed.before === 25, 'diffRuns 上升 → 全绿 25→30');
+  ok(up.warnings.length === 0, `diffRuns 上升 → 样本/模型/judge 一致，无警示（实际 ${up.warnings.length}）`);
+  ok(commitSummaryFromDiff(up).includes('chitchat-negative 21/35→33/35'), `diffRuns 上升 → commit 摘要含 chitchat 变化（${commitSummaryFromDiff(up)}）`);
+
+  // 6b) 分数下降：210→198/223
+  const down = diffRuns(
+    mkRun({ structPass: 210, structTotal: 223 }),
+    mkRun({ structPass: 198, structTotal: 223 }),
+  );
+  ok(down.overall.structRate.deltaPP < 0, `diffRuns 下降 → structRate ΔPP<0（实际 ${signed(down.overall.structRate.deltaPP, 1)}pp）`);
+
+  // 6c) 样本不同 → 高声警示，不可直接比
+  const diffSample = diffRuns(
+    mkRun({ structPass: 198, structTotal: 223, scenarioCount: 42 }),
+    mkRun({ structPass: 40, structTotal: 45, scenarioCount: 7, partial: true }),
+  );
+  ok(diffSample.warnings.some((w) => /样本不同/.test(w)), 'diffRuns 样本不同 → 警示「样本不同」');
+  ok(diffSample.warnings.some((w) => /partial 不一致/.test(w)), 'diffRuns partial 不一致 → 警示「partial 不一致」');
+
+  // 6d) 提示词版本变更 → promptChanges 逐条列出 consolidate v2→v3
+  const diffPrompt = diffRuns(
+    mkRun({ structPass: 198, structTotal: 223, promptVersions: { consolidate: 'v2', distill: 'v1' } }),
+    mkRun({ structPass: 210, structTotal: 223, promptVersions: { consolidate: 'v3', distill: 'v1' } }),
+  );
+  ok(
+    diffPrompt.promptChanges.length === 1 && diffPrompt.promptChanges[0].id === 'consolidate' && diffPrompt.promptChanges[0].before === 'v2' && diffPrompt.promptChanges[0].after === 'v3',
+    `diffRuns 提示词变更 → promptChanges=[consolidate v2→v3]（实际 ${JSON.stringify(diffPrompt.promptChanges)}）`,
+  );
+
+  // 6e) judge 提示词变更 → 软判不可比警示
+  const diffJudge = diffRuns(mkRun({ structPass: 200, structTotal: 223, judgePromptVersion: 'v1' }), mkRun({ structPass: 200, structTotal: 223, judgePromptVersion: 'v2' }));
+  ok(diffJudge.warnings.some((w) => /judge 提示词变了/.test(w)), 'diffRuns judge 版本变更 → 警示「judge 提示词变了」');
+
   if (failures === 0) {
-    console.log('\n[selftest] ✓ 全部通过（结构断言判定、不变量、检测器负例、judge 多数投票、gist 判分均离线验证）');
+    console.log('\n[selftest] ✓ 全部通过（结构断言判定、不变量、检测器负例、judge 多数投票、gist 判分、diffRuns 前后对比均离线验证）');
     process.exit(0);
   }
   console.error(`\n[selftest] ✗ ${failures} 项失败`);
@@ -667,17 +979,62 @@ async function selftest() {
 
 const args = process.argv.slice(2);
 const isSelftest = args.includes('--selftest');
+
+/** 退化输入直接报错早退，绝不"看起来跑了、其实跑了全量还盖了基线"。 */
+function die(msg) {
+  console.error(`[eval-consolidation] ${msg}`);
+  process.exit(1);
+}
+
+// --limit：必须是 ≥1 的整数。
+//   曾经的坑：`--limit 0` / `--limit abc` → limit 落成 0 / NaN，两者都是【假值】，于是
+//   partial 判成 false、切片也不生效 → 跑满 42 场景【并覆盖 baseline】。手滑一个字符就毁基线。
 const limitIdx = args.indexOf('--limit');
-const limit = limitIdx >= 0 && args[limitIdx + 1] ? parseInt(args[limitIdx + 1], 10) : null;
+let limit = null;
+if (limitIdx >= 0) {
+  const raw = args[limitIdx + 1];
+  const n = raw === undefined ? NaN : Number(raw);
+  if (!Number.isInteger(n) || n < 1) die(`--limit 需要一个 ≥1 的整数（收到: ${raw ?? '(空)'}）。`);
+  limit = n;
+}
+
 const discIdx = args.indexOf('--discipline');
-const discipline = discIdx >= 0 && args[discIdx + 1] ? args[discIdx + 1] : null;
+let discipline = null;
+if (discIdx >= 0) {
+  const raw = args[discIdx + 1];
+  if (!raw || raw.startsWith('--')) die(`--discipline 需要一个纪律名（收到: ${raw ?? '(空)'}）。`);
+  discipline = raw;
+}
+
+const outIdx = args.indexOf('--out');
+let outPrefix = null;
+if (outIdx >= 0) {
+  const raw = args[outIdx + 1];
+  if (!raw || raw.startsWith('--')) die(`--out 需要一个产物路径前缀（收到: ${raw ?? '(空)'}）。`);
+  outPrefix = raw;
+}
+
+const cmpIdx = args.indexOf('--compare');
+let compare = null;
+if (cmpIdx >= 0) {
+  const before = args[cmpIdx + 1];
+  const after = args[cmpIdx + 2];
+  if (!before || !after || before.startsWith('--') || after.startsWith('--')) {
+    die('--compare 需要两个 run JSON 路径：--compare <before.json> <after.json>');
+  }
+  compare = { before, after };
+}
 
 async function main() {
   if (isSelftest) {
     await selftest();
     return;
   }
-  await mainReal({ limit, discipline });
+  if (compare) {
+    runCompare(compare.before, compare.after); // 纯离线，内部 exit 0
+    return;
+  }
+  await mainReal({ limit, discipline, outPrefix });
 }
 
 main().catch((err) => {

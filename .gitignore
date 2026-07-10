@@ -59,3 +59,8 @@ debug-output/
 artifacts/
 site/
 *.mp4
+
+# ── bench 部分跑产物（PARTIAL RUN，不入库；全量基线 consolidation-baseline.* 仍提交） ──
+# 只忽略 <date>-<sha>-consolidation-<...>.{md,json}；既有 bench/runs/2026-07-10-retrieval-ablation.md 不受影响。
+bench/runs/*-consolidation-*.json
+bench/runs/*-consolidation-*.md
