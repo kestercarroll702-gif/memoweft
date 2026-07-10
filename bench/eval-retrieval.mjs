@@ -29,6 +29,12 @@
  *       node bench/eval-retrieval.mjs --ablation               # 三臂消融（离线确定性）
  *       EVAL_REAL_ARM=1 node bench/eval-retrieval.mjs          # 基线 + 额外真实嵌入臂（需 .env + 联网）
  *       EVAL_REAL_ARM=1 node bench/eval-retrieval.mjs --ablation # 三臂 + 真实嵌入臂（需 .env + 联网）
+ *
+ * A3 新增两个 CLI 口子（§15.4，只加 CLI、不动评测逻辑与数字）：
+ *   --out <prefix>       报告写到 <prefix>.md；不给则同旧（baseline→retrieval-baseline.md / ablation→retrieval-after.md）。
+ *   --require-real-arm   请求了真实臂（EVAL_REAL_ARM=1 或 --real）却最终 pending（无 embed 配置 / 调用失败 / 未请求）
+ *                        → 打印明确原因并 exit 1；不给此标志时行为同旧（pending 不算失败）。
+ *                        供 test:live：embed 端点挂了不许悄悄变绿。
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
@@ -626,13 +632,18 @@ function collectMeta(cognitions, cases) {
 
 /** 真实臂配置探测（opt-in，默认关）。返回 { wantRealArm, embedCfg }。 */
 function resolveRealArm() {
-  const wantRealArm = process.env.EVAL_REAL_ARM === '1' || process.argv.includes('--real');
+  // --require-real-arm 蕴含「请求真实臂」：否则「没请求」也会被算作 pending 而失败，
+  // 退出码虽对、打印的原因却是「真实臂 off（默认离线）」——答非所问。带上它就是要真跑。
+  const wantRealArm =
+    process.env.EVAL_REAL_ARM === '1' ||
+    process.argv.includes('--real') ||
+    process.argv.includes('--require-real-arm');
   const embedCfg = wantRealArm ? loadEmbedConfig() : null;
   return { wantRealArm, embedCfg };
 }
 
-/** 默认模式：vector-only 基线，落 retrieval-baseline.md（行为与数字不变）。 */
-async function mainBaseline(cognitions, cases, meta) {
+/** 默认模式：vector-only 基线，落 retrieval-baseline.md（行为与数字不变）。--out 给则改落 <prefix>.md。 */
+async function mainBaseline(cognitions, cases, meta, outPrefix) {
   // ── 确定性自检：跑两遍，逐位比对指标（latency 除外）──
   const makeBaseline = () => new VectorRetriever(':memory:', new HashEmbedder());
   const run1 = await runEvalWith(makeBaseline, cognitions, cases);
@@ -680,12 +691,13 @@ async function mainBaseline(cognitions, cases, meta) {
   // ── 报告：终端 + 落盘 ──
   printConsole(run1, meta);
   const report = buildReport(run1, meta);
-  writeFileSync(REPORT_PATH, report, 'utf8');
-  console.log(`[eval-retrieval] 报告已写入 ${REPORT_PATH}`);
+  const outPath = outPrefix ? `${outPrefix}.md` : REPORT_PATH;
+  writeFileSync(outPath, report, 'utf8');
+  console.log(`[eval-retrieval] 报告已写入 ${outPath}`);
 }
 
-/** 消融模式：三臂（vector/keyword/hybrid），各自确定性自检，落 retrieval-after.md。 */
-async function mainAblation(cognitions, cases, meta) {
+/** 消融模式：三臂（vector/keyword/hybrid），各自确定性自检，落 retrieval-after.md。--out 给则改落 <prefix>.md。 */
+async function mainAblation(cognitions, cases, meta, outPrefix) {
   console.log('[eval-retrieval] 三臂消融（§14.6）：vector-only / keyword-only / hybrid');
   const arms = [];
   for (const arm of ABLATION_ARMS) {
@@ -733,19 +745,44 @@ async function mainAblation(cognitions, cases, meta) {
 
   printAblationConsole(arms, meta);
   const report = buildAblationReport(arms, meta);
-  writeFileSync(AFTER_REPORT_PATH, report, 'utf8');
-  console.log(`[eval-retrieval] 三臂消融报告已写入 ${AFTER_REPORT_PATH}`);
+  const outPath = outPrefix ? `${outPrefix}.md` : AFTER_REPORT_PATH;
+  writeFileSync(outPath, report, 'utf8');
+  console.log(`[eval-retrieval] 三臂消融报告已写入 ${outPath}`);
+}
+
+/** 解析 --out <prefix>（不给返回 null；给了空 / 下一个是 flag → 报错早退，防手滑落成怪路径）。 */
+function parseOutPrefix(argv) {
+  const i = argv.indexOf('--out');
+  if (i < 0) return null;
+  const raw = argv[i + 1];
+  if (!raw || raw.startsWith('--')) {
+    console.error(`[eval-retrieval] --out 需要一个产物路径前缀（收到: ${raw ?? '(空)'}）。`);
+    process.exit(1);
+  }
+  return raw;
 }
 
 async function main() {
   const golden = JSON.parse(readFileSync(GOLDEN_PATH, 'utf8'));
   const { cognitions, cases } = golden;
   const meta = collectMeta(cognitions, cases);
+  const outPrefix = parseOutPrefix(process.argv);
 
   if (process.argv.includes('--ablation')) {
-    await mainAblation(cognitions, cases, meta);
+    await mainAblation(cognitions, cases, meta, outPrefix);
   } else {
-    await mainBaseline(cognitions, cases, meta);
+    await mainBaseline(cognitions, cases, meta, outPrefix);
+  }
+
+  // --require-real-arm（供 test:live）：它蕴含「请求真实臂」（见 resolveRealArm），故走到这里 pending
+  //   只可能是【无 embed 配置】或【调用失败】——两者都该判失败：test:live 不能因为 embed 端点挂了就悄悄变绿。
+  //   不给此标志时 pending 不算失败（默认离线跑照旧 exit 0，行为同旧）。meta.realArm* 由上面两个 main 置位。
+  if (process.argv.includes('--require-real-arm') && meta.realArmPending) {
+    console.error('');
+    console.error('[eval-retrieval] ✗ --require-real-arm：真实嵌入臂 pending → 判定为失败（exit 1）。');
+    console.error(`  原因：${meta.realArm}`);
+    console.error('  排查：需 EVAL_REAL_ARM=1 或 --real 请求真实臂，且 .env 配 MEMOWEFT_EMBED_BASE_URL/_API_KEY/_MODEL（含 DLA_ 回退）且端点可达。');
+    process.exit(1);
   }
 }
 

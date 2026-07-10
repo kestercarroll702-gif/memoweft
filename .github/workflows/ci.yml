@@ -30,9 +30,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# CI 主干走确定性:标记跳过需真实 key 的 live 用例(Phase 2 起 test:live 的真实覆盖由 nightly 承担)。
-env:
-  SKIP_LIVE_LLM: '1'
+# CI 主干走确定性:不注入 LLM secrets,live e2e 靠 HAS_LLM(检测 MEMOWEFT_LLM_BASE_URL 是否存在)自动跳过;
+# 真实覆盖由 nightly 的 test:live 承担。
 
 jobs:
   guardrails:

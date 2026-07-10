@@ -64,3 +64,8 @@ site/
 # 只忽略 <date>-<sha>-consolidation-<...>.{md,json}；既有 bench/runs/2026-07-10-retrieval-ablation.md 不受影响。
 bench/runs/*-consolidation-*.json
 bench/runs/*-consolidation-*.md
+
+# ── test:live 产物（Phase 2 §15.4：nightly 编排 test:live 时落 bench/runs/*-live.*，可查但不入库） ──
+# 覆盖 <date>-<sha>-consolidation-live.* 与 <date>-<sha>-retrieval-live.*；既有 *-retrieval-ablation.md 不受影响。
+bench/runs/*-live.md
+bench/runs/*-live.json

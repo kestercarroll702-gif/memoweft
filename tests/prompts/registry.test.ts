@@ -43,17 +43,10 @@ const EXPECTED_IDS = [
   'jsonRepairNudge',
 ];
 
-/** 期望版本(D-0009:consolidate 已 bump 到 v2;其余 v1)。 */
-const EXPECTED_VERSIONS: Record<string, string> = {
-  consolidate: 'v2',
-  distill: 'v1',
-  attribute: 'v1',
-  trends: 'v1',
-  proposeAsk: 'v1',
-  revisitConflicts: 'v1',
-  reply: 'v1',
-  jsonRepairNudge: 'v1',
-};
+// 注:这里【故意不】硬编码 id→version 的期望表。版本值已由哈希快照钉死
+//   (tests/prompts/prompt-hashes.snapshot 每行形如 `consolidate@v2  zh=sha256:…`)——
+//   改版本必然改快照,快照不同步就红。再在此处抄一份等于第二本账:合法 bump 时要改两处,
+//   却不多提供一分安全。本测试只管【格式】与【自洽】,版本值归快照管。
 
 /** 按 id 取一条(找不到即红,让「缺 id」的失败信息清楚,而非后续 undefined 取值报错)。 */
 function byId(id: string): VersionedPrompt {
@@ -70,17 +63,18 @@ test('§15.3-1 注册表契约:恰好 8 条 id、唯一、按 id 字母序', () 
   assert.deepEqual(ids, [...ids].sort(), 'PROMPT_REGISTRY 必须按 id 字母序排列(便于 diff 时肉眼比对)');
 });
 
-test('§15.3-2 版本格式:vN、双语非空、consolidate=v2 其余 v1', () => {
+test('§15.3-2 版本格式 vN、双语非空;promptVersions() 与注册表自洽', () => {
   for (const p of PROMPT_REGISTRY) {
     assert.match(p.version, /^v\d+$/, `${p.id}.version 应形如 vN,实得 '${p.version}'`);
     assert.equal(typeof p.text.zh, 'string', `${p.id}.text.zh 应为字符串`);
     assert.equal(typeof p.text.en, 'string', `${p.id}.text.en 应为字符串`);
     assert.ok(p.text.zh.length > 0, `${p.id}.text.zh 不能为空`);
     assert.ok(p.text.en.length > 0, `${p.id}.text.en 不能为空`);
-    assert.equal(p.version, EXPECTED_VERSIONS[p.id], `${p.id} 版本应为 ${EXPECTED_VERSIONS[p.id]}`);
   }
-  // promptVersions() 是 bench 评测器记进报告元数据用的 id→version 映射,须与注册表逐一对得上。
-  assert.deepEqual(promptVersions(), EXPECTED_VERSIONS, 'promptVersions() 应等于期望的 id→version 映射');
+  // promptVersions() 是 bench 评测器记进报告元数据用的 id→version 映射(分数据归因到哪版提示词),
+  // 须与注册表逐一对得上——从注册表现推期望值,而非另抄一份常量。
+  const expected = Object.fromEntries(PROMPT_REGISTRY.map((p) => [p.id, p.version]));
+  assert.deepEqual(promptVersions(), expected, 'promptVersions() 应逐条等于注册表里的 id→version');
 });
 
 test('§15.3-3 哈希快照:registry 现算 sha256 与快照逐行一致', () => {

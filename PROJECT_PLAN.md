@@ -63,7 +63,7 @@ MemoWeft 当前已经立住的东西,本轮升级**只加固、不动摇**:
 - [ ] 现有 2 个适配器通过完整 AD-1…AD-6 契约套件;peer 版本矩阵 CI 绿;故障注入下降级路径可证
 - [ ] demo:干净环境 clone → 一条命令 → 无 key → <2 分钟走完四幕;两次运行输出 diff 为空(确定性)
 - [ ] README 电梯稿就位;文档代码片段抽取验证进 CI 且绿;死链 0;每篇文档通过「单页单任务」自查
-- [ ] 固化质量线就位:语料库 ≥30 场景、基线分数报告入库、提示词版本化、fixtures:refresh 可用、nightly live 绿
+- [ ] 固化质量线就位:语料库 ≥30 场景、基线分数报告入库、提示词版本化、nightly live 绿(~~fixtures:refresh 可用~~ → 作废,见 D-0010)
 - [ ] 两套公开基准各 ≥1 次完整矩阵成绩,runs 可复现,BENCHMARKS.md 就位
 
 ## 5. 术语表
@@ -331,17 +331,17 @@ hybrid(query, k):
 
 ### 15.4 live 双轨与夹具再生成
 - `npm run test:live`:真实模型全量端到端(固化 + 检索真实臂);本地随跑,CI 以 **nightly job** 常态运行(main 分支;失败记入 CURRENT.md)。
-- `npm run fixtures:refresh`:由 live 运行一键再生成全部录制夹具;再生成后确定性套件(CI 主干)必须仍绿——夹具漂移由此可控、diff 可审。
-- 分工定死:**CI 主干 = 录制夹具 = 确定性;nightly + 本地 = 真实模型 = 真实性**。用夹具不是为了省钱,是为了可复现。
+- ~~`npm run fixtures:refresh`:由 live 运行一键再生成全部录制夹具;再生成后确定性套件(CI 主干)必须仍绿~~ → **作废,见 D-0010**。本仓库没有 LLM 录制夹具:确定性来自 48 处意图清晰的内联 fake;唯一的 `.db` 夹具明确要求永不重新生成。防漂移由三道已有闸门接管——模型漂移→42 场景固化评测;提示词漂移→`tests/prompts/prompt-hashes.snapshot` 哈希闸门;schema 漂移→冻结的 `memoweft-0.1.0.db`。
+- 分工定死:**CI 主干 = 确定性(内联 fake + HashEmbedder,不注入 secrets);nightly + 本地 = 真实模型 = 真实性**。走确定性不是为了省钱,是为了可复现。
 
 ### 15.5 多模型健壮性(强化项)
 - 固化在 2–3 个模型上各跑 15.2,分差矩阵入报告——度量对特定模型的依赖度,也是 LLM pool 抽象的活体验证;结论(推荐默认模型、已知弱项)记 DECISIONS.md。
 
 **Phase 2 验收**:
-- [ ] 语料库 ≥30 场景、覆盖矩阵达标、人类抽审通过
-- [ ] 评测器两级比对可跑,judge 三次判分一致;基线报告入库
-- [ ] 提示词版本化;test:live 与 fixtures:refresh 可用,且夹具再生成后确定性套件绿
-- [ ] nightly live job 上线并首晚绿;(强化项)多模型分差矩阵入库
+- [x] 语料库 ≥30 场景、覆盖矩阵达标、人类抽审通过(42 场景,6 纪律各 7)
+- [x] 评测器两级比对可跑,judge 三次判分一致;基线报告入库
+- [x] 提示词版本化(8 条收敛到 `src/prompts/registry.ts` + 哈希闸门);`test:live` 可用(~~fixtures:refresh~~ → D-0010)
+- [ ] nightly live job 上线并首晚绿(**待人类在 GitHub 加 `MEMOWEFT_LLM_*` secrets**;加之前 nightly 会红——有意为之,红胜过"绿着什么都没干");(强化项)多模型分差矩阵入库 → 未做,进 ROADMAP
 - [ ] 打 tag `phase-2-done`
 
 ---
