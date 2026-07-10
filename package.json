@@ -39,6 +39,7 @@
     "api:check": "node scripts/api-snapshot.mjs --check",
     "bench": "node bench/bulk-updateProfile.mjs",
     "bench:retrieval": "node bench/eval-retrieval.mjs",
+    "bench:consolidation": "node bench/eval-consolidation.mjs",
     "smoke:dist": "node tests/smoke/dist-smoke.mjs",
     "dev:core": "tsc -p tsconfig.build.json --watch",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
