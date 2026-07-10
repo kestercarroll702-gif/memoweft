@@ -8,6 +8,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 > This file is the user-facing summary of notable changes; the full commit history has the fine detail.
 > While the API is pre-1.0, minor versions may include breaking changes. Stability tiers and the breaking-change policy are documented in [`docs/memory-surface-contract.md`](docs/memory-surface-contract.md).
 
+## [0.5.1] — 2026-07-08
+
+Repository surface refresh for the current GitHub `main`, keeping Core APIs and runtime behavior stable.
+
+### Changed
+
+- Refreshed the public README and Chinese README so npm and GitHub present MemoWeft as a library-first package with the reference host clearly framed as a demo.
+- Added the public docs index, examples index, reference-host guide, bilingual docs links, refreshed hero assets, screenshots, and the reference host demo GIF.
+- Cleaned public repository surface by moving or removing historical task logs and internal operation notes from the default public path.
+- Improved the reference host setup flow so saving model configuration writes the expected `.env` file and reads from a stable location.
+- Synchronized `MEMOWEFT_VERSION` with the package version.
+
 ## [0.5.0] — 2026-07-06
 
 Ecosystem release: an MCP server, a Vercel AI SDK adapter, and LLM token usage accounting — plus the local/cloud model tiers and plugin-contract v2 that landed on `main` since 0.4.0. Core stays zero runtime dependencies.
@@ -89,6 +101,7 @@ First tidied pre-release. Core, a reference host, and the first plugins are in p
 - `MEMOWEFT_*` environment variables are the primary names; the legacy `DLA_*` prefix remains supported for backward compatibility.
 - Not yet: memory-graph front-end, schema versioning / migration hardening.
 
+[0.5.1]: https://github.com/memoweft/memoweft/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/memoweft/memoweft/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/memoweft/memoweft/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/memoweft/memoweft/compare/v0.2.0...v0.3.0
