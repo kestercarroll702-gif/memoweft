@@ -1,44 +1,29 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-10 | 所在 Phase:**1 召回更准 已收尾**(将打 tag `phase-1-done`)
+更新于:2026-07-10 | 所在 Phase:**2 固化更可信(进行中)**(前置 tag `phase-1-done`)
 
-> 总纲 `PROJECT_PLAN.md`;决策 `DECISIONS.md`;校准 `docs/internal/phase0-calibration.md`;检索基线/消融 `bench/retrieval-baseline.md`、`bench/retrieval-after.md`。
+> 总纲 `PROJECT_PLAN.md`;决策 `DECISIONS.md`;固化质量基线 `bench/consolidation-baseline.md`;检索 `bench/retrieval-*.md`。
 
 ## 正在进行
 
-- **Phase 1 收尾,待人类验收**。核心结论:hybrid 被数据否决,召回提升来自真实 embedder(见下)。
+- Phase 2 质量线**已能用**:语料库 + 评测器 + **真实基线已入库**。下一步在 15.3(提示词版本化)/ 15.4(live+nightly)/ 修具体质量问题 之间选,待人类定向。
 
-## Phase 1 诚实结论(先测量,拦住了无用优化)
+## 刚完成(Phase 2,附证据)
 
-文档假设"BM25+RRF hybrid → Recall@5 +10%"。**三臂消融实测否决了这个假设**:
+- **2.1 场景语料库**(`7b527c0`):`tests/consolidation-corpus/corpus.json` 42 场景(六类纪律各 7,中文 57%)+ 18 结构校验。
+- **2.2 固化质量评测器 + 真实基线**(`7b527c0` / `939695d`):`bench/eval-consolidation.mjs`(结构断言 + LLM-judge 三票多数 + `--selftest`/`--limit`)+ `bench/consolidation-baseline.md`(42/42 真跑 mimo)。
+- **基线结果**:结构断言 **88.8%**(198/223)、25/42 全绿、gistRecall 0.37、overInferRate **0.01**。
+  - **质量信号(值钱的)**:① **纯闲聊过度记忆**(chitchat 结构仅 21/35=60%,mimo 把闲聊也记成认知)——最清晰的漏洞;② 矛盾能认出(结构 40/42)但**不落新行为认知**(gistRecall 0);③ 亲述事实最稳(35/35)。
 
-| 臂 | overall Recall@5 |
-|---|---|
-| 确定性 vector(HashEmbedder) | 0.7154(基线) |
-| 确定性 hybrid | 0.7154(Δ **0**) |
-| 真实 vector(bge-m3) | **0.9667** |
-| 真实 hybrid(bge-m3+keyword) | 0.9667(Δ **0**) |
+## 阻塞 / 环境
 
-- **hybrid 在确定性与真实臂上都零增益**——keyword(FTS5/BM25)与向量本质同源,RRF 生不出新召回。
-- **真正的召回提升 = 真实语义 embedder**(0.9667,比确定性基线 **+35%**,远超 +10% 目标),系统本就支持注入(`Embedder` 扩展点)。
-- **决定(D-0008,人类拍板)**:不把 hybrid/`mode` 接进公共 API;`KeywordRetriever`/`HybridRetriever` 作为已测好的 building blocks 留仓(不导出 index.ts),待大语料/稀有词场景重评估(ROADMAP Next)。
+- 无阻塞。本地 Ollama(bge-m3 @ 11435)由本会话起着(可停)。真实固化评测慢(约 30s/场景),nightly/本地跑,不进 CI。mimo 会把中文记忆翻成英文存(config.language 默认;评测器已按 lang 设,但提示词语言倾向是 15.3 可看的点)。
 
-## 刚完成(Phase 1,附证据,提交 `0af9dd2`…`b767fff`)
+## 下一步(待人类定向)
 
-- **1.1 HashEmbedder** + **1.2 黄金集(36/65)+ vector-only 基线**(`bench/retrieval-baseline.md`)。
-- **1.3 KeywordRetriever**(FTS5 trigram+BM25,未动 API)+ **1.4a HybridRetriever**(RRF)。
-- **1.6 三臂消融**(`bench/retrieval-after.md`)+ **真实 bge-m3 臂**(打通本地 Ollama 端点后实测:0.9667)。
-- 全量 **262 绿**;三臂确定性自检通过;api:check 绿(公共 API 全程未动)。
-
-## 阻塞 / 环境备注
-
-- 无阻塞。本地 Ollama(bge-m3 @ 127.0.0.1:11435)现由本会话起着,供真实臂;`.env`(gitignored)用旧 `DLA_*` 前缀,代码兼容。真实臂非确定,不入 CI,由本地/nightly 承担。
-
-## 下一步(按序,待人类确认)
-
-1. **人类验收 Phase 1**(§14 验收核对表,诚实版)→ 打 `phase-1-done`。
-2. 选下一 Phase:文档推荐 **Phase 2 固化更可信**(真实模型写路径质量线,mimo 已配、可真跑),或 Phase 3 适配器。
-3. 未做/降级项(均记 DECISIONS):14.4b(不接,D-0008)、14.5 10k 增量验证(默认召回路径未变、增量属性已在单测覆盖,视为 N/A)、纯 TS BM25 降级(D-0007 暂缓)。
+- **A. 完成 Phase 2 管道**:15.3 提示词集中版本化 + 回归流程;15.4 `test:live`/`fixtures:refresh`/nightly 接入。
+- **B. 用基线修真问题**:改提示词治"纯闲聊过度记忆",跑 15.2 量前后(需再跑一轮全量,约 90 分钟;触及写路径提示词,认知纪律相关)。
+- **C. 暂停**:Phase 2 测量地基 + 基线已入库,收尾本会话。
 
 ## 本轮范围冻结(铁律 4)
 
