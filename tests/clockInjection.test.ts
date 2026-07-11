@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { SqliteEvidenceStore } from '../src/evidence/store.ts';
 import { SqliteCognitionStore } from '../src/cognition/store.ts';
 import { SqliteEventStore } from '../src/event/store.ts';
+import { createMemoWeftCore } from '../src/core/createCore.ts';
 import type { Clock } from '../src/clock.ts';
 
 const AT = '2026-03-01T00:00:00.000Z';
@@ -65,5 +66,15 @@ test('回归：缺省不注入 clock → 用真实系统时间（行为不变）
     assert.ok(t >= before - 2000 && t <= Date.now() + 2000, '缺省用真实系统时间（±2s 容差）');
   } finally {
     s.close();
+  }
+});
+
+test('门面：createMemoWeftCore({ clock }) → 落库时间跟随注入的 clock（S1b 公共入口）', async () => {
+  const core = createMemoWeftCore({ dbPath: ':memory:', clock: fixedClock() });
+  try {
+    const e = await core.ingestUserMessage({ content: 'hi', subjectId: 'u' });
+    assert.equal(e.recordedAt, AT, 'core 门面注入的 clock 透传到 evidence store 的 recordedAt');
+  } finally {
+    core.close();
   }
 });

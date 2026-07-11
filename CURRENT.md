@@ -1,6 +1,16 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-11 | 所在 Phase:**3 适配器更稳(§16.1/16.2/16.3 全落地,AD-1…AD-6 全绿——只差人类打 `phase-3-done` tag)**(前置 tag `phase-2-done`)
+更新于:2026-07-11 | 所在 Phase:**4 demo 更锋利(开工·可注入时钟 S1 落地;Phase 3 已全绿待人类打 `phase-3-done` tag)**(前置 tag `phase-2-done`)
+
+## Phase 4 开工:demo 更锋利(§17)—— 时间注入 S1 落地(本地未推)
+
+**方案 C(人类拍板·可注入时钟,D-0015)**:demo 要确定性(两次跑 diff 空)+ `--fast-forward`(情绪衰减、事实留存),且 §17.4「只经公共 API」。散落的 `new Date()` 无法注入 → 加可注入 `Clock`。
+- **S1a**(`86905a9` refactor):三个 store 时间源参数化(构造加可选 `clock`,缺省 `systemClock`),落库/更新时间走 `clock()`。internal,api-freeze 不动(store 构造签名不进快照,已验)。
+- **S1b**(feat):`CreateCoreOptions.clock` + `openStores` 加 `clock` 参 + 导出 `type Clock`/`systemClock`。触 api-freeze 走全流程(D-0015 + api:update + 契约 en/zh + CHANGELOG),纯 additive(缺省系统时间、旧调用方零改动)。
+- **铁律 3b**:clock 只产时间戳、绝不进置信度自算(测试已验注入 clock 不改 confidence)。
+- **⚠️ 诚实边界**:S1 只固定了 **store 落库时间**。**写算子(`consolidate.ts:173`/`attribute.ts:118`/`managementApi.ts`/`obs/runLog.ts` 的 `new Date()`)+ 读路径 now(`core.recall`/`handleConversationTurn` 内部传给 `recallCognitions`/`decay`/`expire`)统一走 clock 留后续**——在此之前 demo 还做不到完整确定性与 fast-forward。
+- 验证:core 296 · typecheck/api:check「一致」全绿;两次提交(`86905a9` S1a · S1b 本轮)本地未推。
+- **剩余步骤**:S2(写算子走 clock)→ S3(读路径 now 走 clock,fast-forward 生效)→ S4(四幕 demo:扩②纠正幕 + `npm run demo` + 三段式 CLI + 确定性验收两次 diff 空)。复用 `examples/no-key-demo.ts`(已演③矛盾 + 认知状态表打印)+ `HashEmbedder`。
 
 > 总纲 `PROJECT_PLAN.md`;决策 `DECISIONS.md`;固化质量报告 `bench/consolidation-baseline.md`;回归流程 `docs/internal/prompt-regression-runbook.md`。
 

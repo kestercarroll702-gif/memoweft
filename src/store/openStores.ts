@@ -19,6 +19,7 @@ import { runMigrations } from './migrations.ts';
 import { BUSY_TIMEOUT_MS } from './busyTimeout.ts';
 import type { Transaction } from './transaction.ts';
 import type { MemoWeftConfig } from '../config.ts';
+import { systemClock, type Clock } from '../clock.ts';
 
 export interface StoreBundle {
   /** 三个 store 共用的这条连接（一般不用直接碰；关它用 close()）。 */
@@ -37,8 +38,9 @@ export interface StoreBundle {
 /**
  * 开一条连接，装好三个 store 与事务器。dbPath 传文件路径或 ':memory:'。
  * @param cfg 可注入配置（P2-5 config 去单例）：不传 = 用全局单例；透给 evidence store 作 put 补授权默认。
+ * @param clock 可注入时钟（Phase 4）：透给三个 store 作落库/更新时间源；缺省真实系统时间。
  */
-export function openStores(dbPath: string, cfg?: MemoWeftConfig): StoreBundle {
+export function openStores(dbPath: string, cfg?: MemoWeftConfig, clock: Clock = systemClock): StoreBundle {
   // schema 版本化：开库【前】判 fresh——新库（文件不存在 / :memory:）store 会建最新 schema、直接盖最新版；
   //   已存在的老库（如 npm 上的 0.1.0 库）走 runMigrations 从 user_version 升上来（见 migrations.ts）。
   const fresh = dbPath === ':memory:' || !existsSync(dbPath);
@@ -52,9 +54,9 @@ export function openStores(dbPath: string, cfg?: MemoWeftConfig): StoreBundle {
   try {
     // 三个 store 都接同一条连接（构造里会各自 CREATE TABLE IF NOT EXISTS + 迁移，幂等）。
     // 只有 evidence store 的 put 会读 config 补授权默认，故只把 cfg 透给它（event/cognition 不读 config）。
-    evidenceStore = new SqliteEvidenceStore(db, cfg);
-    eventStore = new SqliteEventStore(db);
-    cognitionStore = new SqliteCognitionStore(db);
+    evidenceStore = new SqliteEvidenceStore(db, cfg, clock);
+    eventStore = new SqliteEventStore(db, clock);
+    cognitionStore = new SqliteCognitionStore(db, clock);
     // 审计表也挂共享连接（批次2）：管理操作的"改数据 + 落审计"能包进同一个事务、全成或全滚。
     managementLog = new SqliteManagementLog(db);
     // 建表后统一走版本化：新库盖最新版，老库升级（有真改动会先备份）。

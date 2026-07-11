@@ -118,7 +118,8 @@ Each item is marked stable/experimental. "Complete post-persistence shape" and "
 
 ### 2.2 Input shapes of the facade methods
 
-15. **`CreateCoreOptions`** — stable: `dbPath` required + `llm?/embedder?/retriever?/config?/vectorDbPath?`. Basis `src/core/createCore.ts:39-52`.
+15. **`CreateCoreOptions`** — stable: `dbPath` required + `llm?/embedder?/retriever?/config?/vectorDbPath?` + **`clock?: Clock` (experimental, Phase 4)**. The `clock` injects the store time source (`recordedAt`/`created_at`/`updated_at`) for determinism / time-travel; defaults to real system time (additive, existing callers unaffected). It only produces timestamps and never enters confidence self-computation (iron rule 3b). **This step wires the clock into the stores only; write operators (consolidate/attribute/management/run-log) and read-path `now` are staged as follow-up (D-0015).** Basis `src/core/createCore.ts`.
+15b. **`Clock`** — experimental (Phase 4): `type Clock = () => Date`; `systemClock` is the default (real system time). Injected via `CreateCoreOptions.clock` / `openStores(dbPath, cfg, clock)`. Basis `src/clock.ts`.
 16. **`UserMessageInput`** — stable: `content` + `subjectId?/hostId?/sourceKind?/originId?/occurredAt?`. Basis `:56-66`.
 17. **`ObservationInput`** — stable: `observations: Observation[]` + `subjectId?/hostId?`. Basis `:68-73`.
 17a. **`ToolResultInput`** — stable (AD-3/D-0013): `content` (the tool's returned result payload) + `subjectId?/hostId?/originId?/occurredAt?`. Ingested as `tool` evidence, cloud-read defaults false (`config.toolDefaults`). Basis `src/core/createCore.ts`.

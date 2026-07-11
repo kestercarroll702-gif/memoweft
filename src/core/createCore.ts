@@ -12,6 +12,7 @@
  *   缺省与 dbPath 同库（vectors 表挂同一文件，testbench 同款）。
  */
 import { config as globalConfig, type MemoWeftConfig } from '../config.ts';
+import type { Clock } from '../clock.ts';
 import { openStores } from '../store/openStores.ts';
 import { perceive } from '../pipeline/perceive.ts';
 import { Conversation, type TurnOutcome, type RecalledCognition } from '../pipeline/conversation.ts';
@@ -50,6 +51,10 @@ export interface CreateCoreOptions {
   config?: MemoWeftConfig;
   /** 向量库路径；缺省与 dbPath 同库。一个 subject 一个实例的既有契约不变。 */
   vectorDbPath?: string;
+  /** 可注入时钟（Phase 4）：三个 store 的落库/更新时间源；缺省真实系统时间。
+   *  注入固定/前进的 clock 得确定性（两次运行时间戳一致）+ 时间旅行（demo --fast-forward）。
+   *  只产时间戳、绝不进置信度自算（铁律 3b）。 */
+  clock?: Clock;
   /** 插件（第 7 步·契约 v2·experimental）：experience（systemPrompt·Host 每轮传）/ tool / collector（hook + 声明权限）。
    *  不传 = 无插件，行为同旧。hook 在方法层烧、只观察不改管线；每个 hook 拿受限 PluginContext（按声明权限门控、不持 store）。 */
   plugins?: MemoWeftPlugin[];
@@ -198,7 +203,7 @@ function sumUsage(a: UsageStats, b: UsageStats | undefined): UsageStats {
 
 export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
   const cfg = options.config ?? globalConfig;
-  const stores = openStores(options.dbPath, cfg);
+  const stores = openStores(options.dbPath, cfg, options.clock);
   const { evidenceStore, eventStore, cognitionStore, transaction } = stores;
   const pool = asPool(options.llm);
 

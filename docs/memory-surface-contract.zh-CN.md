@@ -121,7 +121,8 @@
 
 ### 2.2 门面各方法入参形状
 
-15. **`CreateCoreOptions`** — stable：`dbPath` 必填 + `llm?/embedder?/retriever?/config?/vectorDbPath?`。依据 `src/core/createCore.ts:39-52`。
+15. **`CreateCoreOptions`** — stable：`dbPath` 必填 + `llm?/embedder?/retriever?/config?/vectorDbPath?` + **`clock?: Clock`（experimental，Phase 4）**。`clock` 注入 store 落库/更新时间源（recordedAt/created_at/updated_at）以求确定性/时间旅行；缺省真实系统时间（additive，旧调用方不受影响）。只产时间戳、绝不进置信度自算（铁律 3b）。**本步只把 clock 接到三个 store;写算子(consolidate/attribute/管理审计/runLog)与读路径 now 留后续(D-0015)。** 依据 `src/core/createCore.ts`。
+15b. **`Clock`** — experimental（Phase 4）：`type Clock = () => Date`;`systemClock` 是缺省(真实系统时间)。经 `CreateCoreOptions.clock` / `openStores(dbPath, cfg, clock)` 注入。依据 `src/clock.ts`。
 16. **`UserMessageInput`** — stable：`content` + `subjectId?/hostId?/sourceKind?/originId?/occurredAt?`。依据 `:56-66`。
 17. **`ObservationInput`** — stable：`observations: Observation[]` + `subjectId?/hostId?`。依据 `:68-73`。
 17a. **`ToolResultInput`** — stable（AD-3/D-0013）：`content`（工具返回结果 payload）+ `subjectId?/hostId?/originId?/occurredAt?`。落成 `tool` 证据，cloud-read 缺省 false（`config.toolDefaults`）。依据 `src/core/createCore.ts`。

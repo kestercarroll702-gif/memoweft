@@ -224,6 +224,8 @@ export {
 // 配置
 // [stable] 配置形状：MemoWeftConfig「有哪些配置项」形状定型（0.4.0 加可选 language:'zh'|'en'，additive 非破坏）；cloudReadDefault() 稳定；Lang 供宿主设 config.language。DlaConfig 是 @deprecated 别名（勿删）。
 export { cloudReadDefault, type MemoWeftConfig, type DlaConfig, type Lang } from './config.ts';
+// [experimental] 可注入时钟（Phase 4）：Clock 类型 + systemClock 缺省。宿主注入以求确定性 / 时间旅行；只产时间戳、不进置信度自算。
+export { systemClock, type Clock } from './clock.ts';
 // [experimental] config 取用方式：单例访问「怎么拿到 config」pre-1.0 可能变（作者拍板⑥，预留 P2-5 去单例）；配置项形状本身 stable（见上）。
 export { config } from './config.ts';
 
