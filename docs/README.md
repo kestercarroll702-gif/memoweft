@@ -1,32 +1,27 @@
-# MemoWeft Docs
+# MemoWeft docs
 
-MemoWeft is a library-first project.
+MemoWeft is a library that gives AI apps portable long-term memory — it keeps facts, guesses, conflicts, and stale states apart.
 
-Start here if you want to integrate it into an AI app or understand how the memory model works.
+## Start here
 
-## Public docs
+- **[Getting started](./getting-started.md)** — install, store one piece of evidence, read it back. Five minutes, no API key for the first step.
+- **[Concepts](./concepts/)** — the six cognitive-discipline rules that make MemoWeft trustworthy, one screen each.
+- **Recipes** — add MemoWeft to your stack in five minutes: [Vercel AI SDK](./recipes/vercel-ai-sdk.md) · [MCP server](./recipes/mcp-server.md).
 
-- [`integration.md`](./integration.md) — integrate MemoWeft into a host app. [中文](./integration.zh-CN.md)
-- [`architecture.md`](./architecture.md) — evidence, event, cognition, read/write paths, and cognitive discipline. [中文](./architecture.zh-CN.md)
-- [`memory-surface-contract.md`](./memory-surface-contract.md) — stable, experimental, and internal API surfaces. [中文](./memory-surface-contract.zh-CN.md)
-- [`plugin-contract.md`](./plugin-contract.md) — plugin hooks and permission boundaries. [中文](./plugin-contract.zh-CN.md)
-- [`deployment.md`](./deployment.md) — cloud-first, cloud-guarded, and local or hybrid deployment.
-- [`INSTALL.md`](./INSTALL.md) — installation and environment configuration. [中文](./INSTALL.zh-CN.md)
-- [`reference-host.md`](./reference-host.md) — what the bundled demo host is and is not.
-- [`naming.md`](./naming.md) — public naming and positioning conventions.
-- [Examples](../examples/README.md) — runnable Core, memory-management, bundle, and plugin examples.
+## Reference
 
-## Developer utilities
+- **[Memory surface contract](./reference/memory-surface-contract.md)** — every host-facing method and shape; the API source of truth. [中文](./reference/memory-surface-contract.zh-CN.md)
+- **[Demo walkthrough](./demo-script.md)** — `npm run demo` shows the four differentiators in 90 seconds.
+- **[Plugin contract](./plugin-contract.md)** — plugin hooks and permission boundaries. [中文](./plugin-contract.zh-CN.md)
 
-- `testbench/` — a local diagnostic harness launched with `npm run testbench`; it is not the reference host demo.
-- `bench/` — reproducible performance checks launched with `npm run bench`; see [`perf.md`](./perf.md).
+## How it is built
 
-## For contributors and agents
+- **[Architecture](./architecture.md)** — evidence → event → cognition, read and write paths. [中文](./architecture.zh-CN.md)
+- **[Deployment](./deployment.md)** — cloud-first, cloud-guarded, local, and hybrid.
+- **[Install details](./INSTALL.md)** — drivers, Node versions, environment. [中文](./INSTALL.zh-CN.md)
+- **[Performance](./perf.md)** — measured numbers, reproducible.
 
-- [`AGENTS.md`](../AGENTS.md)
-- [`CONTRIBUTING.md`](../CONTRIBUTING.md) [中文](../CONTRIBUTING.zh-CN.md)
-- [`CURRENT.md`](../CURRENT.md)
-- [`ROADMAP.md`](../ROADMAP.md)
-- [`PUBLISHING.md`](./PUBLISHING.md)
+## For contributors
 
-Maintainer-only boundary notes live under `docs/internal/`; task and operation logs are not retained.
+- [CONTRIBUTING](../CONTRIBUTING.md) · [AGENTS](../AGENTS.md) · [CURRENT](../CURRENT.md) · [ROADMAP](../ROADMAP.md) · [PUBLISHING](./PUBLISHING.md)
+- Maintainer-only notes live under `docs/internal/`.
