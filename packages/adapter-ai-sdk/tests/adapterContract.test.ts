@@ -108,13 +108,15 @@ const driver: AdapterDriver = {
     };
   },
 
-  // AD-6：故障 core → 读路径降级。抛错被 recallMiddleware catch → 原样返回 params（未注入）= 降级。
+  // AD-6：故障 core → 读路径降级。抛错/超时被 recallMiddleware catch → 原样返回 params（未注入）= 降级，
+  //   并经注入 logger 记一条结构化事件。throw / timeout 两模式都真跑（timeout 由中间件 200ms 超时器有界赢下）。
   async runWithFaultyCore(mode: FaultMode): Promise<FaultOutcome> {
     const faulty = makeFaultyCore(mode) as unknown as Parameters<typeof createMemoWeftMiddleware>[0];
-    const mw = createMemoWeftMiddleware(faulty);
+    const events: unknown[] = [];
+    const mw = createMemoWeftMiddleware(faulty, { logger: () => events.push(1) });
     const params = paramsWith('q');
     const out = await mw.transformParams!({ type: 'generate', params, model: MODEL });
-    return { degraded: out === params, logged: false };
+    return { degraded: out === params, logged: events.length > 0 };
   },
 
   applicability: {
@@ -128,7 +130,7 @@ const driver: AdapterDriver = {
     },
     ad6: {
       status: 'applicable',
-      reason: 'recall 抛错静默降级为不注入（recallMiddleware catch）',
+      reason: 'recall 抛错/超时降级为不注入（recallMiddleware withTimeout+catch），经注入 logger 记一条（契约 §16.2）',
     },
   },
 };

@@ -265,3 +265,18 @@ The following 6 easily-misjudged symbols are tiered item by item according to th
 | `Observation` (`src/perception/ingest.ts`) | **stable** (`meta` field experimental) | The "collector plugin→Host→Core" cross-layer contract, the input of `ingestObservation` (`createCore.ts:124`, `ingest.ts:19-34`). The `meta` field's source notes "this version only carries it, does not persist" → that field is experimental. |
 | `EventInput` / `CognitionInput` | **experimental** | The host generally does not directly construct them (produced internally by distill/consolidate; Host grep has no direct construction point). Not listed in the host's main surface. Basis `event/model.ts:20-26`, `cognition/model.ts:63-75`. |
 | `ManagementLogEntry` | **experimental** | Weakly typed fields (`op`/`targetKind` are `string`, `managementLog.ts:23-33`); the facade does not expose a path to read audit history, the Host writes only via `core.memory.*` and does not read audit through the facade. → experimental. |
+
+---
+
+## VII. Adapter degradation semantics (§16.2)
+
+> Scope: the official MemoWeft adapters (`@memoweft/adapter-ai-sdk`, `@memoweft/mcp-server`). When the memory layer (`core.recall` / `core.ingestUserMessage`) fails or times out, an adapter **degrades instead of interrupting the conversation**. Human-approved wording, 2026-07-11 (see `DECISIONS.md` D-0012). This section governs the adapters only; it does not add any obligation to the Core facade above.
+
+- **recall timeout**: the read path wraps `core.recall` in a **200ms** timeout by default, **configurable** through the adapter factory option (`recallTimeoutMs`). A timeout counts as a failure.
+- **Retry**: the **read path (recall) does not retry** — on failure/timeout it degrades immediately; the **write path (ingest) retries once** before giving up.
+- **Degradation behavior**: on failure/timeout the adapter **injects an empty context (no memory) and the conversation is not interrupted**; one line is recorded through the **injected logger** (no logger by default = silent; the host may inject one).
+- **Implementation boundary**: the timeout is a `Promise.race` wrapping `core.recall` inside the adapter; the logger is an optional adapter-factory parameter. This **does not touch the Core api-freeze** — Core's `src/index.ts` export surface / `tests/api/api-surface.snapshot` are unchanged (`npm run api:check` still passes).
+- **Logger records structured degradation events only** — shape `{ event: 'memory_degraded', op: 'recall' | 'ingest', reason: 'timeout' | 'error' }` (the MCP server adds an optional `tool` field) — and **never records user content, verbatim text, or secrets** (cognitive discipline + privacy).
+- **Degradation vs. real error**: only memory-layer internal faults/timeouts (`core.recall` / `core.ingestUserMessage` throwing or timing out) degrade. Caller errors — invalid parameters, protocol-level errors — are **not** swallowed as degradation and still surface as errors. In the MCP server, input-schema (`zod`) validation runs before the handler, so a bad parameter stays a protocol error with `isError: true`; only the wrapped `core.*` call degrades.
+
+Basis: `packages/adapter-ai-sdk/src/recallMiddleware.ts` (recall timeout + degrade), `packages/adapter-ai-sdk/src/persistOnEnd.ts` (write retry-once + degrade), `packages/mcp-server/src/tools.ts` (read/write tool guards), `packages/adapter-ai-sdk/src/degrade.ts` + `packages/mcp-server/src/degrade.ts` (shared `DEFAULT_RECALL_TIMEOUT_MS = 200`, `withTimeout`, logger event types).

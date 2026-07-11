@@ -268,3 +268,18 @@
 | `Observation`（`src/perception/ingest.ts`）| **stable**（`meta` 字段 experimental）| "采集插件→Host→Core"跨层契约，`ingestObservation` 入参（`createCore.ts:124`、`ingest.ts:19-34`）。`meta` 字段源码注明"本版仅承载不落库"→ 该字段 experimental。 |
 | `EventInput` / `CognitionInput` | **experimental** | 宿主一般不直接构造（由 distill/consolidate 内部产；Host grep 无直接构造点）。不列入宿主主面。依据 `event/model.ts:20-26`、`cognition/model.ts:63-75`。 |
 | `ManagementLogEntry` | **experimental** | 字段弱类型（`op`/`targetKind` 为 `string`，`managementLog.ts:23-33`）；门面不暴露读审计历史路径，Host 只经 `core.memory.*` 写、不经门面读审计。→ experimental。 |
+
+---
+
+## 七、适配器降级语义（§16.2）
+
+> 范围：MemoWeft 官方适配器（`@memoweft/adapter-ai-sdk`、`@memoweft/mcp-server`）。当记忆层（`core.recall` / `core.ingestUserMessage`）失败或超时，适配器**降级而不中断对话**。人类已批准措辞，2026-07-11（见 `DECISIONS.md` D-0012）。本节只约束适配器，不给上面的 Core 门面新增任何义务。
+
+- **recall 超时**：读路径把 `core.recall` 包在 **200ms** 超时里，默认值**可配**（适配器工厂选项 `recallTimeoutMs`）；超时即视为失败。
+- **重试**：**读路径（recall）不重试**——失败/超时直接降级；**写路径（ingest）失败重试一次**再放弃。
+- **降级行为**：失败/超时 → **注入空上下文（无记忆），对话不中断**；经**注入的 logger** 记一条（默认无 logger = 静默，宿主可注入）。
+- **实现边界**：超时用适配器内 `Promise.race` 包裹 `core.recall`；logger 是适配器工厂的可选参。**不碰 Core api-freeze**——Core 的 `src/index.ts` 导出面 / `tests/api/api-surface.snapshot` 不变（`npm run api:check` 仍一致）。
+- **logger 只记结构化降级事件**——形状 `{ event: 'memory_degraded', op: 'recall' | 'ingest', reason: 'timeout' | 'error' }`（MCP server 另带一个可选 `tool` 字段）——**绝不记用户内容 / 原话 / 密钥**（认知纪律 + 隐私）。
+- **降级 vs 真错**：只有记忆层内部故障/超时（`core.recall` / `core.ingestUserMessage` 抛错或超时）才降级。调用方的错——参数非法、协议层错误——**不**被当降级吞掉，仍以错误上浮。MCP server 里 inputSchema（`zod`）校验在 handler 之前跑，故参数非法仍是协议错误 `isError: true`；只有被包裹的 `core.*` 调用才降级。
+
+依据：`packages/adapter-ai-sdk/src/recallMiddleware.ts`（recall 超时 + 降级）、`packages/adapter-ai-sdk/src/persistOnEnd.ts`（写路径一次重试 + 降级）、`packages/mcp-server/src/tools.ts`（读/写 tool 兜底）、`packages/adapter-ai-sdk/src/degrade.ts` + `packages/mcp-server/src/degrade.ts`（共享 `DEFAULT_RECALL_TIMEOUT_MS = 200`、`withTimeout`、logger 事件类型）。

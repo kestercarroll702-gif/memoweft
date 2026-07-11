@@ -38,9 +38,9 @@ function makeCore() {
   return createMemoWeftCore({ dbPath: ':memory:', llm: stubLLM(), retriever: nullRetriever });
 }
 
-/** 建 server + 连好 in-memory client。core 的关闭由调用方负责（fake core 无需关）。 */
-async function connect(core: MemoWeftCore) {
-  const server = createMcpServer(core);
+/** 建 server + 连好 in-memory client。core 的关闭由调用方负责（fake core 无需关）。可注入降级 logger（AD-6）。 */
+async function connect(core: MemoWeftCore, opts: Parameters<typeof createMcpServer>[1] = {}) {
+  const server = createMcpServer(core, opts);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'contract-client', version: '0.0.0' });
   await server.connect(serverTransport);
@@ -111,14 +111,18 @@ const driver: AdapterDriver = {
     }
   },
 
-  // AD-6：故障 core → 读 tool。handler 无 try/catch → 抛错以协议错误(isError)上浮，不降级为空注入。
-  //   本轮 ad6=na（下方 applicability），套件不真跑此路径；实现留真以备后续启用。
-  async runWithFaultyCore(_mode: FaultMode): Promise<FaultOutcome> {
-    const faulty = makeFaultyCore('throw') as unknown as MemoWeftCore;
-    const { client, close } = await connect(faulty);
+  // AD-6：故障 core → 读 tool（recall）。handler 兜 core.* 抛错/超时 → 降级为空召回 + isError:false（不崩、不中断），
+  //   经注入 logger 记一条结构化事件。throw / timeout 两模式都真跑（timeout 由 handler 200ms 超时器有界赢下）。
+  async runWithFaultyCore(mode: FaultMode): Promise<FaultOutcome> {
+    const faulty = makeFaultyCore(mode) as unknown as MemoWeftCore;
+    const events: unknown[] = [];
+    const { client, close } = await connect(faulty, { logger: () => events.push(1) });
     try {
       const res = await client.callTool({ name: 'memoweft_recall', arguments: { query: 'q' } });
-      return { degraded: res.isError !== true, logged: false };
+      const result = (res.structuredContent as { result?: unknown[] } | undefined)?.result;
+      // 降级 = 不以协议错误上浮（isError 非真）且返回空召回（无记忆）。
+      const degraded = res.isError !== true && Array.isArray(result) && result.length === 0;
+      return { degraded, logged: events.length > 0 };
     } finally {
       await close();
     }
@@ -134,8 +138,8 @@ const driver: AdapterDriver = {
       reason: 'AD-5 na(mcp)：写 tool 仅收 verbatim content、无 evidenceId 入参，无 LLM 输出→落库回捞',
     },
     ad6: {
-      status: 'na',
-      reason: 'AD-6 na(mcp)：handler 无 try/catch，故障以协议错误(isError)上浮；适配器层降级+logger 属后续契约(§21.3)',
+      status: 'applicable',
+      reason: 'handler 兜 core.* 抛错/超时 → 读工具降级空召回 + isError:false，经注入 logger 记一条（契约 §16.2）',
     },
   },
 };

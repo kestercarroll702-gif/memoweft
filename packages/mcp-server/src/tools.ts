@@ -9,13 +9,26 @@
  *   - tool description 用中性协议措辞，不复活人设（Core 无头）。
  *
  * 这一层只做"把 Core 门面翻译成 MCP tool"：取参 → 调门面 → 把结果包成
- * structuredContent + 一段可读 text。handler 不做适配器层降级：门面抛错（缺库/缺模型/召回失败）
- * 由 MCP SDK 兜成协议错误（isError）上浮，不调 core.health()、不静默吞。
- * TODO(AD-6)：抛错/超时的「无记忆但对话不中断」降级 + 注入 logger 属后续契约（§21.3），此处暂不实现。
+ * structuredContent + 一段可读 text。
+ *
+ * 降级（契约 §16.2「记忆层故障→降级不中断」，见 D-0012）：记忆层内部故障/超时不再让进程崩、
+ *   不再以协议错误上浮记忆层内部错——handler 兜 core.* 的抛错/超时：
+ *     · 读工具（recall / list_* / graph）→ 返回空结果 + isError:false，对话不中断；recall 另包 200ms 超时；
+ *     · 写工具（ingest）→ 一次重试后仍失败则返回未落库标记 + isError:false；
+ *     · 降级都经【注入的 logger】记一条结构化事件（缺省无 logger = 静默）。
+ *   边界：只有 core.* 记忆层故障才降级；参数非法（zod inputSchema 在 handler 之前校验）等
+ *   "调用方的错"仍以协议错误上浮，不被吞（降级 vs 真错分清）。
  */
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { MemoWeftCore } from 'memoweft';
+import type { MemoWeftCore, RecalledCognition } from 'memoweft';
+import {
+  DEFAULT_RECALL_TIMEOUT_MS,
+  RecallTimeoutError,
+  retryOnce,
+  withTimeout,
+  type McpServerLogger,
+} from './degrade.ts';
 
 /** 白名单 tool 名（snake_case + memoweft_ 前缀）。测试枚举它核对"多一个都不行"。 */
 export const READ_TOOL_NAMES = [
@@ -44,12 +57,44 @@ function ok(payload: unknown): {
   };
 }
 
+/** registerTools 选项（降级语义，契约 §16.2）。 */
+export interface RegisterToolsOptions {
+  /**
+   * 注入式 logger（可选）：记忆层故障/超时降级时记一条【结构化事件】
+   *   （`{ event:'memory_degraded', tool, op, reason }`）。缺省不注入 = 静默降级。
+   * 认知纪律 + 隐私：只记事件元信息，绝不记用户内容 / 原话 / 密钥。
+   */
+  logger?: McpServerLogger;
+  /** recall 超时阈值（毫秒）。缺省 200ms（契约 §16.2）。 */
+  recallTimeoutMs?: number;
+}
+
 /**
  * 把白名单 tool 注册到给定 McpServer。
  * @param server 已建好的 McpServer（serverInfo/capabilities 由 createMcpServer 定）。
  * @param core   进程内的 MemoWeftCore 门面（读写都经它，绝不直接碰 store）。
+ * @param opts   降级语义选项（logger / recallTimeoutMs，契约 §16.2）。
  */
-export function registerTools(server: McpServer, core: MemoWeftCore): void {
+export function registerTools(server: McpServer, core: MemoWeftCore, opts: RegisterToolsOptions = {}): void {
+  const { logger, recallTimeoutMs = DEFAULT_RECALL_TIMEOUT_MS } = opts;
+
+  /**
+   * 读工具降级包裹：跑 core 读操作 → 成功回真结果；记忆层抛错/超时 → 记一条 + 返回 emptyValue（降级）。
+   * recall 另包 recallTimeoutMs 超时（op==='recall'）；list_* 与 graph 只兜抛错（op==='read'）。
+   */
+  async function guardRead<T>(tool: string, op: 'recall' | 'read', empty: T, run: () => Promise<T>): Promise<T> {
+    try {
+      return op === 'recall' ? await withTimeout(run(), recallTimeoutMs) : await run();
+    } catch (err) {
+      logger?.({
+        event: 'memory_degraded',
+        tool,
+        op,
+        reason: err instanceof RecallTimeoutError ? 'timeout' : 'error',
+      });
+      return empty;
+    }
+  }
   // ── 读 1：召回相关认知 ───────────────────────────────────────────────
   server.registerTool(
     'memoweft_recall',
@@ -67,7 +112,10 @@ export function registerTools(server: McpServer, core: MemoWeftCore): void {
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async ({ query, subjectId }) => {
-      const items = await core.recall({ query, subjectId });
+      // 降级：召回超时（200ms）/ 抛错 → 记一条 + 返回空召回（无记忆），isError:false 不中断。
+      const items = await guardRead('memoweft_recall', 'recall', [] as RecalledCognition[], () =>
+        core.recall({ query, subjectId }),
+      );
       return ok(
         items.map((c) => ({
           id: c.id,
@@ -95,7 +143,8 @@ export function registerTools(server: McpServer, core: MemoWeftCore): void {
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ subjectId }) => ok(core.memory.listCognitions({ subjectId })),
+    async ({ subjectId }) =>
+      ok(await guardRead('memoweft_list_cognitions', 'read', [], async () => core.memory.listCognitions({ subjectId }))),
   );
 
   // ── 读 3：列取证据（原始来源）────────────────────────────────────────
@@ -113,7 +162,8 @@ export function registerTools(server: McpServer, core: MemoWeftCore): void {
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ subjectId }) => ok(core.memory.listEvidence({ subjectId })),
+    async ({ subjectId }) =>
+      ok(await guardRead('memoweft_list_evidence', 'read', [], async () => core.memory.listEvidence({ subjectId }))),
   );
 
   // ── 读 4：列取事件（证据聚合）───────────────────────────────────────
@@ -131,7 +181,8 @@ export function registerTools(server: McpServer, core: MemoWeftCore): void {
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ subjectId }) => ok(core.memory.listEvents({ subjectId })),
+    async ({ subjectId }) =>
+      ok(await guardRead('memoweft_list_events', 'read', [], async () => core.memory.listEvents({ subjectId }))),
   );
 
   // ── 读 5：记忆图谱 payload（nodes/edges/stats）──────────────────────
@@ -154,7 +205,15 @@ export function registerTools(server: McpServer, core: MemoWeftCore): void {
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async ({ subjectId, includeArchived }) =>
-      ok(core.graph.buildMemoryGraph({ subjectId, includeArchived })),
+      ok(
+        await guardRead(
+          'memoweft_graph',
+          'read',
+          // 降级空图（best-effort「无记忆」）：只保空 nodes/edges，形状对齐 payload。
+          { nodes: [], edges: [] } as unknown as ReturnType<typeof core.graph.buildMemoryGraph>,
+          async () => core.graph.buildMemoryGraph({ subjectId, includeArchived }),
+        ),
+      ),
   );
 
   // ── 写·轻：存一句用户原话为 spoken 证据（不改画像、不做消化）──────────
@@ -178,8 +237,14 @@ export function registerTools(server: McpServer, core: MemoWeftCore): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ content, subjectId, originId }) => {
-      const ev = await core.ingestUserMessage({ content, subjectId, originId });
-      return ok({ id: ev.id, subjectId: ev.subjectId, sourceKind: ev.sourceKind, recordedAt: ev.recordedAt });
+      // 降级（契约 §16.2）：写路径失败重试一次；仍失败 → 记一条 + 返回未落库标记，isError:false 不中断。
+      try {
+        const ev = await retryOnce(() => core.ingestUserMessage({ content, subjectId, originId }));
+        return ok({ id: ev.id, subjectId: ev.subjectId, sourceKind: ev.sourceKind, recordedAt: ev.recordedAt });
+      } catch {
+        logger?.({ event: 'memory_degraded', tool: 'memoweft_ingest_user_message', op: 'ingest', reason: 'error' });
+        return ok({ stored: false, degraded: true });
+      }
     },
   );
 }

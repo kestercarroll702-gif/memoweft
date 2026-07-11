@@ -20,3 +20,10 @@ export {
   type PersistOnEndOptions,
   type PersistUserTurnInput,
 } from './persistOnEnd.ts';
+
+// 降级语义（§16.2）公开件：供宿主为注入的 logger 标类型。
+export {
+  DEFAULT_RECALL_TIMEOUT_MS,
+  type MemoWeftLogger,
+  type MemoWeftDegradedEvent,
+} from './degrade.ts';

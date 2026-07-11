@@ -11,7 +11,7 @@
  *   AD-3 工具结果 → evidence 标 source=tool（本轮 N/A：SourceKind 无 'tool' 值，属契约分岔）
  *   AD-4 recall 呈现含置信度与冲突状态，格式锁 golden 快照
  *   AD-5 LLM 输出的虚构 evidenceId 被丢弃（本轮 N/A：无 LLM→evidenceId 回捞落库路径）
- *   AD-6 记忆层抛错/超时 → 适配器降级「无记忆但对话不中断」、注入 logger（本轮只测已有抛错降级）
+ *   AD-6 记忆层抛错/超时 → 适配器降级「无记忆但对话不中断」、经注入 logger 记一条（契约 §16.2；throw+timeout 都真跑）
  */
 
 /** 召回呈现面自述类型：A=文本块（注入 prompt），B=结构化 JSON（structuredContent）。 */
@@ -47,14 +47,14 @@ export interface RecallSurface {
   items: Array<{ id: string; content: string; confidence: number; credStatus: string; score?: number }>;
 }
 
-/** 故障注入模式（AD-6）。本轮只跑 'throw'；'timeout'/'slow' 留 SPI 待后续超时契约。 */
+/** 故障注入模式（AD-6）。AD-6 真跑 'throw' 与 'timeout'（超时由适配器超时器有界赢下）；'slow' 留 SPI。 */
 export type FaultMode = 'throw' | 'timeout' | 'slow';
 
 /** runWithFaultyCore 结果。 */
 export interface FaultOutcome {
-  /** 记忆层故障时适配器是否降级为「无记忆但对话不中断」。 */
+  /** 记忆层故障/超时时适配器是否降级为「无记忆但对话不中断」。 */
   degraded: boolean;
-  /** 是否经注入 logger 记录（本轮均 false：logger 属后续契约）。 */
+  /** 降级是否经注入 logger 记了一条结构化事件（契约 §16.2：注入 logger 时应为 true）。 */
   logged: boolean;
 }
 

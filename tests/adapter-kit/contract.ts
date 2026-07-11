@@ -10,8 +10,9 @@
  *
  * 本轮打绿：AD-1（助手→0）、AD-2（用户→+1，含 A 的 originId 幂等）。
  * baseline 快照：AD-4（当前召回呈现格式，含一条 conflicted 项）。
- * N/A 声明位：AD-3（无 tool 入口 / SourceKind 无 'tool'）、AD-5（无 LLM→evidenceId 回捞）、
- *             AD-6 的超时/logger 部分（超时/日志属后续契约）。
+ * AD-6（契约 §16.2）：两适配器均 applicable——记忆层抛错 / 召回超时 → 降级「无记忆但对话不中断」
+ *             + 经注入 logger 记一条结构化事件（throw / timeout 两模式都真跑）。
+ * N/A 声明位：AD-3（无 tool 入口 / SourceKind 无 'tool'）、AD-5（无 LLM→evidenceId 回捞）。
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -84,16 +85,19 @@ export function runAdapterContract(driver: AdapterDriver, opts: ContractOptions)
     assert.ok(driver.applicability.ad5.reason.length > 0, 'N/A 须声明理由');
   });
 
-  // ── AD-6：记忆层故障 → 降级 + logger ──────────────────────────────────
+  // ── AD-6：记忆层故障 → 降级 + logger（契约 §16.2）─────────────────────
   if (driver.applicability.ad6.status === 'applicable') {
-    test(tag('AD-6', 'applicable', '记忆层抛错 → 降级「无记忆但对话不中断」'), async () => {
+    // 抛错：记忆层内部故障 → 降级「无记忆但对话不中断」+ 经注入 logger 记一条。
+    test(tag('AD-6', 'applicable', '记忆层抛错 → 降级「无记忆但对话不中断」+ 注入 logger 记一条'), async () => {
       const out = await driver.runWithFaultyCore('throw');
       assert.equal(out.degraded, true, 'AD-6：抛错时降级、不中断');
+      assert.equal(out.logged, true, 'AD-6：降级经注入 logger 记一条结构化事件');
     });
-    // 超时 / logger 部分本轮 N/A：无适配器层超时面、无注入 logger（属后续契约 §21.3）。
-    test(tag('AD-6', 'na', 'logger 注入面待契约（超时/日志属后续）'), async () => {
-      const out = await driver.runWithFaultyCore('throw');
-      assert.equal(out.logged, false, 'AD-6：本轮无 logger 注入面');
+    // 超时：recall 超阈（默认 200ms）视为失败 → 同样降级 + 记一条（timeout 模式由适配器超时器有界赢下）。
+    test(tag('AD-6', 'applicable', '记忆层召回超时 → 降级「无记忆但对话不中断」+ 注入 logger 记一条'), async () => {
+      const out = await driver.runWithFaultyCore('timeout');
+      assert.equal(out.degraded, true, 'AD-6：召回超时时降级、不中断');
+      assert.equal(out.logged, true, 'AD-6：超时降级经注入 logger 记一条结构化事件');
     });
   } else {
     test(tag('AD-6', 'na', driver.applicability.ad6.reason), () => {

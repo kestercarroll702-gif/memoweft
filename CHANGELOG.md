@@ -8,6 +8,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 > This file is the user-facing summary of notable changes; the full commit history has the fine detail.
 > While the API is pre-1.0, minor versions may include breaking changes. Stability tiers and the breaking-change policy are documented in [`docs/memory-surface-contract.md`](docs/memory-surface-contract.md).
 
+## [Unreleased]
+
+### Added
+
+- **Adapter degradation semantics (memory surface contract §16.2)** — the two official adapters (`@memoweft/adapter-ai-sdk`, `@memoweft/mcp-server`) now **degrade instead of interrupting the conversation** when the memory layer fails or times out. The read path (`recall`) is wrapped in a **200ms timeout, configurable** via a new optional factory option `recallTimeoutMs` (`createMemoWeftMiddleware(core, { recallTimeoutMs })` / `createMcpServer(core, { recallTimeoutMs })`); a timeout counts as a failure. The **read path does not retry** — it degrades immediately (injects an empty context / returns an empty tool result with `isError: false`); the **write path (ingest) retries once** before giving up. Both adapters take a new optional `logger` that records **structured degradation events only** (shape `{ event: 'memory_degraded', op: 'recall' | 'ingest', reason: 'timeout' | 'error' }`, aligned across both adapters; the MCP server adds an optional `tool` field) — never user content, verbatim text, or secrets; no logger = silent (the previous behavior). This turns the MCP server from "a memory-layer throw surfaces as a protocol error / crashes the process" into "degrade and keep the conversation going", while **invalid parameters and other caller errors are still surfaced as real errors, not swallowed as degradation**. Purely additive hardening: the new factory options are optional (unset = previous behavior plus the built-in 200ms timeout and silent degradation), and **Core's public API surface is unchanged** (`npm run api:check` still passes — the timeout/retry/logger live entirely inside the adapter packages). New exported types for host-typed loggers: `MemoWeftLogger` / `MemoWeftDegradedEvent` (ai-sdk) and `McpServerLogger` / `McpDegradedEvent` (mcp-server). See the memory surface contract §16.2 and `DECISIONS.md` D-0012.
+
 ## [0.5.1] — 2026-07-08
 
 Repository surface refresh for the current GitHub `main`, keeping Core APIs and runtime behavior stable.

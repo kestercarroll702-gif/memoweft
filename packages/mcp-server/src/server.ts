@@ -10,7 +10,7 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createMemoWeftCore, type MemoWeftCore } from 'memoweft';
-import { registerTools } from './tools.ts';
+import { registerTools, type RegisterToolsOptions } from './tools.ts';
 
 /** 本包版本（与 package.json 同步；serverInfo 用）。 */
 export const MCP_SERVER_VERSION = '0.1.0';
@@ -34,9 +34,10 @@ export function createCoreFromEnv(): MemoWeftCore {
 /**
  * 建 MCP server 并注册白名单 tool。
  * @param core 进程内 MemoWeftCore 门面（读写都经它）。
+ * @param opts 降级语义选项（logger / recallTimeoutMs，契约 §16.2；缺省无 logger = 静默、超时 200ms）。
  * @returns 配好白名单 tool 的 McpServer（尚未 connect transport）。
  */
-export function createMcpServer(core: MemoWeftCore): McpServer {
+export function createMcpServer(core: MemoWeftCore, opts: RegisterToolsOptions = {}): McpServer {
   const server = new McpServer(
     { name: 'memoweft', version: MCP_SERVER_VERSION },
     {
@@ -49,6 +50,6 @@ export function createMcpServer(core: MemoWeftCore): McpServer {
     },
   );
   // 注册在此单独一层（tools.ts），便于测试枚举核对"没多暴露破坏性面"。
-  registerTools(server, core);
+  registerTools(server, core, opts);
   return server;
 }

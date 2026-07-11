@@ -15,6 +15,7 @@
  *   - 稳定 originId 保证幂等（同一轮即便 onEnd 被触发多次 / 重放，也只落一条）。
  */
 import type { MemoWeftCore } from 'memoweft';
+import type { MemoWeftLogger } from './degrade.ts';
 
 /** 只依赖 ingestUserMessage 一个方法——测试可传最小 stub。 */
 type IngestOnly = Pick<MemoWeftCore, 'ingestUserMessage'>;
@@ -63,6 +64,12 @@ export interface PersistOnEndOptions {
   occurredAt?: string;
   /** 落库出错时的回调（可选；不给则静默吞——落记忆失败不该崩主流程）。 */
   onError?: (err: unknown) => void;
+  /**
+   * 注入式 logger（可选，契约 §16.2）：写路径一次重试后仍失败降级时记一条【结构化事件】
+   *   （`{ event:'memory_degraded', op:'ingest', reason:'error' }`）。缺省不注入 = 静默降级。
+   * 认知纪律 + 隐私：只记事件/原因，绝不记用户内容 / 原话 / 密钥。
+   */
+  logger?: MemoWeftLogger;
 }
 
 /**
@@ -87,18 +94,26 @@ export function createPersistOnEnd(
 ): (event?: unknown) => Promise<void> {
   // 形参 event 被【故意忽略】——用户原话来自闭包 opts.userMessage，事件仅作触发时机。
   //   声明它只为契合 SDK Callback = (event) => PromiseLike<void>，能直接塞进 onEnd。
+  const input: PersistUserTurnInput = {
+    userMessage: opts.userMessage,
+    originId: opts.originId,
+    subjectId: opts.subjectId,
+    hostId: opts.hostId,
+    occurredAt: opts.occurredAt,
+  };
   return async (_event?: unknown) => {
     try {
-      await persistUserTurn(core, {
-        userMessage: opts.userMessage,
-        originId: opts.originId,
-        subjectId: opts.subjectId,
-        hostId: opts.hostId,
-        occurredAt: opts.occurredAt,
-      });
-    } catch (err) {
-      if (opts.onError) opts.onError(err);
-      // 无 onError 时静默吞：落记忆失败不该让宿主这轮对话失败。
+      await persistUserTurn(core, input);
+    } catch {
+      // 契约 §16.2：写路径（ingest）失败重试一次再放弃（稳定 originId 保证重试幂等）。
+      try {
+        await persistUserTurn(core, input);
+      } catch (err) {
+        // 一次重试仍失败 → 降级：经注入 logger 记一条结构化事件（绝不记用户内容/原话），走 onError。
+        opts.logger?.({ event: 'memory_degraded', op: 'ingest', reason: 'error' });
+        if (opts.onError) opts.onError(err);
+        // 无 onError 时静默吞：落记忆失败不该让宿主这轮对话失败。
+      }
     }
   };
 }

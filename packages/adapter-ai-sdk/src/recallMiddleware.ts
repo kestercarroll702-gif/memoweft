@@ -13,6 +13,12 @@
  */
 import type { LanguageModelMiddleware } from 'ai';
 import type { MemoWeftCore, RecalledCognition } from 'memoweft';
+import {
+  DEFAULT_RECALL_TIMEOUT_MS,
+  RecallTimeoutError,
+  withTimeout,
+  type MemoWeftLogger,
+} from './degrade.ts';
 
 /** 最小召回项形状（只用注入需要的三个字段）。故意不引 Core 的完整类型，保持松耦合。 */
 interface RecalledLike {
@@ -33,8 +39,19 @@ export interface MemoWeftMiddlewareOptions {
    */
   lang?: 'en' | 'zh';
   /** 每次成功召回后的回调（可选，便于宿主观测/日志）；召回为空也会以空数组触发。
-   *  仅在 recall 成功返回后调用——无 user 文本（未召回）或 recall 抛错（降级）时不触发。 */
+   *  仅在 recall 成功返回后调用——无 user 文本（未召回）或 recall 抛错/超时（降级）时不触发。 */
   onRecall?: (items: RecalledLike[]) => void;
+  /**
+   * recall 超时阈值（毫秒，契约 §16.2）。缺省 200ms。超时即视为召回失败 → 降级为不注入。
+   * 读路径不重试（超时/抛错直接降级），呼应 Core「召回失败不阻塞对话」纪律。
+   */
+  recallTimeoutMs?: number;
+  /**
+   * 注入式 logger（可选，契约 §16.2）：召回超时/抛错降级时记一条【结构化事件】
+   *   （`{ event:'memory_degraded', op:'recall', reason:'timeout'|'error' }`）。缺省不注入 = 静默降级。
+   * 认知纪律 + 隐私：只记事件/原因，绝不记用户内容 / 原话 / 密钥。
+   */
+  logger?: MemoWeftLogger;
 }
 
 /**
@@ -108,7 +125,7 @@ export function createMemoWeftMiddleware(
   core: RecallOnly,
   opts: MemoWeftMiddlewareOptions = {},
 ): LanguageModelMiddleware {
-  const { subjectId, lang = 'en', onRecall } = opts;
+  const { subjectId, lang = 'en', onRecall, recallTimeoutMs = DEFAULT_RECALL_TIMEOUT_MS, logger } = opts;
   return {
     async transformParams({ params }) {
       const query = getLastUserMessageText(params.prompt);
@@ -117,9 +134,15 @@ export function createMemoWeftMiddleware(
 
       let recalled: RecalledCognition[];
       try {
-        recalled = await core.recall(subjectId ? { query, subjectId } : { query });
-      } catch {
-        // 召回失败不挡回话（呼应 Core "召回失败不阻塞对话"纪律）：静默降级为不注入。
+        // 契约 §16.2：Promise.race 包 recallTimeoutMs（默认 200ms）超时；读路径不重试。
+        recalled = await withTimeout(
+          core.recall(subjectId ? { query, subjectId } : { query }),
+          recallTimeoutMs,
+        );
+      } catch (err) {
+        // 召回失败/超时不挡回话（呼应 Core "召回失败不阻塞对话"纪律）：降级为不注入。
+        //   经注入 logger 记一条结构化事件（缺省无 logger = 静默）；绝不记用户内容/原话。
+        logger?.({ event: 'memory_degraded', op: 'recall', reason: err instanceof RecallTimeoutError ? 'timeout' : 'error' });
         return params;
       }
       onRecall?.(recalled);
