@@ -59,7 +59,7 @@ This also means a guess cannot climb into a fact. Above, piling 20 supporting ob
 
 ## See it become a stored fact (needs a model)
 
-Turning evidence into a scored cognition needs a chat model. Scene 1 of the demo ingests "I am allergic to peanuts", distills it, and shows it land as a high-confidence `fact` — no key, no network, deterministic offline stub.
+Turning evidence into a scored cognition needs a chat model. Act 1 of the demo ingests "I am allergic to peanuts", distills it, and shows it land as a `fact` scored by rule at 600 (`limited`) — no key, no network, deterministic offline stub.
 
 <!-- snippet:skip (needs a live model) -->
 ```ts

@@ -29,7 +29,7 @@ for (const e of core.memory.listEvidence({ subjectId: 'alice' })) {
 core.close();
 ```
 
-每一条 evidence 都带一个 `sourceKind`。用户亲口说的话（`spoken`）和工具的输出（`tool`）是不同种类的事实，MemoWeft 从不丢掉这个区别。四种来源是 `spoken`、`observed`、`inferred` 和 `tool`。
+每一条 evidence 都带一个 `sourceKind`。用户亲口说的话（`spoken`）和工具的输出（`tool`）是不同种类的事实，MemoWeft 从不丢掉这个区别。四种来源是 `spoken`、`observed`、`inferred` 和 `tool`。其中三种经摄入调用进来（`spoken` / `observed` / `tool`）；`inferred` 由写路径的归因（attribution）步骤内部产出——绝不从模型自报回填（见[不拿自己当证据](./no-self-evidence.zh-CN.md)）。
 
 ## 三层结构
 

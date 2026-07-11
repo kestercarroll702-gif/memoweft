@@ -32,7 +32,7 @@ MemoWeft 是一个供 AI 应用 `import` 的库。它为用户保存可迁移、
 - **冲突暴露，不覆盖。** 矛盾信息被并排暴露、保留；MemoWeft 绝不静默选出赢家。
 - **置信度由规则算，不靠自报。** 每条认知按证据强度与重复印证打分——模型永远不能自定可信度。
 
-另有三条纪律（分类衰减、可追溯、不自我印证）由 [`tests/eval/`](./tests/eval/) 里的编号 eval 用例背书——跑 `npm test`。
+这三条，加上分类衰减、可追溯、不自我印证，就是**六条认知纪律**——全由 [`tests/eval/`](./tests/eval/) 里的编号 eval 用例背书（`npm test`）。
 
 ## 60 秒安装与首次调用
 
@@ -40,20 +40,20 @@ MemoWeft 是一个供 AI 应用 `import` 的库。它为用户保存可迁移、
 npm install memoweft   # Node 24 用内置 node:sqlite；Node 20/22 还需 `npm i better-sqlite3`
 ```
 
-<!-- snippet:skip (needs a live model for updateProfile / handleConversationTurn) -->
 ```ts
 import { createMemoWeftCore } from 'memoweft';
 
-const core = createMemoWeftCore({ dbPath: './memoweft.db' });
+// 无需 API key、不联网——内存库 + 一行公开 API。
+const core = createMemoWeftCore({ dbPath: ':memory:' });
 await core.ingestUserMessage({ subjectId: 'user-42', content: '我下午三点后只喝无咖啡因的，咖啡因会影响睡眠。' });
-await core.updateProfile({ subjectId: 'user-42' });   // 需要一个 OpenAI 兼容模型（.env）
 
-const turn = await core.handleConversationTurn({ subjectId: 'user-42', message: '推荐一种下午喝的饮料。' });
-console.log(turn.reply);
+for (const e of core.memory.listEvidence({ subjectId: 'user-42' }))
+  console.log(e.sourceKind, '·', e.rawContent); // → spoken · 我下午三点后只喝无咖啡因的，咖啡因会影响睡眠。
+
 core.close();
 ```
 
-没有 API key？[`examples/no-key-demo.ts`](./examples/no-key-demo.ts) 用离线 stub 跑同一条写路径——约 30 秒看一个冲突被暴露（而不是被覆盖）。
+这就存下了一条证据——不用 key。把证据变成可召回的**画像**（提炼事实、暴露冲突）需要一个聊天模型：见[快速上手](./docs/getting-started.zh-CN.md)。没有 key？[`examples/no-key-demo.ts`](./examples/no-key-demo.ts) 用离线 stub 约 30 秒看一个冲突被暴露。
 
 ## 试试 reference host
 
@@ -71,7 +71,8 @@ npm start -w @memoweft/host    # 然后打开 http://localhost:7788
 
 - **[快速上手](./docs/getting-started.zh-CN.md)** —— 装好、存一条证据、读回来。五分钟。
 - **[核心概念](./docs/concepts/README.zh-CN.md)** —— 六条认知纪律，每条一屏。
-- **[接入配方](./docs/recipes/)** —— 五分钟把 MemoWeft 接进 [Vercel AI SDK](./packages/adapter-ai-sdk) 或 [MCP server](./packages/mcp-server)。
+- **[接入配方](./docs/recipes/)** —— 五分钟把 MemoWeft 接进 [Vercel AI SDK](./docs/recipes/vercel-ai-sdk.zh-CN.md) 或 [MCP server](./docs/recipes/mcp-server.zh-CN.md)。
+- **[术语表](./docs/glossary.zh-CN.md)** —— 每个核心术语，从 `evidence` 到 `confidence`，一张表查清。
 
 完整文档导航：[`docs/README.md`](./docs/README.md)。
 
@@ -79,7 +80,7 @@ npm start -w @memoweft/host    # 然后打开 http://localhost:7788
 
 仍处于 1.0 之前、坚持 library-first。Core 已实现并有测试覆盖，但 minor 版本之间的接口仍可能调整——稳定、实验性与内部接口的边界见[记忆面契约](./docs/reference/memory-surface-contract.zh-CN.md)。**零运行时依赖。**
 
-另见[路线图](./ROADMAP.md)、[贡献指南](./CONTRIBUTING.md)和[更新记录](./CHANGELOG.md)。
+另见[路线图](./ROADMAP.md)、[贡献指南](./CONTRIBUTING.zh-CN.md)和[更新记录](./CHANGELOG.md)。
 
 ## 许可证
 

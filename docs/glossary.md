@@ -8,11 +8,13 @@ This page is the single formal definition of MemoWeft's core terms. Column one i
 
 | Term (code) | Definition | User-facing wording |
 | --- | --- | --- |
+| `subject` / `subjectId` | Who a memory belongs to — the entity being remembered, usually one end user. Every Core method takes it as the `subjectId` argument. | (the person being remembered) |
 | `evidence` | A stored record of what actually arrived — a user's words, an observation, or a tool result. Every judgment must cite it; nothing else counts as a source. | 记忆线索 / 原话 / 记录 |
 | `event` | One or more pieces of evidence grouped into a single episode ("something that happened"), with a summary and an `occurredAt`. Built by `distill`. | 经历片段 / 一次经历 |
 | `cognition` | One judgment MemoWeft holds about a user (a `fact`, `preference`, `goal`, `project`, `state`, `trait`, `hypothesis`, `trend`; see `ContentType`), carrying a rule-computed `confidence` / `credStatus` and links to the evidence it rests on. | 对你的理解 / 理解条目 |
 | `profile` | The current set of a subject's active cognitions — the whole picture MemoWeft has assembled about one user. Rebuilt by `updateProfile`. | 对你的了解 / 个人上下文（用户界面避免「用户画像」） |
 | `confidence` | An integer 0–1000 score MemoWeft computes from the supporting evidence, never taken from the model's self-report. Algorithm-tuning input, not a 0–1 probability. See [Confidence tiers](#confidence-tiers). | 把握度（用定性档，不显示数字） |
+| `formedBy` | How a cognition's **source strength** is rated: `stated \| ruled \| observed \| inferred` (a user's own words distilled → `stated`; a rule-aggregated pattern → `ruled`; a behavior → `observed`; a model's guess → `inferred`). Sets the base `confidence` — a different axis from evidence's `sourceKind`. | (internal) |
 | `credStatus` | The qualitative band a cognition's confidence falls in: `candidate \| low \| limited \| stable \| conflicted`. Adding values is not a breaking change; hosts keep a `default` branch. | 候选 / 低把握 / 有一定把握 / 比较确定 / 有冲突，需确认 |
 | `sourceKind` | How a piece of evidence arrived: `spoken \| inferred \| observed \| tool`. Routes the default authorization bits — `observed` and `tool` default to no cloud read. | （对内；对外通过溯源体现） |
 | `recall` | A synchronous, lightweight read that returns the cognitions relevant to a query (`RecalledCognition[]`), gated by validity / archive / scope / decay. Never blocks the chat. | 想起相关内容 / 相关记忆 |

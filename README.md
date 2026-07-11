@@ -32,7 +32,7 @@ MemoWeft is a library you `import` into an AI app. It keeps portable, traceable 
 - **Conflicts are surfaced, not overwritten.** Contradictory information is exposed and kept side by side; MemoWeft never silently picks a winner.
 - **Confidence is computed by rule, not self-reported.** Each cognition is scored from evidence strength and corroboration — a model never sets its own credibility.
 
-Three more disciplines (typed decay, traceability, and no self-corroboration) are backed by numbered eval cases in [`tests/eval/`](./tests/eval/) — run `npm test`.
+These three, plus typed decay, traceability, and no self-corroboration, make **six cognitive disciplines** — all backed by numbered eval cases in [`tests/eval/`](./tests/eval/) (`npm test`).
 
 ## 60-second install and first call
 
@@ -40,20 +40,20 @@ Three more disciplines (typed decay, traceability, and no self-corroboration) ar
 npm install memoweft   # Node 24: built-in node:sqlite. Node 20/22: also `npm i better-sqlite3`
 ```
 
-<!-- snippet:skip (needs a live model for updateProfile / handleConversationTurn) -->
 ```ts
 import { createMemoWeftCore } from 'memoweft';
 
-const core = createMemoWeftCore({ dbPath: './memoweft.db' });
+// No API key, no network — an in-memory db and the public API.
+const core = createMemoWeftCore({ dbPath: ':memory:' });
 await core.ingestUserMessage({ subjectId: 'user-42', content: 'I only drink decaf after 3pm — caffeine wrecks my sleep.' });
-await core.updateProfile({ subjectId: 'user-42' });   // needs an OpenAI-compatible model (.env)
 
-const turn = await core.handleConversationTurn({ subjectId: 'user-42', message: 'Recommend an afternoon drink.' });
-console.log(turn.reply);
+for (const e of core.memory.listEvidence({ subjectId: 'user-42' }))
+  console.log(e.sourceKind, '·', e.rawContent); // → spoken · I only drink decaf after 3pm — caffeine wrecks my sleep.
+
 core.close();
 ```
 
-No API key? [`examples/no-key-demo.ts`](./examples/no-key-demo.ts) runs the same write path against an offline stub — watch a conflict get exposed (not overwritten) in about 30 seconds.
+That stored one piece of evidence — no key needed. Turning evidence into a recalled **profile** (distilling facts, exposing conflicts) needs a chat model: see [Getting started](./docs/getting-started.md). No key handy? [`examples/no-key-demo.ts`](./examples/no-key-demo.ts) shows a conflict exposed against an offline stub in ~30 seconds.
 
 ## Try the reference host
 
@@ -71,7 +71,8 @@ More: [what the reference host is and is not](./docs/reference-host.md).
 
 - **[Getting started](./docs/getting-started.md)** — install, store one piece of evidence, read it back. Five minutes.
 - **[Concepts](./docs/concepts/)** — the six cognitive-discipline rules, one screen each.
-- **[Recipes](./docs/recipes/)** — drop MemoWeft into the [Vercel AI SDK](./packages/adapter-ai-sdk) or an [MCP server](./packages/mcp-server).
+- **[Recipes](./docs/recipes/)** — drop MemoWeft into the [Vercel AI SDK](./docs/recipes/vercel-ai-sdk.md) or an [MCP server](./docs/recipes/mcp-server.md).
+- **[Glossary](./docs/glossary.md)** — every core term, from `evidence` to `confidence`, in one table.
 
 Full documentation index: [`docs/README.md`](./docs/README.md).
 

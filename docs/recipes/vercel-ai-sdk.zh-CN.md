@@ -42,7 +42,7 @@ const { text } = await generateText({
 });
 ```
 
-整个循环就这么多。下一轮的 `recall` 会找到 turn-1 那句话并注入进去。
+整个循环就这么多。`recall` 反映的是**画像**（cognitions），所以要等你的宿主在某处跑过 `core.updateProfile` 并配了 embedder，下一轮才召回得到 turn-1；否则写路径照常存证据，但召回为空。
 
 ## 为什么 `userMessage` 要你自己传
 

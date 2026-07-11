@@ -58,7 +58,7 @@ await server.connect(new StdioServerTransport());
 | `memoweft_ingest_user_message` | `core.ingestUserMessage` | write (light) |
 | `memoweft_ingest_tool_result` | `core.ingestToolResult` | write (light) |
 
-The two write tools only record **one raw piece of evidence** each. They do not update the profile, run consolidation, or grant any cloud-read authorization.
+The two write tools only record **one raw piece of evidence** each. They do not update the profile, run consolidation, or grant any cloud-read authorization. So `memoweft_recall` reflects the **profile** your host builds elsewhere via `updateProfile` (with an embedder) — not the raw evidence you just ingested through these tools. In a pure-MCP setup with no profile step, recall stays empty; that is expected.
 
 ## Why only these 7
 

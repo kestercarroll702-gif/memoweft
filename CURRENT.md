@@ -1,6 +1,6 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-11 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二~六批(中文版 / internals / README / glossary+naming / 文档 CI)已落地本地;剩 新人巡检+打 tag)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
+更新于:2026-07-11 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二~七批(中文版 / internals / README / glossary+naming / 文档 CI / 新人巡检处理)已落地本地;§18 实质全完成,只差打 tag phase-5-done(人类))**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
 
 ## Phase 5:文档更不绕(§18)—— 第一批用户文档已上线(已推 origin main)
 
@@ -48,6 +48,19 @@
 - `ci.yml` guardrails 加两 step:Docs dead-links(Lint 后、不需 build)+ Docs runnable-snippets(Core Build 后、靠 dist);`package.json` 加 `docs:links` / `docs:snippets`;`.gitignore` 加临时目录。
 - 本地全绿(docs:links deadPath 0 · docs:snippets 25 passed)、YAML 校验通过;**CI 真跑待下次 push**。
 
+**第七批:新人视角巡检 + 处理已落地(本地未推)**:
+- 5 路 scout 以新人视角并行走不同路径(首屏 / 概念 / 接入+术语 / internals / 纯中文),产 ~54 条「仍然绕」。
+- **本批修 5 个 HIGH + quick-win**(人类拍板力度 🔴+🟡):① README「60 秒首次调用」改真·无 key(修第四批标 snippet:skip 引入的矛盾——doc-snippets 现真跑 README en+zh 片段,27 全绿)② glossary 补 `subject/subjectId` + `formedBy` 词条 ③ sourcing 补 inferred 来源(消 no-self-evidence 的「inferred 从哪来」矛盾)④ vercel/mcp recipe 补 updateProfile/embedder 前提 ⑤ concepts/README + README 加 glossary 链接、Recipes 入口统一指 docs/recipes ⑥ 中文快修(README.zh recipes/glossary/contributing 指中文、getting-started.zh 中文标签)⑦ 措辞(卖点 3+3=6、confidence high→limited/Scene→Act)。全 en+zh 双改。
+- **驳回 1**:README.zh 免责声明(README 是平等双语门面、非英文镜像,加「英文为准」会矮化中文门面)。
+- **降级 ROADMAP**(Next 段):三个新中文版(demo-script.zh / docs-README.zh / reference-host.zh)、concepts 六页重排、internals 编号对照表 + internal↔internals 目录改名 + contract TOC、perf recall 基准、若干 low 措辞。
+- 验证:doc-snippets 27 片段全绿(README en+zh 从 skip 转真跑)、死链 0(56 文件 307 链接)。
+
+**Phase 5 验收(§18)**:
+- [x] README 电梯稿 ≤ 一屏半;迁移映射表执行完毕(architecture/boundaries/perf → internals,naming 拆 glossary)
+- [x] snippets 验证进 CI(27 片段)、死链 0、glossary 定稿双语
+- [x] 「仍然绕」清单全部关闭或降级 ROADMAP
+- [ ] **打 tag `phase-5-done`**(发布动作,待人类)
+
 **三决策(见工件 `docs/internal/phase5-migration-map.md`,含全表映射)**:
 - **D-a 分层双语**:用户页(README/getting-started/concepts/recipes/glossary/契约)双语;internals(architecture/boundaries/perf)英文单源。
 - **D-b 目录分工**:`docs/internals/`(新·"怎么建的":architecture/boundaries/perf)vs `docs/internal/`(旧·维护者账本:halumem/calibration/runbook/publishing)。
@@ -59,7 +72,7 @@
 3. ~~根 **README 收敛成 60 秒电梯稿**(§18.1;现有 README 4 条重复定位句收敛成 1)~~ ✅ **已落地**(本地未推,见上「第四批」)。
 4. ~~**glossary.md**(naming §3 词表提炼)~~ ✅ **已落地**(本地未推,见上「第五批」;含 naming 拆分 + 11 处 host 注释入链分流)。
 5. ~~**§18.3 snippets 进 CI** + **§18.4 死链检查进 CI**~~ ✅ **已落地**(本地未推,见上「第六批」;25 片段全绿、死链 0,CI 真跑待 push)。
-6. **§18.5 新人视角巡检**("仍然绕"清单 → 逐条处理)。
+6. ~~**§18.5 新人视角巡检**("仍然绕"清单 → 逐条处理)~~ ✅ **已落地**(本地未推,见上「第七批」;5 HIGH + quick-win 已修、结构性降级 ROADMAP)。
 7. 收尾:打 tag `phase-5-done`(人类)。
 
 ## Phase 4:demo 更锋利(§17)—— 时间注入 S1-S3 + 四幕 demo S4 全落地(已推 main)

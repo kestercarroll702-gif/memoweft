@@ -27,7 +27,7 @@ for (const e of core.memory.listEvidence({ subjectId: 'alice' })) {
 core.close();
 ```
 
-Every piece of evidence carries a `sourceKind`. A user's own words (`spoken`) and a tool's output (`tool`) are different kinds of fact, and MemoWeft never loses that difference. The four kinds are `spoken`, `observed`, `inferred`, and `tool`.
+Every piece of evidence carries a `sourceKind`. A user's own words (`spoken`) and a tool's output (`tool`) are different kinds of fact, and MemoWeft never loses that difference. The four kinds are `spoken`, `observed`, `inferred`, and `tool`. Three arrive through an ingest call (`spoken` / `observed` / `tool`); `inferred` is produced internally by the write path's attribution step — never written back from a model's self-report (see [no self-evidence](./no-self-evidence.md)).
 
 ## The three layers
 

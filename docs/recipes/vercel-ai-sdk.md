@@ -40,7 +40,7 @@ const { text } = await generateText({
 });
 ```
 
-That is the whole loop. The next turn's `recall` finds turn-1's words and injects them.
+That is the whole loop. Recall reflects the **profile** (cognitions), so a later turn recalls turn-1 only after your host has run `core.updateProfile` and configured an embedder; without them the write path still stores evidence, but recall stays empty.
 
 ## Why you pass `userMessage` yourself
 

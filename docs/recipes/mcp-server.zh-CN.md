@@ -60,7 +60,7 @@ await server.connect(new StdioServerTransport());
 | `memoweft_ingest_user_message` | `core.ingestUserMessage` | 写（轻量） |
 | `memoweft_ingest_tool_result` | `core.ingestToolResult` | 写（轻量） |
 
-这两个写工具各自只记录**一条原始证据**。它们不会更新画像、不会跑固化、也不会授予任何云端读取授权。
+这两个写工具各自只记录**一条原始证据**。它们不会更新画像、不会跑固化、也不会授予任何云端读取授权。所以 `memoweft_recall` 反映的是你的宿主在别处经 `updateProfile`（配 embedder）构建出的**画像**——不是你刚通过这些工具 ingest 的原始证据。纯 MCP、没有画像步骤时，召回始终为空，这是预期行为。
 
 ## 为什么只有这 7 个
 

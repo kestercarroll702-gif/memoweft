@@ -61,7 +61,7 @@ console.log('with 1 contradict', deriveCredStatus(stated, 1, 'fact'));         /
 
 ## 看它变成存下来的 fact（需要模型）
 
-把 evidence 变成打了分的 cognition 需要一个 chat 模型。demo 的第 1 幕摄入 "I am allergic to peanuts"，蒸馏它，展示它落地成一条高置信度的 `fact`——无 key、不联网，用的是确定性离线桩。
+把 evidence 变成打了分的 cognition 需要一个 chat 模型。demo 的第 1 幕摄入 "I am allergic to peanuts"，蒸馏它，展示它落地成一条按规则打了 600 分（`limited`）的 `fact`——无 key、不联网，用的是确定性离线桩。
 
 <!-- snippet:skip (needs a live model) -->
 ```ts

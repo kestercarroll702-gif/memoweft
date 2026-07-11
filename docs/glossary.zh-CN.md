@@ -10,11 +10,13 @@
 
 | 术语（code） | 一句话定义 | 用户侧说法 |
 | --- | --- | --- |
+| `subject` / `subjectId` | 记忆归属的主体——被记住的对象，通常是一个终端用户。每个 Core 方法都用 `subjectId` 参数指定它。 | （被记住的那个人） |
 | `evidence` | 落库的原料记录——用户说的话、一次观察、或一条工具结果。每个判断都必须引它；其他东西都不算来源。 | 记忆线索 / 原话 / 记录 |
 | `event` | 一条或多条 `evidence` 归成一个片段（「发生过的一件事」），带摘要和 `occurredAt`。由 `distill` 生成。 | 经历片段 / 一次经历 |
 | `cognition` | MemoWeft 对用户持有的一条判断（`fact` / `preference` / `goal` / `project` / `state` / `trait` / `hypothesis` / `trend`，见 `ContentType`），带按规则算出的 `confidence` / `credStatus`，并挂着它所依据的证据。 | 对你的理解 / 理解条目 |
 | `profile` | 某个 subject 当前有效认知的集合——MemoWeft 拼出的这个用户的全貌。由 `updateProfile` 重建。 | 对你的了解 / 个人上下文（用户界面避免「用户画像」） |
 | `confidence` | MemoWeft 从支撑证据算出的 0–1000 整数分，绝不采信模型自报。给算法调参用，不是 0–1 概率。见[把握度定性档](#把握度定性档)。 | 把握度（用定性档，不显示数字） |
+| `formedBy` | 一条认知的**源强度**分级：`stated \| ruled \| observed \| inferred`（用户亲口的话经蒸馏 → `stated`；按规则聚合的模式 → `ruled`；一次行为 → `observed`；模型的猜测 → `inferred`）。它定 `confidence` 基础分——和证据的 `sourceKind` 是不同的维度。 | （对内） |
 | `credStatus` | 一条认知的把握度所在的定性档：`candidate \| low \| limited \| stable \| conflicted`。加取值不算破坏，宿主要留 `default` 兜底。 | 候选 / 低把握 / 有一定把握 / 比较确定 / 有冲突，需确认 |
 | `sourceKind` | 一条证据是怎么来的：`spoken \| inferred \| observed \| tool`。它决定默认授权位——`observed` 和 `tool` 默认不上云。 | （对内；对外通过溯源体现） |
 | `recall` | 一次同步、轻量的读取，返回与查询相关的认知（`RecalledCognition[]`），受有效性 / 归档 / scope / 衰减门控。永不阻塞聊天。 | 想起相关内容 / 相关记忆 |

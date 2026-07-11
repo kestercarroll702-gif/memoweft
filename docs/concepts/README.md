@@ -13,4 +13,4 @@ Six disciplines enforce the separation. Every write and read path obeys all six;
 - **[No self-evidence](./no-self-evidence.md)** — the assistant's own replies never become evidence, and a judgment that cannot cite real user words is dropped.
 - **[Read/write split](./read-write.md)** — reads stay synchronous and light; the heavy digest into a profile runs batched in the background, so chat never blocks.
 
-New to MemoWeft? Read [Getting started](../getting-started.md) first, then come back here.
+New to MemoWeft? Read [Getting started](../getting-started.md) first, then come back here. Unsure about a term (evidence, cognition, confidence…)? The [Glossary](../glossary.md) defines them all.

@@ -71,7 +71,7 @@ console.log(turn.reply);
 
 ## 下一步
 
-- **[Concepts](./concepts/README.zh-CN.md)** —— 为什么把事实、猜测、冲突和过期状态分开来放。
-- **[Recipes](./recipes/)** —— 五分钟把 MemoWeft 接进 Vercel AI SDK 或 MCP server。
-- **[API reference](./reference/memory-surface-contract.zh-CN.md)** —— 每个面向宿主的方法和数据形状。
-- **[Run the demo](./demo-script.md)** —— `npm run demo` 用 90 秒演示四大差异点。
+- **[核心概念](./concepts/README.zh-CN.md)** —— 为什么把事实、猜测、冲突和过期状态分开来放。
+- **[接入配方](./recipes/)** —— 五分钟把 MemoWeft 接进 Vercel AI SDK 或 MCP server。
+- **[API 参考](./reference/memory-surface-contract.zh-CN.md)** —— 每个面向宿主的方法和数据形状。
+- **[跑 demo](./demo-script.md)** —— `npm run demo` 用 90 秒演示四大差异点（脚本暂为英文）。
