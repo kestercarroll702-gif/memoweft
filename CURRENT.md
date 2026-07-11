@@ -1,8 +1,25 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-11 | 所在 Phase:**2 固化更可信(A 路线收尾已完成,待打 tag)**(前置 tag `phase-1-done`)
+更新于:2026-07-11 | 所在 Phase:**3 适配器更稳(§16.1 起步已落地,卡在 3 个契约分岔待人类拍板)**(前置 tag `phase-2-done`)
 
 > 总纲 `PROJECT_PLAN.md`;决策 `DECISIONS.md`;固化质量报告 `bench/consolidation-baseline.md`;回归流程 `docs/internal/prompt-regression-runbook.md`。
+
+## Phase 3 进行中(适配器更稳,§16)
+
+**已落地 §16.1 起步**(`2d087c1`,本地未推):建 `tests/adapter-kit/` 参数化契约套件(一份喂两个适配器,每适配器约 50 行薄驱动),两个适配器接入:
+- **AD-1 绿**(助手消息 → evidence 零新增)、**AD-2 绿**(用户 → 恰好一条 spoken;A 含 originId 幂等、B 含前后计数)。
+- **AD-4 baseline**:当前召回呈现格式锁进 golden(A 文本块 en/zh、B structuredContent,含一条 conflicted 项)。
+- **AD-3/AD-5/AD-6(超时+logger)**:N/A 声明位 + by-construction 断言(带绊线:将来翻 applicable 会强制补真断言)。
+- 顺手修:非法 credStatus bug(`corroborated`/`single-source`→真实枚举,conflicted 路径首测)、两处注释与实现不符。
+- 验证:core 284 · adapter-ai-sdk 23 · mcp-server 11 · typecheck/build/api:check/lint 全绿。契约红线(contract/枚举/index/api-snapshot/action)一个没碰,Integrator 独立复核过。
+
+**卡点:剩下的 Phase 3 活都要碰契约,3 个分岔待人类拍板**(见下「Phase 3 待决」)。calibration 全貌在 workflow `phase3-calibration-recon` 的产出。
+
+## Phase 3 待决(3 个契约分岔,须人类先批 → DECISIONS)
+
+1. **§16.2 降级语义写进 contract**(AD-6 超时+logger 的前提):建议默认 recall 超时 200ms 可配 / 读路径不重试直接降级、写路径一次重试 / 降级注入空上下文+日志。属契约变更走第 13 章。
+2. **AD-3 工具结果 source=tool 二选一**:(a) 给 `SourceKind` 加 `'tool'` 值 → 触 api-freeze + schema 变更 + 迁移评估;或 (b) 重定义为"走 `ingestObservation` 落 observed、用 kind 标 tool"(不破 API 但改 AD-3 验收定义)。
+3. **AD-4 冲突提示**:(a) 接受 `credStatus='conflicted'` 即算冲突提示 → AD-4 退化为纯快照、**无契约变更**(推荐);或 (b) 注入文本新增显式冲突措辞 → 改宿主可见格式 + 须同步两处复制文案(recallMiddleware ≡ action.ts),走第 13 章。
 
 ## 刚完成:A 路线(Phase 2 收尾管道)三段全部落地 + 全量基线入库
 
