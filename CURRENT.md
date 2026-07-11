@@ -1,6 +1,6 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-11 | 所在 Phase:**3 适配器更稳(§16.1 契约套件 + AD-1/2/3/4/6 全落地,只剩 §16.3 版本矩阵 CI)**(前置 tag `phase-2-done`)
+更新于:2026-07-11 | 所在 Phase:**3 适配器更稳(§16.1/16.2/16.3 全落地,AD-1…AD-6 全绿——只差人类打 `phase-3-done` tag)**(前置 tag `phase-2-done`)
 
 > 总纲 `PROJECT_PLAN.md`;决策 `DECISIONS.md`;固化质量报告 `bench/consolidation-baseline.md`;回归流程 `docs/internal/prompt-regression-runbook.md`。
 
@@ -32,10 +32,19 @@
 - **对抗验证驳回 2 条**(经复核认同非真缺陷):config 缺 `toolDefaults` 的 fail-open(`toolDefaults` 是**必填**字段,只有故意传畸形 config 才触发);MCP `callIntentExcluded` 冗余(by-construction 已有注释解释)。
 - 验证:core 291 · adapter-ai-sdk 30 · mcp-server 13 · typecheck/build/api:check「一致」/lint 0-error 全绿。**契约红线走了完整流程**(D-0013 + 影响面说明 + api:update + 文档),非手改快照。
 
-### §16.3 版本矩阵 CI(不碰契约,但有 monorepo 复杂度)
-两适配器 SDK 的最低支持版+最新版矩阵 job。难点:单一根 package-lock + workspace hoist,换版本会改锁文件撞 guardrails 的 lockfile guard;须**与 guardrails 隔离**的探针 job(独立缓存 key)。且 mcp-server 的 SDK 是 dependency 非 peer(需先定矩阵化 dependency 还是改 peer)。
+### §16.3 版本矩阵 CI——已落地(D-0014,本会话)
+`ci.yml` 新增 `sdk-version-matrix` job(4 组合,fail-fast:false):adapter-ai-sdk `ai@7.0.0`/`ai@7`、mcp-server `sdk@1.29.0`/`sdk@1`。**人类拍板「矩阵化 dependency,不改 peer」**(mcp-server 是自带 SDK 的可执行服务器 bin,SDK 属实现依赖;ai-sdk 的 ai 本就是 peer)。
+- **探针机制**:`npm install <dep>@<版本> -w <pkg> --no-save`(不写 lockfile)覆盖装 → 该包 typecheck+test。**与 guardrails 隔离**:--no-save 不碰 lockfile、缓存用每组合独立 key 的 actions/cache。**核实**:既有 lockfile guard 只 `grep npmmirror`(挡镜像源、不挡版本),探针天然不撞它——CURRENT 原「撞 lockfile guard」的担心用 --no-save 化解。
+- **版本口径**:测声明范围两端(下界 + 范围内最新),**不追绝对 latest**(超范围大版本是「是否扩大支持」的主动决策,不该让矩阵无意义地红)。矩阵红 = 声明范围内兼容性破裂 → 记 DECISIONS。
+- **本地实测背书**:写 CI 前先本地跑 4 组合 --no-save 覆盖装 + typecheck+test **全绿**(ai-sdk 30 · mcp 13);npm ci 复原、lockfile 未污染。YAML 经 `yaml.safe_load` 校验。GitHub Actions 真跑需 push(人类的事)。
 
-### §16.5 新适配器 / §16.4 快照-beyond-baseline:进 ROADMAP(calibration 建议 adapter-kit 稳后再做)
+### §16.5 新适配器 / §16.4 快照-beyond-baseline:进 ROADMAP(§16.4 的注入格式 golden 其实已由 AD-4 recallSurface golden 覆盖;§16.5 新适配器 calibration 建议 adapter-kit 稳后再做)
+
+## Phase 3 验收(§16 · 只差打 tag)
+- [x] adapter-kit 就位;两适配器 **AD-1…AD-6 全绿**(AD-3 本会话翻 applicable)
+- [x] 故障注入(AD-6 throw/timeout)测试绿;降级语义进 contract(D-0012)
+- [x] **版本矩阵 CI 落地**(§16.3 · D-0014);注入格式快照(AD-4 golden 已锁)
+- [ ] **打 tag `phase-3-done`**(发布动作,待人类点头);§16.5 新适配器进 ROADMAP
 
 ## 刚完成:A 路线(Phase 2 收尾管道)三段全部落地 + 全量基线入库
 

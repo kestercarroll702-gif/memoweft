@@ -200,6 +200,80 @@ jobs:
         env:
           MEMOWEFT_TEST_DRIVER: better-sqlite3
 
+  # ── SDK 版本矩阵（§16.3 · D-0014）：验两适配器在各自声明的 SDK 版本范围【两端】真能跑 ──────────
+  #
+  # 为什么独立于 guardrails：探针用 `npm install <sdk>@<版本> --no-save` 覆盖装指定版本、【不写回 lockfile】，
+  #   与主 job 的 `npm ci`（锁定版本）物理隔离；缓存也用【每组合独立 key】的 actions/cache（见下），
+  #   不交叉污染 guardrails 的 npm cache（呼应 §16.3「锁定文件分开缓存」）。
+  # 版本口径（D-0014）：测【声明范围两端】——最低支持版（peer/dep range 下界）+ 范围内最新（`ai@7`/`sdk@1` 由 npm 解析）。
+  #   不追【绝对 latest】：上游发布超出声明范围的大版本时，那是「是否扩大支持范围」的主动决策（届时改 package.json + 记 DECISIONS），
+  #   不该让本矩阵无意义地红。矩阵红 = 声明范围内出现兼容性破裂 → 处理结论记 DECISIONS（§16.3）。
+  # mcp-server 的 SDK 是 dependency 非 peer（D-0014 拍板：不改 peer——它是自带 SDK 的可执行服务器 bin，SDK 属实现依赖）；
+  #   ai-sdk 的 ai 本就是 peer。两者统一用同一套 --no-save 探针，只是版本来源不同（dep range vs peer range）。
+  sdk-version-matrix:
+    name: SDK 版本矩阵 (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # 一个版本破裂不掩盖其它组合
+      matrix:
+        include:
+          - label: 'adapter-ai-sdk · ai@7.0.0 (peer 下界)'
+            pkg: '@memoweft/adapter-ai-sdk'
+            dep: 'ai'
+            version: '7.0.0'
+          - label: 'adapter-ai-sdk · ai@7 (peer 范围内最新)'
+            pkg: '@memoweft/adapter-ai-sdk'
+            dep: 'ai'
+            version: '7'
+          - label: 'mcp-server · sdk@1.29.0 (dep 下界)'
+            pkg: '@memoweft/mcp-server'
+            dep: '@modelcontextprotocol/sdk'
+            version: '1.29.0'
+          - label: 'mcp-server · sdk@1 (dep 范围内最新)'
+            pkg: '@memoweft/mcp-server'
+            dep: '@modelcontextprotocol/sdk'
+            version: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 不用 setup-node 内建 cache：探针会 --no-save 覆盖装非 lockfile 版本，与 guardrails 共享 npm cache
+      #   有交叉污染风险；下面用【每组合独立 key】的 actions/cache 隔离。
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Cache npm (独立 key，与 guardrails 隔离)
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-sdkmatrix-${{ matrix.dep }}-${{ matrix.version }}-${{ hashFiles('package-lock.json') }}
+
+      # 先按 lockfile 装 workspace（可复现基线），再在下一步覆盖单个 SDK 版本。
+      - name: Install dependencies (lockfile 基线)
+        run: npm ci
+
+      # 适配器包的 typecheck/test 靠 `import 'memoweft'` 解析到 dist（路线甲），故先 build 出 Core dist。
+      - name: Core Build
+        run: npm run build
+
+      # 探针核心：--no-save 覆盖装指定 SDK 版本，【不写回 package.json / lockfile】。官方 registry（不撞镜像源护栏）。
+      - name: Override ${{ matrix.dep }} to ${{ matrix.version }} (探针，不写 lockfile)
+        run: |
+          npm install "${{ matrix.dep }}@${{ matrix.version }}" -w ${{ matrix.pkg }} --no-save --no-audit --no-fund
+          echo "解析到的实际版本："
+          npm ls "${{ matrix.dep }}" -w ${{ matrix.pkg }} || true
+        env:
+          npm_config_registry: https://registry.npmjs.org
+
+      - name: Typecheck (${{ matrix.pkg }})
+        run: npm run typecheck -w ${{ matrix.pkg }}
+
+      - name: Test (${{ matrix.pkg }})
+        run: npm test -w ${{ matrix.pkg }}
+
   # ── on-tag 发布：npm publish + provenance（供应链背书）──────────────────────
   #
   # 【执行前提·作者手动】发布前，作者需先往本 repo 的 GitHub secrets 托管一个
