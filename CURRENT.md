@@ -1,16 +1,24 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-11 | 所在 Phase:**4 demo 更锋利(开工·可注入时钟 S1 落地;Phase 3 已全绿待人类打 `phase-3-done` tag)**(前置 tag `phase-2-done`)
+更新于:2026-07-11 | 所在 Phase:**4 demo 更锋利(时间注入 S1-S3 + 四幕 demo S4 全落地——只差人类打 `phase-4-done`;Phase 3 也待 `phase-3-done`)**(前置 tag `phase-2-done`)
 
-## Phase 4 开工:demo 更锋利(§17)—— 时间注入 S1 落地(本地未推)
+## Phase 4:demo 更锋利(§17)—— 时间注入 S1-S3 + 四幕 demo S4 全落地(本地未推)
 
 **方案 C(人类拍板·可注入时钟,D-0015)**:demo 要确定性(两次跑 diff 空)+ `--fast-forward`(情绪衰减、事实留存),且 §17.4「只经公共 API」。散落的 `new Date()` 无法注入 → 加可注入 `Clock`。
 - **S1a**(`86905a9` refactor):三个 store 时间源参数化(构造加可选 `clock`,缺省 `systemClock`),落库/更新时间走 `clock()`。internal,api-freeze 不动(store 构造签名不进快照,已验)。
 - **S1b**(feat):`CreateCoreOptions.clock` + `openStores` 加 `clock` 参 + 导出 `type Clock`/`systemClock`。触 api-freeze 走全流程(D-0015 + api:update + 契约 en/zh + CHANGELOG),纯 additive(缺省系统时间、旧调用方零改动)。
 - **铁律 3b**:clock 只产时间戳、绝不进置信度自算(测试已验注入 clock 不改 confidence)。
-- **⚠️ 诚实边界**:S1 只固定了 **store 落库时间**。**写算子(`consolidate.ts:173`/`attribute.ts:118`/`managementApi.ts`/`obs/runLog.ts` 的 `new Date()`)+ 读路径 now(`core.recall`/`handleConversationTurn` 内部传给 `recallCognitions`/`decay`/`expire`)统一走 clock 留后续**——在此之前 demo 还做不到完整确定性与 fast-forward。
-- 验证:core 296 · typecheck/api:check「一致」全绿;两次提交(`86905a9` S1a · S1b 本轮)本地未推。
-- **剩余步骤**:S2(写算子走 clock)→ S3(读路径 now 走 clock,fast-forward 生效)→ S4(四幕 demo:扩②纠正幕 + `npm run demo` + 三段式 CLI + 确定性验收两次 diff 空)。复用 `examples/no-key-demo.ts`(已演③矛盾 + 认知状态表打印)+ `HashEmbedder`。
+- **S2**(`fb0ec69` feat):写路径算子(consolidate correct/conflict 显式时间、attribute 归因窗口上界)+ updateProfile 透传走 clock。
+- **S3**(`6ebc091` feat):读路径 now(`core.recall`/`handleConversationTurn` → `recallCognitions` 衰减门控)走 clock —— 前进 clock → 情绪 `state` 有效置信衰减出局、`fact` 留存(测试实证前进 11 天)。
+- **S4**(`a941429` feat):四幕 demo `examples/demo.ts`(记住/纠正/矛盾/时间)+ `npm run demo` + 三段式纯文本 CLI(`!! CONFLICT` 标记)+ `--fast-forward`/`--act` + 录屏脚本 `docs/demo-script.md`。**确定性验收:两次运行 diff 逐字为空(已验)**;只经公共 API(`import 'memoweft'`)。
+- 验证:core 298 · typecheck/api:check「一致」/build 全绿。**六提交本地未推**(S1a/S1b/S2/S3/S4 + 更早的 AD-3/§16.3)。
+- **⚠️ 方案 C 完整性剩余(demo 不阻塞 → ROADMAP)**:`managementApi`(用户手动 invalidate/archive 的 invalidAt/archivedAt)、`obs/runLog`(ts)、`asking`(askedAt)的 `new Date()` 仍未接 clock——四幕 demo 不碰这些路径;要彻底"全局可注入时钟"需补这几处。
+
+## Phase 4 验收(§17 · 只差打 tag)
+- [x] clone 一条命令 `npm run demo` 走完四幕;**两次运行 diff 为空**(确定性)
+- [x] 四幕点题输出 + 认知状态表可读;conflict 幕 `!! CONFLICT` 呈现
+- [x] demo 仅用公共 API(`import 'memoweft'`);录屏脚本 `docs/demo-script.md` 入库
+- [ ] 打 tag `phase-4-done`(发布动作,待人类)
 
 > 总纲 `PROJECT_PLAN.md`;决策 `DECISIONS.md`;固化质量报告 `bench/consolidation-baseline.md`;回归流程 `docs/internal/prompt-regression-runbook.md`。
 
