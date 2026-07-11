@@ -8,6 +8,7 @@ import { DatabaseSync } from '../store/nodeSqliteDriver.ts';
 import type { SQLInputValue } from '../store/driver.ts';
 import { randomUUID } from 'node:crypto';
 import { BUSY_TIMEOUT_MS } from '../store/busyTimeout.ts';
+import { systemClock, type Clock } from '../clock.ts';
 import type {
   Cognition,
   CognitionInput,
@@ -117,13 +118,17 @@ export interface CognitionStore {
 export class SqliteCognitionStore implements CognitionStore {
   private readonly db: DatabaseSync;
   private readonly ownsDb: boolean;
+  /** 落库/更新时间源（created_at/updated_at）；可注入以求确定性/时间旅行，缺省=真实系统时间。 */
+  private readonly clock: Clock;
 
-  /** @param db 文件路径（自开连接，默认 './dla.db'）或共享 DatabaseSync（多 store 共用一条连接、可跨表事务，见 store/openStores.ts）。 */
-  constructor(db: string | DatabaseSync = './dla.db') {
+  /** @param db 文件路径（自开连接，默认 './dla.db'）或共享 DatabaseSync（多 store 共用一条连接、可跨表事务，见 store/openStores.ts）。
+   *  @param clock 时间源；缺省真实系统时间。 */
+  constructor(db: string | DatabaseSync = './dla.db', clock: Clock = systemClock) {
     this.ownsDb = typeof db === 'string';
     this.db = typeof db === 'string' ? new DatabaseSync(db) : db;
     // 自开连接才设并发保底；共享连接由 openStores 已设过，别重复设。
     if (this.ownsDb) this.db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+    this.clock = clock;
     this.db.exec(SCHEMA);
     this.migrate();
   }
@@ -142,7 +147,7 @@ export class SqliteCognitionStore implements CognitionStore {
   }
 
   put(input: CognitionInput): Cognition {
-    const now = new Date().toISOString();
+    const now = this.clock().toISOString();
     const cog: Cognition = {
       id: randomUUID(),
       subjectId: input.subjectId,
@@ -241,7 +246,7 @@ export class SqliteCognitionStore implements CognitionStore {
       invalidAt: patch.invalidAt === undefined ? cur.invalidAt : patch.invalidAt,
       askedAt: patch.askedAt === undefined ? cur.askedAt : patch.askedAt,
       archivedAt: patch.archivedAt === undefined ? (cur.archivedAt ?? null) : patch.archivedAt,
-      updatedAt: new Date().toISOString(),
+      updatedAt: this.clock().toISOString(),
     };
     this.db
       .prepare(

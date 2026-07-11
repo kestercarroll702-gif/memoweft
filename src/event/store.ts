@@ -5,6 +5,7 @@
 import { DatabaseSync } from '../store/nodeSqliteDriver.ts';
 import { randomUUID } from 'node:crypto';
 import { BUSY_TIMEOUT_MS } from '../store/busyTimeout.ts';
+import { systemClock, type Clock } from '../clock.ts';
 import type { Event, EventInput } from './model.ts';
 
 const SCHEMA = `
@@ -64,13 +65,17 @@ export interface EventStore {
 export class SqliteEventStore implements EventStore {
   private readonly db: DatabaseSync;
   private readonly ownsDb: boolean;
+  /** 落库时间源（created_at）；可注入以求确定性/时间旅行，缺省=真实系统时间。 */
+  private readonly clock: Clock;
 
-  /** @param db 文件路径（自开连接，默认 './dla.db'）或共享 DatabaseSync（多 store 共用一条连接，见 store/openStores.ts）。 */
-  constructor(db: string | DatabaseSync = './dla.db') {
+  /** @param db 文件路径（自开连接，默认 './dla.db'）或共享 DatabaseSync（多 store 共用一条连接，见 store/openStores.ts）。
+   *  @param clock 时间源；缺省真实系统时间。 */
+  constructor(db: string | DatabaseSync = './dla.db', clock: Clock = systemClock) {
     this.ownsDb = typeof db === 'string';
     this.db = typeof db === 'string' ? new DatabaseSync(db) : db;
     // 自开连接才设并发保底；共享连接由 openStores 已设过，别重复设。
     if (this.ownsDb) this.db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+    this.clock = clock;
     this.db.exec(SCHEMA);
     // 迁移：旧库 event 表可能缺 consolidated 列（增量消化追踪，阶段 2）。
     const cols = this.db.prepare('PRAGMA table_info(event)').all() as unknown as Array<{ name: string }>;
@@ -80,7 +85,7 @@ export class SqliteEventStore implements EventStore {
   }
 
   put(input: EventInput): Event {
-    const now = new Date().toISOString();
+    const now = this.clock().toISOString();
     const ev: Event = {
       id: randomUUID(),
       subjectId: input.subjectId,

@@ -10,6 +10,7 @@ import { DatabaseSync } from '../store/nodeSqliteDriver.ts';
 import type { SQLInputValue } from '../store/driver.ts';
 import { randomUUID } from 'node:crypto';
 import { config, cloudReadDefault, type MemoWeftConfig } from '../config.ts';
+import { systemClock, type Clock } from '../clock.ts';
 import { BUSY_TIMEOUT_MS } from '../store/busyTimeout.ts';
 import type { Evidence, EvidenceInput, SourceKind } from './model.ts';
 
@@ -113,18 +114,21 @@ export class SqliteEvidenceStore implements EvidenceStore {
   private readonly ownsDb: boolean;
   /** 本 store 的配置（put 补默认授权位用）；可注入（P2-5），缺省=全局单例。 */
   private readonly cfg: MemoWeftConfig;
+  /** 落库时间源（recordedAt）；可注入以求确定性/时间旅行，缺省=真实系统时间。 */
+  private readonly clock: Clock;
 
   /**
    * @param db SQLite 文件路径（自开连接，默认 './dla.db'；测试传 ':memory:'），
    *   或一个【已打开的共享 DatabaseSync】——多个 store 共用一条连接时才能跨表事务（见 store/openStores.ts）。
    * @param cfg 可注入配置（P2-5 config 去单例）：不传 = 用全局单例；put 补授权默认（evidenceDefaults / privacyMode）按这份。
    */
-  constructor(db: string | DatabaseSync = './dla.db', cfg: MemoWeftConfig = config) {
+  constructor(db: string | DatabaseSync = './dla.db', cfg: MemoWeftConfig = config, clock: Clock = systemClock) {
     this.ownsDb = typeof db === 'string';
     this.db = typeof db === 'string' ? new DatabaseSync(db) : db;
     // 自开连接才设并发保底；共享连接由 openStores 已设过，别重复设。
     if (this.ownsDb) this.db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     this.cfg = cfg;
+    this.clock = clock;
     this.db.exec(SCHEMA);
   }
 
@@ -135,7 +139,7 @@ export class SqliteEvidenceStore implements EvidenceStore {
       if (existing) return existing;
     }
 
-    const recordedAt = new Date().toISOString();
+    const recordedAt = this.clock().toISOString();
     // 授权缺省按 sourceKind 分流（红线 B 下沉 put，最后防线）：
     //   'observed'/'tool' → 三个默认取各自保守分支（observedDefaults / toolDefaults，均 local✓/cloud✗/infer✓），
     //     任何入口落 observed/tool 都一次性兜住不上云（工具返回值常含敏感外部数据，与 observed 同级保守，AD-3/D-0013）；
