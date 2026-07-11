@@ -36,6 +36,7 @@
     "collector": "node plugins/collector-active-window/run.mjs",
     "experience": "node testbench/server.mjs",
     "build": "tsc -p tsconfig.build.json",
+    "demo": "npm run build && node examples/demo.ts",
     "api:update": "node scripts/api-snapshot.mjs",
     "api:check": "node scripts/api-snapshot.mjs --check",
     "prompts:update": "node scripts/prompt-hashes.mjs",
