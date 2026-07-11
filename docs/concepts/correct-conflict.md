@@ -1,5 +1,7 @@
 # Corrections leave a trail; conflicts stay visible
 
+**English** | [简体中文](./correct-conflict.zh-CN.md)
+
 MemoWeft never silently overwrites a judgment. When a user corrects themselves, the old belief is kept and marked stale. When new evidence contradicts a belief without correcting it, both are kept and the clash is flagged. MemoWeft exposes conflicts — it does not pick a winner.
 
 ## Set up two turns (no API key)

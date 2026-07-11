@@ -1,5 +1,7 @@
 # Assistant output is never evidence
 
+**English** | [简体中文](./no-self-evidence.zh-CN.md)
+
 MemoWeft records what the user said, what the host observed, and what a tool returned. It never records the assistant's own reply, or the tool call the model proposes. The model cannot feed its own guesses back in as facts.
 
 ## The store has no door for assistant output (no API key)

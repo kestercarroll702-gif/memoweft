@@ -1,5 +1,7 @@
 # Cognitive discipline: six rules
 
+**English** | [简体中文](./README.zh-CN.md)
+
 MemoWeft keeps **facts and guesses apart** — what a user actually said versus what a model inferred — and never lets one quietly become the other. That distinction is the whole point.
 
 Six disciplines enforce the separation. Every write and read path obeys all six; the mechanism lives in [architecture](../architecture.md), and each page below explains one rule with a runnable check where one fits.

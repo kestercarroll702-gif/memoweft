@@ -1,5 +1,7 @@
 # Read/write split: store first, digest later
 
+**English** | [简体中文](./read-write.zh-CN.md)
+
 MemoWeft separates the fast path from the slow path. Storing a message is cheap and synchronous. Turning stored evidence into a profile is the expensive step, and it runs on its own schedule. A recall failure never blocks a reply.
 
 ## Storing is instant; the profile is a separate step (no API key)

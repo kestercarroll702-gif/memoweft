@@ -1,5 +1,7 @@
 # Vercel AI SDK integration in five minutes
 
+**English** | [简体中文](./vercel-ai-sdk.zh-CN.md)
+
 Give your existing Vercel AI SDK app long-term memory. `@memoweft/adapter-ai-sdk` wraps MemoWeft's public Core: **read** recalls memory into the prompt, **write** stores the user's own words after each turn.
 
 ## Install

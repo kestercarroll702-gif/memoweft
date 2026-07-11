@@ -1,5 +1,7 @@
 # Emotions fade, facts stay (typed decay)
 
+**English** | [简体中文](./decay.zh-CN.md)
+
 A user's stress last week should not colour every reply this week. Their peanut allergy must never fade. MemoWeft decays confidence **by type**: emotional states have a short half-life; facts and preferences have none.
 
 ## See it (no API key)

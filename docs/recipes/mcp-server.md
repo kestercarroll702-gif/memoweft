@@ -1,5 +1,7 @@
 # MCP server in five minutes
 
+**English** | [简体中文](./mcp-server.zh-CN.md)
+
 Expose a MemoWeft database to Claude Desktop, Cursor, or any MCP client — as a tightly scoped set of Model Context Protocol tools. The client can recall stored knowledge and record raw messages, but never delete, merge, or change authorization.
 
 ## Install

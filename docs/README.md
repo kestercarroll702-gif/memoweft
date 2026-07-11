@@ -4,9 +4,9 @@ MemoWeft is a library that gives AI apps portable long-term memory — it keeps 
 
 ## Start here
 
-- **[Getting started](./getting-started.md)** — install, store one piece of evidence, read it back. Five minutes, no API key for the first step.
-- **[Concepts](./concepts/)** — the six cognitive-discipline rules that make MemoWeft trustworthy, one screen each.
-- **Recipes** — add MemoWeft to your stack in five minutes: [Vercel AI SDK](./recipes/vercel-ai-sdk.md) · [MCP server](./recipes/mcp-server.md).
+- **[Getting started](./getting-started.md)** — install, store one piece of evidence, read it back. Five minutes, no API key for the first step. [中文](./getting-started.zh-CN.md)
+- **[Concepts](./concepts/)** — the six cognitive-discipline rules that make MemoWeft trustworthy, one screen each. [中文](./concepts/README.zh-CN.md)
+- **Recipes** — add MemoWeft to your stack in five minutes: [Vercel AI SDK](./recipes/vercel-ai-sdk.md) [中文](./recipes/vercel-ai-sdk.zh-CN.md) · [MCP server](./recipes/mcp-server.md) [中文](./recipes/mcp-server.zh-CN.md).
 
 ## Reference
 

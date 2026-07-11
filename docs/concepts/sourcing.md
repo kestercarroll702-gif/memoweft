@@ -1,5 +1,7 @@
 # Three-layer sourcing: evidence → event → cognition
 
+**English** | [简体中文](./sourcing.zh-CN.md)
+
 Every judgment MemoWeft holds can trace back to the raw words that produced it. It records not just *what* it knows, but *where that came from*.
 
 ## See the source get recorded (no API key)

@@ -1,5 +1,7 @@
 # Confidence is computed by rule, not reported by the LLM
 
+**English** | [简体中文](./confidence.zh-CN.md)
+
 Every cognition MemoWeft keeps carries a `confidence` (0–1000) and a `credStatus`. This page shows where those numbers come from — and why the model never gets to set them.
 
 ## See it (no API key)

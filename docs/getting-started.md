@@ -1,5 +1,7 @@
 # Getting started
 
+**English** | [简体中文](./getting-started.zh-CN.md)
+
 Install MemoWeft, store one thing a user said, and read it back — in five minutes. No API key for the first step.
 
 ## Install

@@ -1,6 +1,6 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-11 | 所在 Phase:**5 文档更不绕(§18·第一批已上线 main:getting-started + concepts6 + recipes2 + reference 归位;剩中文版/internals 迁移/CI 自动化/README 电梯稿/glossary)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
+更新于:2026-07-11 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二批中文版 zh-CN 已落地本地;剩 internals 迁移/CI 自动化/README 电梯稿/glossary)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
 
 ## Phase 5:文档更不绕(§18)—— 第一批用户文档已上线(已推 origin main)
 
@@ -11,13 +11,21 @@
 - **`docs/reference/`**:memory-surface-contract 归位(双语)+ 旧位跳转桩;`docs/README.md` 改成三入口索引。
 - 质量:11 页 69 内链 **0 死链**;所有无 key 片段实跑输出与注释逐字一致(核实 computeConfidence/effectiveConfidence/persistUserTurn 等真实签名,doc-writer 未编造)。起草走 8-agent doc-writer 工作流 + Integrator 逐页审+验+落盘。
 
+**第二批:用户文档中文版 zh-CN 已落地(本地未推)**:
+- **10 个 zh-CN 页**:getting-started + concepts6(含 README)+ recipes2,镜像已上线的英文页(分层双语 D-a·用户页双语)。
+- **代码围栏逐字节保留**(`compare-fences.mjs` 机械验全 10 页 VERBATIM):中文页只译围栏外散文,代码块与英文源逐字一致 → 英文页已实跑过的片段中文页照样能跑,无需重跑。
+- 术语提炼自现有中文页保持一致(证据/事件/认知/置信度/亲口/观察/推测/固化/召回/冲突/纠正/衰减);内链重指向中文版(目录自指 `[Concepts](./)`→README.zh-CN、嵌链接括注全处理对);标点全角化对齐全仓惯例(`check-punct.mjs` 验 0 残留半角)。
+- **10 个英文页顶部加 `English | 简体中文` 互链行** + docs/README「Start here」三条加中文链接。
+- 验证:死链 0(`check-links.mjs`:48 文件 269 内链)、typecheck/api:check「一致」(纯文档零碰代码/快照)。
+- 做法:doc-writer 并行起草 + reviewer 逐页对抗审(代码围栏逐字为硬指标,全 pass)+ Integrator 三脚本机械终验 + 两轮标点收口(第一轮宪法漏定括号规则、误判 sourcing 为全角页 → v2 强化括号规则全 10 页补齐;教训:翻译镜像的风格规范应在首版宪法定清)。
+
 **三决策(见工件 `docs/internal/phase5-migration-map.md`,含全表映射)**:
 - **D-a 分层双语**:用户页(README/getting-started/concepts/recipes/glossary/契约)双语;internals(architecture/boundaries/perf)英文单源。
 - **D-b 目录分工**:`docs/internals/`(新·"怎么建的":architecture/boundaries/perf)vs `docs/internal/`(旧·维护者账本:halumem/calibration/runbook/publishing)。
 - **D-c**:architecture 迁移时修 `sourceKind` 3→4 值(加 tool)+ 补 toolDefaults/archivedAt。
 
 **剩余(后续批,迁移映射表是蓝图)**:
-1. concepts/recipes/getting-started 的**中文版** zh-CN(分层双语)。
+1. ~~concepts/recipes/getting-started 的**中文版** zh-CN(分层双语)~~ ✅ **已落地**(本地未推,见上「第二批」)。
 2. **architecture/boundaries/perf → `docs/internals/`**(迁移 + 修 sourceKind 陈旧 + 改入链 + 旧位留桩);naming 拆 `glossary.md` + `internal/`。
 3. 根 **README 收敛成 60 秒电梯稿**(§18.1;现有 README 4 条重复定位句收敛成 1)。
 4. **glossary.md**(naming §3 词表提炼)。
