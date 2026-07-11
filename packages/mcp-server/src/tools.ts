@@ -2,10 +2,13 @@
  * MemoWeft MCP tools —— 白名单注册（外部 AI 客户端自主可调的协议面）。
  *
  * 安全硬约束（见 README 的 SECURITY 段 + 任务书 D3）：
- *   - 只暴露 6 个 tool：5 读 + 1 轻写（只存一句用户原话）。
+ *   - 只暴露 7 个 tool：5 读 + 2 轻写（存一句用户原话 / 存一条工具返回结果）。
+ *     两个写工具都只【存一条原料证据】——不改画像、不消化、不改上云授权，落库均默认不上云。
  *   - 破坏性 / 改上云授权 / 整套消化改画像的 Core 方法【一律不注册】——
  *     invalidate、remove、merge、archive、reset、updateEvidenceAuthorization、
  *     handleConversationTurn、updateProfile、ingestObservation、portable 都不出现在这里。
+ *   - memoweft_ingest_tool_result 只摄入工具执行的【返回结果】(外部客观数据=合法证据，AD-3/D-0013)，
+ *     不摄入 LLM 的工具调用意图/入参(那是助手输出，禁摄入，铁律 3a)。
  *   - tool description 用中性协议措辞，不复活人设（Core 无头）。
  *
  * 这一层只做"把 Core 门面翻译成 MCP tool"：取参 → 调门面 → 把结果包成
@@ -39,7 +42,7 @@ export const READ_TOOL_NAMES = [
   'memoweft_graph',
 ] as const;
 
-export const WRITE_TOOL_NAMES = ['memoweft_ingest_user_message'] as const;
+export const WRITE_TOOL_NAMES = ['memoweft_ingest_user_message', 'memoweft_ingest_tool_result'] as const;
 
 /** 全部会被注册的 tool 名（读 + 轻写）。测试断言 server 注册的 tool 集合 === 这个集合。 */
 export const ALL_TOOL_NAMES = [...READ_TOOL_NAMES, ...WRITE_TOOL_NAMES] as const;
@@ -243,6 +246,41 @@ export function registerTools(server: McpServer, core: MemoWeftCore, opts: Regis
         return ok({ id: ev.id, subjectId: ev.subjectId, sourceKind: ev.sourceKind, recordedAt: ev.recordedAt });
       } catch {
         logger?.({ event: 'memory_degraded', tool: 'memoweft_ingest_user_message', op: 'ingest', reason: 'error' });
+        return ok({ stored: false, degraded: true });
+      }
+    },
+  );
+
+  // ── 写·轻：存一条工具执行【返回结果】为 tool 证据（AD-3/D-0013，默认不上云、不改画像）──
+  server.registerTool(
+    'memoweft_ingest_tool_result',
+    {
+      title: 'Ingest tool result',
+      description:
+        'Store the verbatim result payload returned by a tool execution as evidence (source kind: tool). ' +
+        "This records only the tool's returned output as an external data point; it does NOT record the model's " +
+        'tool-call arguments or intent, does not update the profile, run consolidation, or grant any cloud-read ' +
+        'authorization. Tool-result evidence defaults to local-only (not cloud-readable).',
+      inputSchema: {
+        content: z.string().min(1).describe('The verbatim result payload returned by the tool execution.'),
+        subjectId: z
+          .string()
+          .optional()
+          .describe('Subject the result belongs to; defaults to the configured subject.'),
+        originId: z
+          .string()
+          .optional()
+          .describe('Idempotency key (e.g. the toolCallId): repeated ingests with the same originId store only once.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ content, subjectId, originId }) => {
+      // 降级（契约 §16.2）：写路径失败重试一次；仍失败 → 记一条 + 返回未落库标记，isError:false 不中断。
+      try {
+        const ev = await retryOnce(() => core.ingestToolResult({ content, subjectId, originId }));
+        return ok({ id: ev.id, subjectId: ev.subjectId, sourceKind: ev.sourceKind, recordedAt: ev.recordedAt });
+      } catch {
+        logger?.({ event: 'memory_degraded', tool: 'memoweft_ingest_tool_result', op: 'ingest', reason: 'error' });
         return ok({ stored: false, degraded: true });
       }
     },

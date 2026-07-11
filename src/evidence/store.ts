@@ -137,13 +137,17 @@ export class SqliteEvidenceStore implements EvidenceStore {
 
     const recordedAt = new Date().toISOString();
     // 授权缺省按 sourceKind 分流（红线 B 下沉 put，最后防线）：
-    //   'observed' → 三个默认取自 observedDefaults（local✓/cloud✗/infer✓），任何入口落 observed 都一次性兜住不上云；
+    //   'observed'/'tool' → 三个默认取各自保守分支（observedDefaults / toolDefaults，均 local✓/cloud✗/infer✓），
+    //     任何入口落 observed/tool 都一次性兜住不上云（工具返回值常含敏感外部数据，与 observed 同级保守，AD-3/D-0013）；
     //   其余（spoken/inferred）→ 维持原通用默认（evidenceDefaults + cloudReadDefault 跟随 privacyMode）。
     // 显式传值永远优先（下面 ?? 左侧）。
-    const isObserved = input.sourceKind === 'observed';
-    const localDefault = isObserved ? this.cfg.observedDefaults.allowLocalRead : this.cfg.evidenceDefaults.allowLocalRead;
-    const cloudDefault = isObserved ? this.cfg.observedDefaults.allowCloudRead : cloudReadDefault(this.cfg);
-    const inferDefault = isObserved ? this.cfg.observedDefaults.allowInference : this.cfg.evidenceDefaults.allowInference;
+    const conservative =
+      input.sourceKind === 'observed' ? this.cfg.observedDefaults
+      : input.sourceKind === 'tool' ? this.cfg.toolDefaults
+      : null;
+    const localDefault = conservative ? conservative.allowLocalRead : this.cfg.evidenceDefaults.allowLocalRead;
+    const cloudDefault = conservative ? conservative.allowCloudRead : cloudReadDefault(this.cfg);
+    const inferDefault = conservative ? conservative.allowInference : this.cfg.evidenceDefaults.allowInference;
     const evidence: Evidence = {
       id: randomUUID(),
       subjectId: input.subjectId,

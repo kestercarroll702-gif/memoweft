@@ -26,26 +26,27 @@
 
 ---
 
-## 一、门面方法专章（24 个宿主接触方法）
+## 一、门面方法专章（25 个宿主接触方法）
 
 宿主主入口是 `createMemoWeftCore(options)`，拿到 `MemoWeftCore` 门面后经它的方法与三个子命名空间（`memory` / `portable` / `graph`）做事。**不要绕过门面直接拼底层 `Sqlite*Store` / 算子**。
 
-计数：`createMemoWeftCore`(1) + 门面顶层 8 + `core.memory` 11 + `core.portable` 3 + `core.graph` 1 = **24**。全部 **stable**。
+计数：`createMemoWeftCore`(1) + 门面顶层 9 + `core.memory` 11 + `core.portable` 3 + `core.graph` 1 = **25**。全部 **stable**。
 
 ### 1.0 工厂
 
 #### `createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore` — **stable**
 - **入参** `CreateCoreOptions`：`dbPath`（必填）、`llm?`（`LLMPool | LLMClient`）、`embedder?`、`retriever?`、`config?`、`vectorDbPath?`。
-- **返回**：`MemoWeftCore` 门面（下述 8 顶层方法 + `memory`/`portable`/`graph`/`health`/`close`）。
+- **返回**：`MemoWeftCore` 门面（下述 9 顶层方法 + `memory`/`portable`/`graph`/`health`/`close`）。
 - **隐性契约**：**无 `.env` 也能建 core**——缺模型配置不崩，只有真调模型的路径才降级/报错（见隐性契约第 9 条）。`vectorDbPath` 缺省与 `dbPath` 同库；一个 subject 一个向量实例的既有契约不变。
 - 依据：`src/core/createCore.ts:39-52`（入参）、`:155-174`（装配降级）。
 
-### 1.1 门面顶层 8 方法（`MemoWeftCore.*`）
+### 1.1 门面顶层 9 方法（`MemoWeftCore.*`）
 
 | 方法 | 入参 | 返回 | 级 | 隐性行为契约 |
 |---|---|---|---|---|
 | `ingestUserMessage(input)` | `UserMessageInput` | `Promise<Evidence>` | stable | 存 `spoken` 证据，只存不答（"先存后答"里"存"的那半）。 |
 | `ingestObservation(input)` | `ObservationInput` | `Promise<Evidence[]>` | stable | 存 `observed` 证据，**默认不上云**；带 `originId` 幂等；返回本次**新落库**的（幂等命中的不在内）。 |
+| `ingestToolResult(input)` | `ToolResultInput` | `Promise<Evidence>` | stable | 存一条工具执行的**返回结果** payload 为 `tool` 证据（AD-3/D-0013），**默认不上云**（`config.toolDefaults`）；带 `originId` 幂等。只摄入工具返回结果，绝不摄入 LLM 的工具调用意图/入参（铁律 3a）。要给某条 `tool` 证据开上云走 `memory.updateEvidenceAuthorization`（带审计），不在摄入口开口子。 |
 | `recall(input)` | `RecallInput` | `Promise<RecalledCognition[]>` | stable | 与 `Conversation` 同一段共享召回语义（invalid/archived/越界/衰减门控全走）。 |
 | `handleConversationTurn(input)` | `ConversationInput` | `Promise<TurnOutcome>` | stable | 存证据→召回→回话；同 `conversationId` 复用实例、窗口连续；`systemPrompt`/`seedTurns` 仅首次建实例生效（见隐性契约第 4 条）。 |
 | `dropConversation(conversationId)` | `string` | `void` | stable | 丢内存里的活跃会话实例（不碰库）；下次同 id 会重建（届时新 `systemPrompt`/`seedTurns` 才生效）；不存在的 id 静默略过。 |
@@ -105,7 +106,7 @@
 
 1. **`Evidence`** — stable。证据落库完整形状：`id / subjectId / sourceKind / hostId / originId / occurredAt / recordedAt / rawContent / summary / allowLocalRead / allowCloudRead / allowInference / correctsEvidenceId`。依据 `src/evidence/model.ts:14-40`。
 2. **`EvidenceInput`** — stable（宿主经 `ingestUserMessage` 间接产；直接构造 `evidenceStore.put` 属 internal 路径）。`id/recordedAt` 由存储层生成，缺省授权位按 `sourceKind` 分流。依据 `src/evidence/model.ts:48-60`。
-3. **`SourceKind`** — stable 枚举：`'spoken' | 'inferred' | 'observed'`。加值不算破坏、须留 default。依据 `src/evidence/model.ts:11`。
+3. **`SourceKind`** — stable 枚举：`'spoken' | 'inferred' | 'observed' | 'tool'`（`'tool'` 于 AD-3/D-0013 加入 = 工具执行的返回结果，外部数据点）。加值不算破坏、须留 default。依据 `src/evidence/model.ts:11`。
 4. **`Event`** — stable。事件落库形状：`id / subjectId / summary / occurredAt / createdAt`。依据 `src/event/model.ts:10-18`。
 5. **`EventInput`** — **experimental**。宿主一般不直接构造（由 `distill` 内部产）；Host 侧无直接构造点（grep `apps/memoweft-host` 无命中）。依据 `src/event/model.ts:20-26`。
 6. **`EventWithEvidence`** — stable（`core.memory.listEvents` 返回项）：`Event + evidenceIds: string[]`。依据 `src/event/model.ts:28-30`。
@@ -123,6 +124,7 @@
 15. **`CreateCoreOptions`** — stable：`dbPath` 必填 + `llm?/embedder?/retriever?/config?/vectorDbPath?`。依据 `src/core/createCore.ts:39-52`。
 16. **`UserMessageInput`** — stable：`content` + `subjectId?/hostId?/sourceKind?/originId?/occurredAt?`。依据 `:56-66`。
 17. **`ObservationInput`** — stable：`observations: Observation[]` + `subjectId?/hostId?`。依据 `:68-73`。
+17a. **`ToolResultInput`** — stable（AD-3/D-0013）：`content`（工具返回结果 payload）+ `subjectId?/hostId?/originId?/occurredAt?`。落成 `tool` 证据，cloud-read 缺省 false（`config.toolDefaults`）。依据 `src/core/createCore.ts`。
 18. **`RecallInput`** — stable：`query` + `subjectId?`。依据 `:75-78`。
 19. **`ConversationInput`** — stable：`message` + `conversationId?/subjectId?/hostId?/originId?/occurredAt?/systemPrompt?/seedTurns?`。依据 `:80-93`。
 20. **`UpdateProfileInput`** — stable：`subjectId?`。依据 `:95-97`。
@@ -170,7 +172,7 @@
 50. **`MemoryGraphPayload`** — stable：`subjectId / generatedAt / scope / depth / nodes / edges / stats`。依据 `src/graph/model.ts:71-79`。
 51. **`MemoryGraphNode`** — stable：`id / kind / label / summary? / (cognition:) contentType?/formedBy?/confidence?/credStatus? / (evidence:) sourceKind?/allowCloudRead?/allowInference? / 时间字段 / archivedAt? / val?/colorKey?`。依据 `:26-50`。
 52. **`MemoryGraphEdge`** — stable：`id / source / target / kind / label? / dashed?`。依据 `:52-59`。
-53. **`MemoryGraphStats`** — stable：`nodeCount / edgeCount / hiddenCount / activeCognitionCount / conflictedCount / hypothesisCount / observedEvidenceCount`。依据 `:61-69`。
+53. **`MemoryGraphStats`** — stable：`nodeCount / edgeCount / hiddenCount / activeCognitionCount / conflictedCount / hypothesisCount / observedEvidenceCount / toolEvidenceCount`（`toolEvidenceCount` 于 AD-3/D-0013 加入，additive）。依据 `:61-69`。
 54. **`MemoryGraphNodeKind`** — stable 枚举：`subject|evidence|event|cognition`。依据 `:16`。
 55. **`MemoryGraphEdgeKind`** — stable 枚举，但 `conflicts_with`/`corrects` 两值 **experimental**（v1 未生成，数据未存）。依据 `:18-24`。
 
@@ -181,7 +183,7 @@
 ### 2.8 版本 / 配置
 
 57. **`MEMOWEFT_VERSION`** — stable 常量。`DLA_VERSION` 是 `@deprecated` 别名（保留、勿删）。依据 `src/index.ts:208-211`。
-58. **`MemoWeftConfig`（有哪些配置项）** — stable：identity / privacyMode / observedDefaults / consolidation / retrieval / attribution / background 等字段结构。**0.4.0 加可选 `language: 'zh' | 'en'`（additive 非破坏——旧宿主不传照跑；缺省 `'en'`，env `MEMOWEFT_LANG=zh` 或运行期设 `config.language` 切中文）+ 导出 `type Lang`（stable，供宿主设值）**。**但“怎么拿到 config”（`config` 单例访问）标 experimental**，pre-1.0 期间可能调整。`DlaConfig` 是 `@deprecated` 别名。`cloudReadDefault()` / `resolveLang()` stable（后者取当前库语言，只决定文本产出、绝不进置信度自算）。依据 `src/config.ts`。
+58. **`MemoWeftConfig`（有哪些配置项）** — stable：identity / privacyMode / observedDefaults / consolidation / retrieval / attribution / background 等字段结构。**0.4.0 加可选 `language: 'zh' | 'en'`（additive 非破坏——旧宿主不传照跑；缺省 `'en'`，env `MEMOWEFT_LANG=zh` 或运行期设 `config.language` 切中文）+ 导出 `type Lang`（stable，供宿主设值）**。**AD-3/D-0013 加 `toolDefaults: { allowLocalRead; allowCloudRead; allowInference }`（additive）——`tool` 证据的保守默认授权（local✓ / cloud✗ / infer✓），由 `put()` 按 `sourceKind` 套用，与 `observedDefaults` 对称。****但“怎么拿到 config”（`config` 单例访问）标 experimental**，pre-1.0 期间可能调整。`DlaConfig` 是 `@deprecated` 别名。`cloudReadDefault()` / `resolveLang()` stable（后者取当前库语言，只决定文本产出、绝不进置信度自算）。依据 `src/config.ts`。
 
 ---
 
@@ -189,7 +191,7 @@
 
 1. **`confidence` 是 0~1000 量纲、由 MemoWeft 自算而非 LLM 自报**。别把它当 0~1 概率、也别信 LLM 回报的分数。依据 `src/cognition/model.ts:46-47`、`src/consolidation/confidence.ts:4`（"不采信 LLM 自报"）、`:24-34`。
 2. **管理写操作的 `reason` 必填是隐私审计契约**，不可放松为可选——审计表回答"我的记忆被怎么了"。依据 `src/memory/managementApi.ts:22-94`（各 Input 的 `reason: string` 非可选）、`managementLog.ts` schema `reason TEXT NOT NULL`。
-3. **observed 证据默认 `allowCloudRead=false`（隐私红线 B）**。摄入观察默认不上云；只有 `Observation` 显式给 `allowCloudRead:true` 才上云。依据 `src/perception/ingest.ts:7-10`、`:79-82`。
+3. **`observed` 与 `tool` 证据均默认 `allowCloudRead=false`（隐私红线 B）**。摄入观察、摄入工具结果默认不上云（工具返回值常含敏感外部数据——网页/文件/API 响应）；只有输入显式给 `allowCloudRead:true` 才上云。最后防线在 `evidenceStore.put()` 按 `sourceKind` 兜底（`observed` → `observedDefaults`、`tool` → `toolDefaults`）。依据 `src/evidence/store.ts`（保守分支）、`src/perception/ingest.ts:7-10`、`:79-82`。
 4. **`systemPrompt` / `seedTurns` 仅首次建会话实例时生效**（换人设/重种续聊窗口须先 `dropConversation(id)` 再调，否则命中旧实例、新值被静默忽略）。依据 `src/core/createCore.ts:89-92`（入参注释）、`:207-234`（复用/重建逻辑）。
 5. **`effectiveConfidence` 是读时算的衍生值、不持久化**。库里存的是原始 `confidence`；`listCognitions` 返回的 `effectiveConfidence` = `confidence × 衰减因子`，每次读现算。依据 `src/memory/managementApi.ts:123-124`、`:397-405`。
 6. **`TurnOutcome.error` 非空 = 回话降级但证据已落（先存后答）**。宿主看到 `error != null` 应知"这轮没正常回话，但用户的话已存进证据库"，不要重试摄入（会重复落库或靠 originId 幂等）。依据 `src/pipeline/conversation.ts:44-50`、`:63-78`（存在前、召回失败当无召回照常）。

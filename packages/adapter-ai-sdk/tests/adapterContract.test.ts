@@ -8,8 +8,8 @@
  */
 import { fileURLToPath } from 'node:url';
 import { createMemoWeftCore, type ChatMessage, type RecalledCognition } from 'memoweft';
-import type { LanguageModelMiddleware } from 'ai';
-import { createMemoWeftMiddleware, createPersistOnEnd } from '../src/index.ts';
+import type { LanguageModelMiddleware, ModelMessage } from 'ai';
+import { createMemoWeftMiddleware, createPersistOnEnd, persistToolResults } from '../src/index.ts';
 import { runAdapterContract } from '../../../tests/adapter-kit/contract.ts';
 import type {
   AdapterDriver,
@@ -17,6 +17,7 @@ import type {
   FaultOutcome,
   RecallFixtureItem,
   RecallSurface,
+  ToolResultTurnResult,
   UserTurnResult,
 } from '../../../tests/adapter-kit/spi.ts';
 import { makeFaultyCore } from '../../../tests/adapter-kit/faultyCore.ts';
@@ -95,6 +96,30 @@ const driver: AdapterDriver = {
     }
   },
 
+  // AD-3：一轮 [user, assistant(tool-call 意图), tool(返回结果)] 经 persistToolResults →
+  //   只落工具返回结果为 tool 证据（+1）；assistant 的 tool-call 意图/入参根本不被读（铁律 3a）。
+  async ingestToolResult(resultPayload: string, callIntent: string): Promise<ToolResultTurnResult> {
+    const core = makeCore();
+    try {
+      const before = core.memory.listEvidence({});
+      const beforeIds = new Set(before.map((e) => e.id));
+      // callIntent 藏进 assistant 的 tool-call part（意图/入参）；resultPayload 是 tool 消息的返回结果。
+      const messages = [
+        { role: 'user', content: [{ type: 'text', text: 'What is the weather in Xiamen?' }] },
+        { role: 'assistant', content: [{ type: 'tool-call', toolCallId: 'call-1', toolName: 'get_weather', input: JSON.parse(callIntent) }] },
+        { role: 'tool', content: [{ type: 'tool-result', toolCallId: 'call-1', toolName: 'get_weather', output: { type: 'text', value: resultPayload } }] },
+      ] as ModelMessage[];
+      await persistToolResults(core, { messages, originIdPrefix: 'turn-1' });
+      const after = core.memory.listEvidence({});
+      const added = after.filter((e) => !beforeIds.has(e.id));
+      // 铁律 3a：新落库的证据里，无一条含调用意图标识串（'get_weather'）。
+      const callIntentExcluded = added.every((e) => !e.rawContent.includes('get_weather'));
+      return { delta: after.length - before.length, sourceKind: added[0]?.sourceKind, content: added[0]?.rawContent, callIntentExcluded };
+    } finally {
+      core.close();
+    }
+  },
+
   // AD-4：真 middleware 注入 → 抽出前插的文本块（addToLastUserMessage 把注入块置于 content[0]）。
   async recallSurface(fixture: RecallFixtureItem[], lang: 'en' | 'zh' = 'en'): Promise<RecallSurface> {
     const fakeCore = { recall: async (): Promise<RecalledCognition[]> => fixture as unknown as RecalledCognition[] };
@@ -121,8 +146,8 @@ const driver: AdapterDriver = {
 
   applicability: {
     ad3: {
-      status: 'na',
-      reason: 'AD-3 na(ai-sdk)：无工具结果摄入入口；SourceKind 无 "tool" 值（契约冻结，不碰）',
+      status: 'applicable',
+      reason: 'persistToolResults 只读 role:tool 消息的 tool-result → +1 tool 证据；assistant 的 tool-call 意图不读（铁律 3a，AD-3/D-0013）',
     },
     ad5: {
       status: 'na',

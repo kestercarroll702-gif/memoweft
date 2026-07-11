@@ -19,6 +19,7 @@ import type {
   FaultOutcome,
   RecallFixtureItem,
   RecallSurface,
+  ToolResultTurnResult,
   UserTurnResult,
 } from '../../../tests/adapter-kit/spi.ts';
 import { makeFaultyCore } from '../../../tests/adapter-kit/faultyCore.ts';
@@ -78,8 +79,8 @@ const driver: AdapterDriver = {
     }
   },
 
-  // AD-1：MCP 客户端驱动 —— 注册面只有 memoweft_ingest_user_message（收 verbatim 用户原话），
-  //   无任何助手摄入 tool。没有可调的助手落库入口 → 助手消息流经产生零证据（by-construction）。
+  // AD-1：MCP 客户端驱动 —— 写 tool 只有「用户原话」与「工具返回结果」两个摄入面，
+  //   无任何【助手输出】摄入 tool。没有可调的助手落库入口 → 助手消息流经产生零证据（by-construction）。
   async ingestAssistantTurn(_text: string): Promise<number> {
     const core = makeCore();
     const { client, close } = await connect(core);
@@ -90,8 +91,36 @@ const driver: AdapterDriver = {
         .filter((t) => (t.annotations as { readOnlyHint?: boolean } | undefined)?.readOnlyHint !== true)
         .map((t) => t.name)
         .sort();
-      assert.deepEqual(writeTools, ['memoweft_ingest_user_message'], 'AD-1：唯一写 tool 是用户原话摄入，无助手摄入入口');
+      assert.deepEqual(
+        writeTools,
+        ['memoweft_ingest_tool_result', 'memoweft_ingest_user_message'],
+        'AD-1：写 tool 仅摄入用户原话 / 工具返回结果，无【助手输出】摄入入口',
+      );
       return core.memory.listEvidence({}).length - before;
+    } finally {
+      await close();
+      core.close();
+    }
+  },
+
+  // AD-3：外部客户端调 memoweft_ingest_tool_result 存工具返回结果 → +1 tool 证据。
+  //   MCP 注册面【无】摄入 assistant/tool-call 的 tool，故 LLM 的调用意图/入参无渠道落库（铁律 3a，by-construction）。
+  async ingestToolResult(resultPayload: string, callIntent: string): Promise<ToolResultTurnResult> {
+    const core = makeCore();
+    const { client, close } = await connect(core);
+    try {
+      const before = core.memory.listEvidence({});
+      const beforeIds = new Set(before.map((e) => e.id));
+      const res = await client.callTool({
+        name: 'memoweft_ingest_tool_result',
+        arguments: { content: resultPayload, originId: 'call-1' },
+      });
+      const payload = (res.structuredContent as { result: { sourceKind: string } }).result;
+      const after = core.memory.listEvidence({});
+      const added = after.filter((e) => !beforeIds.has(e.id));
+      // 铁律 3a：落库证据里无一条等于/含调用意图（callIntent 含 'get_weather'，result 不含）。
+      const callIntentExcluded = added.every((e) => e.rawContent !== callIntent && !e.rawContent.includes('get_weather'));
+      return { delta: after.length - before.length, sourceKind: payload.sourceKind, content: added[0]?.rawContent, callIntentExcluded };
     } finally {
       await close();
       core.close();
@@ -130,8 +159,8 @@ const driver: AdapterDriver = {
 
   applicability: {
     ad3: {
-      status: 'na',
-      reason: 'AD-3 na(mcp)：无工具结果摄入 tool；SourceKind 无 "tool" 值（契约冻结，不碰）',
+      status: 'applicable',
+      reason: 'memoweft_ingest_tool_result 存工具返回结果 → +1 tool 证据；无 assistant/tool-call 摄入 tool，调用意图不落库（铁律 3a，AD-3/D-0013）',
     },
     ad5: {
       status: 'na',

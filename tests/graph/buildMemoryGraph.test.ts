@@ -126,3 +126,20 @@ test('onlyCloudBlocked：只留 allowCloudRead=false 的证据', () => {
     s.close();
   }
 });
+
+test('tool 证据：节点 colorKey=tool + stats.toolEvidenceCount 计数（AD-3/D-0013）', () => {
+  const s = openStores(':memory:');
+  try {
+    const eTool = s.evidenceStore.put({ subjectId: 'owner', sourceKind: 'tool', hostId: 'h', rawContent: '{"temp":31}' });
+    const eObs = s.evidenceStore.put({ subjectId: 'owner', sourceKind: 'observed', hostId: 'h', rawContent: '观察' });
+    s.cognitionStore.put({ subjectId: 'owner', content: 'c1', contentType: 'fact', formedBy: 'stated', confidence: 500, credStatus: 'limited', evidence: [{ evidenceId: eTool.id, relation: 'support' }, { evidenceId: eObs.id, relation: 'support' }] });
+    const g = buildMemoryGraph('owner', s, {});
+    const toolNode = g.nodes.find((n) => n.id === eTool.id)!;
+    assert.equal(toolNode.colorKey, 'tool', 'tool 证据有独立着色键');
+    assert.equal(toolNode.sourceKind, 'tool');
+    assert.equal(g.stats.toolEvidenceCount, 1, 'tool 证据计数');
+    assert.equal(g.stats.observedEvidenceCount, 1, 'observed 计数不受影响');
+  } finally {
+    s.close();
+  }
+});

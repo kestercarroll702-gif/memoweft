@@ -76,6 +76,17 @@ export interface ObservationInput {
   hostId?: string;
 }
 
+export interface ToolResultInput {
+  /** 工具执行的【返回结果】载荷（文本；结构化结果请序列化后传入）。
+   *  铁律 3a：只应传工具真实返回的外部数据，不应传 LLM 的调用意图/入参（那是助手输出，禁摄入）。 */
+  content: string;
+  subjectId?: string;
+  hostId?: string;
+  /** 幂等键：同 originId 重复摄入只落一条（建议用 toolCallId）。 */
+  originId?: string | null;
+  occurredAt?: string;
+}
+
 export interface RecallInput {
   query: string;
   subjectId?: string;
@@ -137,6 +148,9 @@ export interface MemoWeftCore {
   ingestUserMessage(input: UserMessageInput): Promise<Evidence>;
   /** 摄入观察 → observed 证据（默认不上云；带 originId 幂等）。返回本次新落库的。 */
   ingestObservation(input: ObservationInput): Promise<Evidence[]>;
+  /** 摄入一条工具执行结果 → tool 证据（默认不上云，config.toolDefaults；带 originId 幂等）。
+   *  只摄入结果载荷、不摄入调用意图（铁律 3a）；要给某条 tool 证据开上云走 memory.updateEvidenceAuthorization（带审计）。 */
+  ingestToolResult(input: ToolResultInput): Promise<Evidence>;
   /** 召回相关认知（与 Conversation 同一段共享召回语义：invalid/archived/越界/衰减门控全走）。 */
   recall(input: RecallInput): Promise<RecalledCognition[]>;
   /** 处理一轮对话（存证据 → 召回 → 回话）。同 conversationId 复用实例、窗口连续。 */
@@ -301,6 +315,20 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
         }
       }
       return r.stored;
+    },
+
+    async ingestToolResult(input) {
+      // 同 ingestUserMessage 的 perceive → put 组合，sourceKind 钉死 'tool'：
+      //   授权缺省由 put 按 sourceKind 兜底（toolDefaults：local✓/cloud✗/infer✓，最后防线）；带 originId 幂等。
+      return evidenceStore.put(
+        perceive(input.content, {
+          subjectId: input.subjectId,
+          hostId: input.hostId,
+          sourceKind: 'tool',
+          originId: input.originId,
+          occurredAt: input.occurredAt,
+        }, cfg),
+      );
     },
 
     async recall(input) {

@@ -9,16 +9,18 @@
  * 不被 core 根 `npm test` 的 test-glob 误跑（该 glob 只收 tests 下的 *.test.ts）。
  *
  * 本轮打绿：AD-1（助手→0）、AD-2（用户→+1，含 A 的 originId 幂等）。
+ * AD-3（AD-3/D-0013）：两适配器均 applicable——工具返回结果 → 恰好一条 tool 证据，
+ *             且 LLM 的工具调用意图/入参不落库（铁律 3a）。
  * baseline 快照：AD-4（当前召回呈现格式，含一条 conflicted 项）。
  * AD-6（契约 §16.2）：两适配器均 applicable——记忆层抛错 / 召回超时 → 降级「无记忆但对话不中断」
  *             + 经注入 logger 记一条结构化事件（throw / timeout 两模式都真跑）。
- * N/A 声明位：AD-3（无 tool 入口 / SourceKind 无 'tool'）、AD-5（无 LLM→evidenceId 回捞）。
+ * N/A 声明位：AD-5（无 LLM→evidenceId 回捞）。
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { AdapterDriver } from './spi.ts';
-import { RECALL_FIXTURE } from './spi.ts';
+import { RECALL_FIXTURE, TOOL_RESULT_FIXTURE, TOOL_CALL_INTENT_FIXTURE } from './spi.ts';
 import { matchGolden } from './goldens.ts';
 
 export interface ContractOptions {
@@ -54,11 +56,23 @@ export function runAdapterContract(driver: AdapterDriver, opts: ContractOptions)
     });
   }
 
-  // ── AD-3：工具结果 → source=tool（本轮 N/A）────────────────────────────
-  test(tag('AD-3', driver.applicability.ad3.status, driver.applicability.ad3.reason), () => {
-    assert.equal(driver.applicability.ad3.status, 'na', 'AD-3 本轮 N/A：SourceKind 无 tool 值（契约冻结）');
-    assert.ok(driver.applicability.ad3.reason.length > 0, 'N/A 须声明理由');
-  });
+  // ── AD-3：工具结果 → source=tool，调用意图不落库（铁律 3a）────────────
+  if (driver.applicability.ad3.status === 'applicable') {
+    const ingestTool = driver.ingestToolResult?.bind(driver);
+    assert.ok(ingestTool, 'AD-3 applicable 的适配器必须实现 ingestToolResult 驱动');
+    test(tag('AD-3', 'applicable', '工具结果 → 恰好一条 tool 证据；LLM 调用意图/入参不落库（铁律 3a）'), async () => {
+      const r = await ingestTool!(TOOL_RESULT_FIXTURE, TOOL_CALL_INTENT_FIXTURE);
+      assert.equal(r.delta, 1, 'AD-3：恰好新增一条证据（只有工具返回结果落库）');
+      if (r.sourceKind !== undefined) assert.equal(r.sourceKind, 'tool', 'AD-3：工具结果存为 tool 证据');
+      if (r.content !== undefined) assert.equal(r.content, TOOL_RESULT_FIXTURE, 'AD-3：存的是工具返回结果原文');
+      assert.equal(r.callIntentExcluded, true, 'AD-3/铁律3a：LLM 的工具调用意图/入参未落成证据');
+    });
+  } else {
+    test(tag('AD-3', 'na', driver.applicability.ad3.reason), () => {
+      assert.equal(driver.applicability.ad3.status, 'na');
+      assert.ok(driver.applicability.ad3.reason.length > 0, 'N/A 须声明理由');
+    });
+  }
 
   // ── AD-4：召回呈现格式 golden 快照（baseline）──────────────────────────
   test(tag('AD-4', 'applicable', 'recall 呈现含置信度/冲突状态，锁 golden'), async () => {

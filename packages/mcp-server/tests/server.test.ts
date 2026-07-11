@@ -68,13 +68,13 @@ const FORBIDDEN_SUBSTRINGS = [
   'portable',
 ];
 
-test('tools/list：恰好注册白名单 6 个 tool，一个不多', async () => {
+test('tools/list：恰好注册白名单 7 个 tool，一个不多', async () => {
   const { client, close } = await connectClient();
   try {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     assert.deepEqual(names, [...ALL_TOOL_NAMES].sort(), '注册的 tool 集合 === 白名单集合');
-    assert.equal(names.length, 6, '恰好 6 个');
+    assert.equal(names.length, 7, '恰好 7 个（5 读 + 2 轻写）');
   } finally {
     await close();
   }
@@ -143,6 +143,31 @@ test('memoweft_ingest_user_message：写一句用户原话，返回结构合理'
     const payload = (res.structuredContent as { result: { id: string; sourceKind: string } }).result;
     assert.ok(payload.id, '返回落库证据 id');
     assert.equal(payload.sourceKind, 'spoken', '用户消息存为 spoken 证据');
+  } finally {
+    await close();
+  }
+});
+
+test('memoweft_ingest_tool_result：存一条工具返回结果为 tool 证据（AD-3/D-0013）', async () => {
+  const { client, close } = await connectClient();
+  try {
+    const res = await client.callTool({
+      name: 'memoweft_ingest_tool_result',
+      arguments: { content: '{"city":"Xiamen","tempC":31}', originId: 'call-1' },
+    });
+    assert.equal(res.isError, undefined, 'ingest 不报错');
+    const payload = (res.structuredContent as { result: { id: string; sourceKind: string } }).result;
+    assert.ok(payload.id, '返回落库证据 id');
+    assert.equal(payload.sourceKind, 'tool', '工具结果存为 tool 证据（隐私默认不上云由 Core toolDefaults 兜底）');
+
+    // 幂等：同 originId 再存一次，list_evidence 仍只有这一条 tool 证据。
+    await client.callTool({
+      name: 'memoweft_ingest_tool_result',
+      arguments: { content: '{"city":"Xiamen","tempC":31}', originId: 'call-1' },
+    });
+    const listed = await client.callTool({ name: 'memoweft_list_evidence', arguments: {} });
+    const evs = (listed.structuredContent as { result: Array<{ sourceKind: string }> }).result;
+    assert.equal(evs.filter((e) => e.sourceKind === 'tool').length, 1, '同 originId 幂等：只落一条 tool 证据');
   } finally {
     await close();
   }

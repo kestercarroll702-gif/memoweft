@@ -8,7 +8,7 @@
  * AD 编号定义（PROJECT_PLAN.md §16.1，行 355-360）：
  *   AD-1 助手消息流经适配器 → evidence 表零新增（by-construction）
  *   AD-2 用户消息 → 恰好一条 evidence（spoken）
- *   AD-3 工具结果 → evidence 标 source=tool（本轮 N/A：SourceKind 无 'tool' 值，属契约分岔）
+ *   AD-3 工具结果 → evidence 标 source=tool（真跑：+1 条 tool 证据；LLM 的工具调用意图/入参不落库，铁律 3a）
  *   AD-4 recall 呈现含置信度与冲突状态，格式锁 golden 快照
  *   AD-5 LLM 输出的虚构 evidenceId 被丢弃（本轮 N/A：无 LLM→evidenceId 回捞落库路径）
  *   AD-6 记忆层抛错/超时 → 适配器降级「无记忆但对话不中断」、经注入 logger 记一条（契约 §16.2；throw+timeout 都真跑）
@@ -74,6 +74,26 @@ export interface UserTurnResult {
   content?: string;
 }
 
+/**
+ * AD-3 共享夹具：一轮里 LLM 发起工具调用（意图/入参）+ 工具返回结果。
+ * TOOL_CALL_INTENT 含 'get_weather' 这类只出现在【调用侧】的标识串，TOOL_RESULT 不含它——
+ * 便于校验「落库的只有工具返回结果、绝无调用意图/入参」（铁律 3a）。
+ */
+export const TOOL_RESULT_FIXTURE = '{"city":"Xiamen","tempC":31,"sky":"sunny"}';
+export const TOOL_CALL_INTENT_FIXTURE = '{"tool":"get_weather","arguments":{"city":"Xiamen"}}';
+
+/** 摄入一轮「工具调用意图 + 工具返回结果」的结果（AD-3）。 */
+export interface ToolResultTurnResult {
+  /** evidence 表增量（期望 +1：只有工具返回结果落库）。 */
+  delta: number;
+  /** 落库证据的来源种类（期望 'tool'）。 */
+  sourceKind?: string;
+  /** 落库证据的原文（期望 === 传入的工具返回结果 payload）。 */
+  content?: string;
+  /** 铁律 3a 校验：本轮 LLM 的工具调用意图/入参【未】落成任何证据（期望 true）。 */
+  callIntentExcluded: boolean;
+}
+
 /** 薄驱动 SPI：每适配器实现一个。 */
 export interface AdapterDriver {
   /** 适配器标识（测试名用），如 'ai-sdk' | 'mcp'。 */
@@ -84,6 +104,9 @@ export interface AdapterDriver {
   ingestAssistantTurn(text: string): Promise<number>;
   /** AD-2 幂等（A 专属）：同一轮用户原话 + 稳定 originId 触发 times 次 → 总增量（期望仍 1）。 */
   ingestUserTurnIdempotent?(text: string, times: number): Promise<number>;
+  /** AD-3（applicable 时必实现）：摄入一轮「工具调用意图 + 工具返回结果」→ 只落 result（+1 tool）、意图不落库。
+   *  @param resultPayload 工具执行的返回结果（应落库）。@param callIntent LLM 的工具调用意图/入参（不应落库，铁律 3a）。 */
+  ingestToolResult?(resultPayload: string, callIntent: string): Promise<ToolResultTurnResult>;
   /** AD-4：按夹具召回，返回呈现面。lang 供 A 出 en/zh 两份；B 忽略。 */
   recallSurface(fixture: RecallFixtureItem[], lang?: 'en' | 'zh'): Promise<RecallSurface>;
   /** AD-6：对故障 Core 跑读路径，报告降级/日志。 */

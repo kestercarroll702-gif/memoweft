@@ -8,6 +8,7 @@ export {
   type CreateCoreOptions,
   type UserMessageInput,
   type ObservationInput,
+  type ToolResultInput,
   type RecallInput,
   type ConversationInput,
   type UpdateProfileInput,

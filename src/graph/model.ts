@@ -66,6 +66,8 @@ export interface MemoryGraphStats {
   conflictedCount: number;
   hypothesisCount: number;
   observedEvidenceCount: number;
+  /** tool（工具执行结果）证据节点数（AD-3/D-0013，additive）。 */
+  toolEvidenceCount: number;
 }
 
 export interface MemoryGraphPayload {

@@ -7,8 +7,9 @@
  * 双时态（借 Graphiti）：occurredAt = 事情发生时；recordedAt = MemoWeft 存入时。
  */
 
-/** 来源种类——来源强度分层（地图 cell 8 规则 2）：亲口 > 推测 > 观察。 */
-export type SourceKind = 'spoken' | 'inferred' | 'observed';
+/** 来源种类——来源强度分层（地图 cell 8 规则 2）：亲口 > 推测 > 观察/工具。
+ *  'tool'（AD-3/D-0013）= 工具执行的【返回结果】（外部客观数据）；LLM 的调用意图/入参是助手输出，禁摄入（铁律 3a）。 */
+export type SourceKind = 'spoken' | 'inferred' | 'observed' | 'tool';
 
 /** 一条证据（落库后的完整形状）。 */
 export interface Evidence {

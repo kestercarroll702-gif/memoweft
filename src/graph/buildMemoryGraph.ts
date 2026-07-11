@@ -160,7 +160,7 @@ export function buildMemoryGraph(
         occurredAt: e.occurredAt,
         createdAt: e.recordedAt,
         val: 2,
-        colorKey: e.sourceKind === 'observed' ? 'observed' : 'evidence',
+        colorKey: e.sourceKind === 'observed' || e.sourceKind === 'tool' ? e.sourceKind : 'evidence',
       });
     }
 
@@ -211,6 +211,7 @@ export function buildMemoryGraph(
       conflictedCount: cognitions.filter((c) => c.credStatus === 'conflicted').length,
       hypothesisCount: cognitions.filter((c) => c.contentType === 'hypothesis').length,
       observedEvidenceCount: nodes.filter((n) => n.kind === 'evidence' && n.sourceKind === 'observed').length,
+      toolEvidenceCount: nodes.filter((n) => n.kind === 'evidence' && n.sourceKind === 'tool').length,
     },
   };
 }

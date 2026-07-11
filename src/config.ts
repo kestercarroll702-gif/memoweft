@@ -19,6 +19,9 @@ export interface MemoWeftConfig {
   /** observed（行为观察）证据的保守默认授权（4-A）：本地可读、默认不上云、可推画像。
    *  由 put 按 sourceKind 套用（最后防线）；ingestObservations 显式传值属双保险。故 spoken 行为不变。 */
   observedDefaults: { allowLocalRead: boolean; allowCloudRead: boolean; allowInference: boolean };
+  /** tool（工具执行结果）证据的保守默认授权（AD-3/D-0013）：本地可读、默认不上云、可推画像。
+   *  工具返回值常含敏感外部数据（网页/文件/API 响应），与 observed 同级保守；由 put 按 sourceKind 套用（最后防线）。 */
+  toolDefaults: { allowLocalRead: boolean; allowCloudRead: boolean; allowInference: boolean };
   /** 回话带最近几轮（阶段 0：简单轮数窗口，非召回）。 */
   workingMemory: { maxTurns: number };
   /** 召回（阶段 1b + 4-B 衰减门控）：注入回话的相关认知条数 + 有效置信门槛。 */
@@ -98,6 +101,7 @@ export const config: MemoWeftConfig = {
   privacyMode: false,
   evidenceDefaults: { allowLocalRead: true, allowInference: true },
   observedDefaults: { allowLocalRead: true, allowCloudRead: false, allowInference: true },
+  toolDefaults: { allowLocalRead: true, allowCloudRead: false, allowInference: true },
   workingMemory: { maxTurns: 8 },
   retrieval: { topK: 5, minEffectiveConfidence: 80, minSimilarity: 0 },
   consolidation: {
