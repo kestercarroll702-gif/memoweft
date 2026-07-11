@@ -70,3 +70,9 @@ bench/runs/*-consolidation-*.md
 # 覆盖 <date>-<sha>-consolidation-live.* 与 <date>-<sha>-retrieval-live.*；既有 *-retrieval-ablation.md 不受影响。
 bench/runs/*-live.md
 bench/runs/*-live.json
+
+# ── 公开基准数据 + 冒烟产物（Phase 6 §19）──
+# LoCoMo 是 CC BY-NC 4.0：数据【绝不入库、绝不打进包】,只发聚合分数;经 LOCOMO_PATH 指向本地副本。
+bench/data/
+bench/runs/*-locomo-*.md
+bench/runs/*-locomo-*.json

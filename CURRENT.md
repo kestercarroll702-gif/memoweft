@@ -1,6 +1,15 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-11 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二~七批(中文版 / internals / README / glossary+naming / 文档 CI / 新人巡检处理)已落地本地;§18 实质全完成,只差打 tag phase-5-done(人类))**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
+更新于:2026-07-11 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二~七批(中文版 / internals / README / glossary+naming / 文档 CI / 新人巡检处理)已落地本地;§18 实质全完成,只差打 tag phase-5-done(人类);Phase 6 已起头——LoCoMo 冒烟链路通,本地)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
+
+## Phase 6 起头(进行中·§19 公开基准):LoCoMo 冒烟链路通(本地)
+
+**用户拍板开工 LoCoMo-10 冒烟(§19.1 第一步)**。侦察(2-agent:bench 骨架复用度 + LongMemEval/LoCoMo web 研究)结论:现有 eval 骨架(runner/judge/记录器/三臂工厂/config 注入 seam)大多可复用;先接 LoCoMo(小、自带、F1 免 judge、Mem0 标准基线,**CC BY-NC 只发聚合分**),LongMemEval(MIT 可商用背书,需 GPT-4o judge)后续。
+- **`bench/locomo-eval.mjs`**(新):loader(LoCoMo 会话→ingest 序列,排除 category5 adversarial)+ evidence 层关键词 top-k 检索 + 外挂答案 LLM(mimo)+ partial-match F1 分桶 + token 记录 + runs 报告。CLI `--dry`(无 key 验管线)/`--limit`/`--qa`。
+- **链路全通**(--limit 1 --qa 5 接 mimo):loader→ingest 419 轮→检索→mimo 答题→F1→token(4311)→runs 报告。
+- **冒烟暴露的真实取舍**(第一步的价值):evidence 层关键词检索 gold-evidence 命中率参差(single-hop 48% / multi-hop 32% / temporal 75%),F1 低——量化了「MemoWeft 画像级 recall vs 基准 episodic 事实召回」的粒度落差(scout 预判)。**下一步:接 embedder 语义检索 / cognition 层召回 / parse 会话日期(时序题)**。
+- 数据 NC 许可:`bench/data/` + `bench/runs/*-locomo-*` 已 gitignore,数据只在本地(LOCOMO_PATH),绝不入库。
+- **Phase 6 完整还差**(大工程·多会话):完整 10 sample×~1986 QA + 三臂×双 embedder 矩阵(§19.2)+ 参数敏感性网格(§19.3)+ LongMemEval_S + BENCHMARKS.md(§19.4)+ token/费用完整记录。
 
 ## Phase 5:文档更不绕(§18)—— 第一批用户文档已上线(已推 origin main)
 
