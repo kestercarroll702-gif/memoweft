@@ -63,4 +63,4 @@ A memory that overwrites or auto-resolves loses the one thing that makes it trus
 
 - Run it: [`npm run demo`](../demo-script.md) — acts 2 (correct) and 3 (conflict), no key.
 - Field shapes: `invalidAt`, `credStatus: 'conflicted'` in the [memory surface contract](../reference/memory-surface-contract.md).
-- The write path that produces these: [`architecture.md`](../architecture.md) (distill → consolidate → attribute).
+- The write path that produces these: [`architecture.md`](../internals/architecture.md) (distill → consolidate → attribute).

@@ -142,7 +142,7 @@ The four steps are detailed in §4.
 
 ## 4. The four write-path steps + cognitive discipline
 
-Cognitive discipline is what MemoWeft enforces — not "record more," but "**how to record without distortion**." Five disciplines run through every step of the write path.
+Cognitive discipline is what MemoWeft enforces — not "record more," but "**how to record without distortion**." These disciplines run through every step of the write path.
 
 ### 4.1 Records are not beliefs (what the LLM infers starts as a low-confidence candidate)
 
@@ -210,7 +210,7 @@ Different types of cognition have different "expiry speeds" — **you can't appl
 
 Code: `src/retrieval/`
 
-The recall foundation is a **replaceable seam** (the `Retriever` interface), with two methods: `indexAll` (replacement-style index rebuild) + `search` (top-k). Three implementations:
+The recall foundation is a **replaceable seam** (the `Retriever` interface), with two methods: `indexAll` (replacement-style index rebuild) + `search` (top-k). Two implementations:
 
 - `NullRetriever`: an empty implementation — used as a fallback when no embedder is configured; `search` returns `[]` (the reply injects no profile, without erroring).
 - `VectorRetriever`: SQLite stores vectors + **JS cosine similarity**, plenty for a single person's few thousand entries, **zero native dependencies** (does not use sqlite-vec). `indexAll` rebuilds by replacement; `search` embeds the query and then computes cosine to take top-k.
