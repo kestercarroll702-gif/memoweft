@@ -28,14 +28,20 @@
 - [ ] **打 tag `phase-2-done`**(发布动作,待人类点头 —— nightly 已绿,就差这一下)
 - 强化项:§15.5 多模型分差矩阵未做 → 进 ROADMAP
 
+## B 靶子经诊断为【度量假象】—— 已用质量线证伪(2026-07-10 只读 scout)
+
+动手改提示词前先诊断了 CURRENT 原列的两个"B 靶子",结论:**两个都不是真缺陷,是度量退化**(依据见 baseline.json 逐场景明细):
+
+- **conflict gistRecall=0.00 = 度量盲区,非质量缺陷**。gist 判官只看【落库认知的文本】(`eval-consolidation.mjs:129-133`),而 conflict 是靠"给旧认知打 conflicted 标 + 不造新认知"处理的(证据在计数器里、不在文本里)→ 这条路径**天生产不出可被 gist 匹配的文本**,gistRecall 恒为 0,与模型好坏无关。真实处理质量由**结构 40/42** 背书(且语料 `newCognitions.min=0` 明说可不落新认知)。叠加 D-0009 单跑噪声(CC-003 created=0 却抖出一票 YES)。**改提示词动不了这个数字。**
+- **no-over-inference 29/34 = fact/state 类型口径分歧,非过度推断**。`overInferRate=0.00`、所有 `shouldNotFormGists` 陷阱 100% 躲过——真正的过度推断靶心全达标。挂掉的 5 分全是同一类 `created类型⊆{types}`:模型把"一次性完成事件/情绪残留"标 `fact`,语料期望 `state`,**两边都站得住,甚至可能是语料期望该松绑**。
+
+→ **B 手里没有一个经得起结构硬指标检验的真靶子。** 若真要动,最划算的是一次**廉价的语料/度量清理**(见 ROADMAP Next:定 fact-vs-state 规范类型 / 让 conflict 的 gist 度量改看 conflicted 标而非落认知),而不是"改提示词→bump→跑全量→compare"的 77 分钟迭代。
+
 ## 下一步(待人类定向)
 
-- **收尾 Phase 2**:人类加 nightly secrets → 首晚绿 → 打 tag `phase-2-done`。(唯一卡在人类侧的动作)
-- **B. 继续用质量线修**(现在修一个问题的成本已被 A 打下来了):
-  - `conflict` gistRecall=0.00(不落行为认知)—— 全量基线复现,是最明确的靶子
-  - `no-over-inference` 结构 29/34(6 纪律里最低)、偶发过度推断
-  - 改提示词的完整流程见 `docs/internal/prompt-regression-runbook.md`,改一条 → bump version → prompts:update → 跑全量 → --compare。
-- **C. 转 Phase 3**(适配器更稳)或其它。
+- **C. 转 Phase 3(适配器更稳,PROJECT_PLAN §16)** —— 证据推荐方向。开工照惯例:先只读 calibration scout 侦察 `packages/mcp-server` 与 `packages/adapter-ai-sdk`(AD-1…AD-6 契约、peer 版本矩阵、故障注入降级)。
+- **B'(可选·低优先)**:上面那次廉价语料/度量清理(不是提示词战役);想让这两个数字"好看"时再做,已进 ROADMAP Next。
+- 改提示词的完整流程(将来真需要时)见 `docs/internal/prompt-regression-runbook.md`。
 
 ## 环境 / 阻塞
 
