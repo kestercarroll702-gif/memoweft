@@ -1,6 +1,6 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-11 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二批中文版 zh-CN 已落地本地;剩 internals 迁移/CI 自动化/README 电梯稿/glossary)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
+更新于:2026-07-11 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二批中文版 + 第三批 internals 迁移已落地本地;剩 README 电梯稿/glossary(并 naming 拆分)/CI 自动化/巡检)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
 
 ## Phase 5:文档更不绕(§18)—— 第一批用户文档已上线(已推 origin main)
 
@@ -19,6 +19,14 @@
 - 验证:死链 0(`check-links.mjs`:48 文件 269 内链)、typecheck/api:check「一致」(纯文档零碰代码/快照)。
 - 做法:doc-writer 并行起草 + reviewer 逐页对抗审(代码围栏逐字为硬指标,全 pass)+ Integrator 三脚本机械终验 + 两轮标点收口(第一轮宪法漏定括号规则、误判 sourcing 为全角页 → v2 强化括号规则全 10 页补齐;教训:翻译镜像的风格规范应在首版宪法定清)。
 
+**第三批:internals 迁移已落地(本地未推)**:
+- **三文件 git mv 到 `docs/internals/`**(保留历史):architecture(瘦身+修陈旧)、boundaries、perf;旧位留 301 桩(architecture / architecture.zh-CN / internal-boundaries / perf 四桩)。
+- **architecture 瘦身**(§18.0 删透,人类拍板):删 Mem0「未来将」/ route-seam 路线图腔 /「✅已落地 tier2·step6」changelog 腔 / differentiator 营销腔 / 经纬比喻附录;§4.5 重述并入 §4.1(标题改成 Attribution)。
+- **修 3 陈旧点**(D-c,用 scout 核实的源码真实值·0 编造):sourceKind 3→4 补 `tool`(model.ts:12);§8 补 `toolDefaults={local:true,cloud:false,inference:true}`(config.ts:104)+ 写模型 tier;§2.3 cognition 补 `archivedAt`(model.ts:57)。
+- **改活入链**(architecture 5 + 中文 4 改指英文单源 + boundaries 5 + perf 1,含新中文页 concepts 2 处)+ 建 `internals/README`(D-b 分区索引)+ 清 `internal/README` 的 boundaries 条目。
+- **boundaries 保留中文**(D-0016:D-a 英文单源的例外——纯中文无英文版,翻译损耗>收益);naming 拆分移到第 4 项(和 glossary 一起,避免词表悬空)。
+- 验证:死链 0(`check-links.mjs`:52 文件 271 链接)、typecheck/api:check「一致」;既存缺陷(boundaries 无编号锚点 vs 源码 §引用)记 ROADMAP。
+
 **三决策(见工件 `docs/internal/phase5-migration-map.md`,含全表映射)**:
 - **D-a 分层双语**:用户页(README/getting-started/concepts/recipes/glossary/契约)双语;internals(architecture/boundaries/perf)英文单源。
 - **D-b 目录分工**:`docs/internals/`(新·"怎么建的":architecture/boundaries/perf)vs `docs/internal/`(旧·维护者账本:halumem/calibration/runbook/publishing)。
@@ -26,7 +34,7 @@
 
 **剩余(后续批,迁移映射表是蓝图)**:
 1. ~~concepts/recipes/getting-started 的**中文版** zh-CN(分层双语)~~ ✅ **已落地**(本地未推,见上「第二批」)。
-2. **architecture/boundaries/perf → `docs/internals/`**(迁移 + 修 sourceKind 陈旧 + 改入链 + 旧位留桩);naming 拆 `glossary.md` + `internal/`。
+2. ~~**architecture/boundaries/perf → `docs/internals/`**(迁移 + 修 sourceKind 陈旧 + 改入链 + 旧位留桩)~~ ✅ **已落地**(本地未推,见上「第三批」);naming 拆分移到第 4 项(和 glossary 一起做)。
 3. 根 **README 收敛成 60 秒电梯稿**(§18.1;现有 README 4 条重复定位句收敛成 1)。
 4. **glossary.md**(naming §3 词表提炼)。
 5. **§18.3 snippets 进 CI**(`scripts/doc-snippets.mjs`:抽 md 里 ts 围栏逐个编译+跑,`<!-- snippet:skip -->` 跳过)+ **§18.4 死链检查进 CI**(把本会话手动跑的 node 死链脚本自动化)。

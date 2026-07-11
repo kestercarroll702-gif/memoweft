@@ -76,4 +76,4 @@ Core is a **headless library** and draws no interface. The plugin management int
 - What v2 lays down is **infrastructure**: the current experience plugin relies on `systemPrompt` (no hook), the active-window collector goes through `/api/observe` (does not consume `onObservation`) — **hooks currently have no production consumer**, real tool / hook-type collectors are pending later. A live demo is in `examples/plugin-hook.ts`.
 - **Not doing**: runtime dynamic install/uninstall of external plugin packages (module loading / plugin marketplace / sandbox); pipeline-modifying hooks; dynamic permission popups.
 
-Related: [memory surface contract](./memory-surface-contract.md) · [three-layer boundaries](./internal/boundaries.md) · example `examples/plugin-hook.ts`.
+Related: [memory surface contract](./memory-surface-contract.md) · [three-layer boundaries](./internals/boundaries.md) · example `examples/plugin-hook.ts`.

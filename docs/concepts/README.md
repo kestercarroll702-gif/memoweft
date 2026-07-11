@@ -4,7 +4,7 @@
 
 MemoWeft keeps **facts and guesses apart** — what a user actually said versus what a model inferred — and never lets one quietly become the other. That distinction is the whole point.
 
-Six disciplines enforce the separation. Every write and read path obeys all six; the mechanism lives in [architecture](../architecture.md), and each page below explains one rule with a runnable check where one fits.
+Six disciplines enforce the separation. Every write and read path obeys all six; the mechanism lives in [architecture](../internals/architecture.md), and each page below explains one rule with a runnable check where one fits.
 
 - **[Sourcing](./sourcing.md)** — every fact is tagged with how it arrived (`spoken`, `observed`, `inferred`, `tool`), and every judgment traces back to the exact user words it rests on.
 - **[Confidence by rule](./confidence.md)** — confidence is computed from evidence by a fixed formula, never taken from the model's self-report.

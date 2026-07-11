@@ -155,7 +155,7 @@ core.close();
 
 从[公开文档导航](./docs/README.md)开始。
 
-核心文档包括[接入指南](./docs/integration.zh-CN.md)、[架构说明](./docs/architecture.zh-CN.md)、[部署说明](./docs/deployment.md)、[公开记忆面契约](./docs/memory-surface-contract.zh-CN.md)和[插件契约](./docs/plugin-contract.zh-CN.md)。
+核心文档包括[接入指南](./docs/integration.zh-CN.md)、[架构说明](./docs/internals/architecture.md)、[部署说明](./docs/deployment.md)、[公开记忆面契约](./docs/memory-surface-contract.zh-CN.md)和[插件契约](./docs/plugin-contract.zh-CN.md)。
 
 ## 仓库结构
 

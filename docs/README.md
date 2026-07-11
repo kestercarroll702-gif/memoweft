@@ -16,10 +16,10 @@ MemoWeft is a library that gives AI apps portable long-term memory — it keeps 
 
 ## How it is built
 
-- **[Architecture](./architecture.md)** — evidence → event → cognition, read and write paths. [中文](./architecture.zh-CN.md)
+- **[Architecture](./internals/architecture.md)** — evidence → event → cognition, read and write paths.
 - **[Deployment](./deployment.md)** — cloud-first, cloud-guarded, local, and hybrid.
 - **[Install details](./INSTALL.md)** — drivers, Node versions, environment. [中文](./INSTALL.zh-CN.md)
-- **[Performance](./perf.md)** — measured numbers, reproducible.
+- **[Performance](./internals/perf.md)** — measured numbers, reproducible.
 
 ## For contributors
 

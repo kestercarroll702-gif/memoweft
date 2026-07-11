@@ -159,7 +159,7 @@ Both are thin adapters over the same Core rules; they do not change the Core pac
 
 Start with the [public documentation index](./docs/README.md).
 
-Key guides cover [integration](./docs/integration.md), [architecture](./docs/architecture.md), [deployment](./docs/deployment.md), the [public memory surface contract](./docs/memory-surface-contract.md), and the [plugin contract](./docs/plugin-contract.md).
+Key guides cover [integration](./docs/integration.md), [architecture](./docs/internals/architecture.md), [deployment](./docs/deployment.md), the [public memory surface contract](./docs/memory-surface-contract.md), and the [plugin contract](./docs/plugin-contract.md).
 
 ## Repository layout
 
