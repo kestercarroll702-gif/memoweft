@@ -31,7 +31,7 @@ Optional knobs: `BENCH_N=1000 npm run bench` (fewer rows), `BENCH_RECALL_ROUNDS=
 | Step | Time |
 | --- | --- |
 | `updateProfile` (total) | ≈ **462 ms** — distill 129 · consolidate 332 · attribute ~0 · index 1 |
-| `recall` (avg, 20 rounds) | ≈ **0 ms** — this is the `NullRetriever` path (no embedder configured); real recall latency is dominated by your embedder's round-trip |
+| `recall` (avg, 20 rounds) | ≈ **0 ms** — measured on the old `NullRetriever` path; since D-0017 the no-embedder default is `KeywordRetriever` (FTS5, local, still sub-ms), and real semantic-recall latency is dominated by your embedder's round-trip |
 
 **Test environment:** Node `24.15.0` · `win32 / x64` · single run, throwaway in-memory DB.
 _— the model is stubbed out, so these measure store + orchestration cost (not model latency); this-machine numbers, not a guarantee._

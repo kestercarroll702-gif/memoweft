@@ -40,7 +40,7 @@
 - **向量存储**:独立表 `vectors(id TEXT PK, hash TEXT, vec TEXT)`,**向量以 JSON 字符串**存 `vec` 列(非 BLOB/紧凑 float),`hash=sha256(text)` 作内容指纹。`src/retrieval/vectorRetriever.ts:18,93-97`。
 - **相似度**:`SELECT id,vec FROM vectors` 读**全表** → 逐行 `JSON.parse` + 手写 JS `cosine` → sort → slice(topK)。**无 ANN、无 SQL 侧向量运算**。`vectorRetriever.ts:106-116,25-39`。
 - **索引更新**:`indexAll` **内部已是 sha256 增量 diff**——只对新增/变更条目调 `embedder.embed`,删除消失条目,嵌入调用量 O(Δ);仅旧库缺 hash 列时才 DROP 全量重嵌。触发点仅 `updateProfile`(用全部 active 认知调 indexAll,事务外,失败仅记 indexError)与 `resetSubject`(清空)。`vectorRetriever.ts:69-104`。
-- vectors 表由 VectorRetriever 自建、走**独立第二连接**、**不纳入 `runMigrations` 版本化**(自带 DROP-重建)。缺嵌入配置 → 降级 `NullRetriever`(search 返回 [])。`src/core/createCore.ts:195-206`;`src/retrieval/nullRetriever.ts`。
+- vectors 表由 VectorRetriever 自建、走**独立第二连接**、**不纳入 `runMigrations` 版本化**(自带 DROP-重建)。缺嵌入配置 → 降级 **`KeywordRetriever`**(FTS5 关键词兜底,**D-0017**;FTS5 不可用再降 `NullRetriever` search 返回 [])。`src/core/createCore.ts`;`src/retrieval/nullRetriever.ts`。
 - **召回门控顺序**:`search(query,topK)` → `minSimilarity` → `get(id)` → 跳过 invalidAt → 跳过 archivedAt → `subjectId` 硬过滤 → 衰减门控。`src/retrieval/recall.ts:36-59`。
 
 ### 文档需修正 —— ⚠️ 直接改写 Phase 1 打法

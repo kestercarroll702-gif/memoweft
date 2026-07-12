@@ -67,7 +67,7 @@ const turn = await core.handleConversationTurn({ subjectId: 'alice', message: 'A
 console.log(turn.reply);
 ```
 
-配置缺了不会崩，而是降级（degrade）：没有聊天模型 → 画像那一步报错，但证据照样存下；没有 embedder → 召回（recall）返回空。用 `core.health()` 查状态。完整可跑的闭环见 [`examples/minimal.ts`](../examples/minimal.ts)。
+配置缺了不会崩，而是降级（degrade）：没有聊天模型 → 画像那一步报错，但证据照样存下；没有 embedder → 召回（recall）降级为关键词检索（FTS5），仍能出结果（语义召回才需 embedder）。用 `core.health()` 查状态。完整可跑的闭环见 [`examples/minimal.ts`](../examples/minimal.ts)。
 
 ## 下一步
 

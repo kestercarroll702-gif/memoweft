@@ -15,7 +15,7 @@
 | **Node ≥ 24（开箱即用）或 Node 20/22 + `better-sqlite3`（后备）** | 存储底层是 SQLite。驱动**优先用内置 `node:sqlite`**、加载不到才回退可选的 `better-sqlite3`。Node ≥24 上 `node:sqlite` 转正稳定、零额外依赖；Node 20 上没有它、必须装 `better-sqlite3`（`npm i better-sqlite3`，见下方 §1.2）；Node 22 视你的版本 / flag 是否已提供 `node:sqlite` 而定，用不上时才需装 `better-sqlite3`。 |
 | **一个 OpenAI-compatible 对话模型端点** | 默认推荐云端端点：最省事、最容易让开发者跑起来。只要兼容 `/chat/completions` 即可。 |
 | **可选：写路径小快模型端点** | 用于 `distill → consolidate → attribute`，缺配会回退对话模型。 |
-| **可选：嵌入端点** | 用于语义召回。缺配时召回降级为空，画像照写，只是不注入长期认知。 |
+| **可选：嵌入端点** | 用于语义召回。缺配时召回降级为关键词检索（FTS5），画像照写；丢的只是*语义*召回、不是召回本身。 |
 | **零运行时依赖** | runtime `dependencies` 为空，存储 / HTTP / 向量计算均用 Node 内置。`better-sqlite3` 只是**可选 peer 依赖**，Node ≥24 用户根本不需要装它。 |
 
 > ⚙️ **`node:sqlite` 加载不到时，装可选驱动 `better-sqlite3` 兜底。** MemoWeft **优先用内置 `node:sqlite`**、加载不到才回退 `better-sqlite3`（原生模块，见 §1.2）。`node:sqlite` 到 Node 24 才转正稳定；Node 20 上没有它，**必须**装 `better-sqlite3`；Node 22 是否可用取决于你的 Node 版本 / flag——用不上时才需装 `better-sqlite3`（装了也只在 `node:sqlite` 加载不到时才会被选中，不会顶替已可用的内置驱动）。开发库本身（跑仓库里的 `.ts` 示例 / 测试台）另有门槛：Node 22 需 22.18+ 才默认支持原生剥 `.ts` 类型，Node 20 没有此能力——想跑 `.ts` 请用 Node ≥24；只是**当库用**（`import 'memoweft'` 吃编译后的 `.js`）则装好可用驱动即可。
@@ -97,7 +97,7 @@ MEMOWEFT_WRITE_LLM_API_KEY=sk-xxxx
 MEMOWEFT_WRITE_LLM_MODEL=your-small-fast-model
 
 # ── 嵌入器（可选）：语义召回 ─────────────────────────────
-# 缺配则召回降级为空，不影响证据和画像写入。
+# 缺配则召回降级为关键词检索（FTS5），不影响证据和画像写入。
 MEMOWEFT_EMBED_BASE_URL=https://your-cloud-endpoint/v1
 MEMOWEFT_EMBED_API_KEY=sk-xxxx
 MEMOWEFT_EMBED_MODEL=your-embedding-model
@@ -162,7 +162,7 @@ MEMOWEFT_EMBED_MODEL=bge-m3
 | --- | --- | --- | --- |
 | 对话模型 | `MEMOWEFT_LLM_{BASE_URL,API_KEY,MODEL}` | `DLA_LLM_*` | 真调用时报错 |
 | 写路径模型 | `MEMOWEFT_WRITE_LLM_{BASE_URL,API_KEY,MODEL}` | `DLA_WRITE_LLM_*` | 回退对话模型 |
-| 嵌入召回 | `MEMOWEFT_EMBED_{BASE_URL,API_KEY,MODEL}` | `DLA_EMBED_*` | 召回降级为空 |
+| 嵌入召回 | `MEMOWEFT_EMBED_{BASE_URL,API_KEY,MODEL}` | `DLA_EMBED_*` | 召回降级为关键词（FTS5） |
 
 > ⚠️ 不要提交 `.env`。它包含密钥，应被 `.gitignore` 忽略。
 
@@ -255,7 +255,7 @@ const core = createMemoWeftCore({ dbPath: './my-app.db' });
 
 ### 不配嵌入器可以吗？
 
-可以。召回会降级为空，但证据仍会存，画像仍可写。只是回话里不会注入长期认知。
+可以。召回会降级为关键词检索（FTS5），证据仍会存、画像仍可写。丢的是语义召回、不是召回本身。
 
 ### observed 行为数据会默认上云吗？
 

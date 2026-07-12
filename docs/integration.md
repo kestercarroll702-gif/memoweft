@@ -65,7 +65,7 @@ MEMOWEFT_WRITE_LLM_BASE_URL=https://your-cloud-endpoint/v1
 MEMOWEFT_WRITE_LLM_API_KEY=sk-xxxx
 MEMOWEFT_WRITE_LLM_MODEL=your-small-fast-model
 
-# Optional: semantic recall. If unset, recall degrades to empty.
+# Optional: semantic recall. If unset, recall falls back to keyword search (FTS5).
 MEMOWEFT_EMBED_BASE_URL=https://your-cloud-endpoint/v1
 MEMOWEFT_EMBED_API_KEY=sk-xxxx
 MEMOWEFT_EMBED_MODEL=your-embedding-model

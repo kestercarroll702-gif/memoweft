@@ -4,7 +4,7 @@
  * Host 后续优先经这里调 Core，不到处直接碰 Sqlite*Store。工厂负责把散装部件
  * （stores / retriever / LLM 池 / 事务器 / 受控管理 API）按既有降级路数装配好：
  *   - LLM 缺配不崩：loadLLMPool 的 failStub 语义——真调用才报错（与 testbench 现行为一致）。
- *   - 嵌入缺配不崩：loadEmbedConfig 返回 null → NullRetriever（召回降级为空，回话不注入画像）。
+ *   - 嵌入缺配不崩：loadEmbedConfig 返回 null → KeywordRetriever（D-0017,FTS5 关键词召回;FTS5 不可用再降 NullRetriever 召回空）。
  * 所以【无 .env 也能建 core】，能干存证据/管理记忆这类不碰模型的活。
  *
  * subjectId 口径：各方法入参 subjectId 可选，缺省 config.identity.subjectId（v1 单人单宿主）。
@@ -22,6 +22,7 @@ import { updateProfile as runUpdateProfile, type UpdateProfileResult } from '../
 import { recallCognitions } from '../retrieval/recall.ts';
 import { NullRetriever } from '../retrieval/nullRetriever.ts';
 import { VectorRetriever } from '../retrieval/vectorRetriever.ts';
+import { KeywordRetriever, FtsUnavailableError } from '../retrieval/keywordRetriever.ts';
 import { OpenAICompatEmbedder, loadEmbedConfig, type Embedder } from '../retrieval/embedder.ts';
 import type { Retriever } from '../retrieval/retriever.ts';
 import { loadLLMPool, type LLMPool } from '../llm/pool.ts';
@@ -45,7 +46,7 @@ export interface CreateCoreOptions {
   llm?: LLMPool | LLMClient;
   /** 嵌入器：显式注入则用它建 VectorRetriever（优先级高于 env 配置，低于 retriever）。 */
   embedder?: Embedder;
-  /** 召回器：注入则最优先；不注入 → loadEmbedConfig() 有配置建 VectorRetriever、无则 NullRetriever。 */
+  /** 召回器：注入则最优先；不注入 → loadEmbedConfig() 有配置建 VectorRetriever、无则 KeywordRetriever(D-0017,FTS5 不可用降 NullRetriever)。 */
   retriever?: Retriever;
   /** 可注入配置（P2-5 口径）：缺省全局单例。 */
   config?: MemoWeftConfig;
@@ -201,6 +202,17 @@ function sumUsage(a: UsageStats, b: UsageStats | undefined): UsageStats {
   };
 }
 
+/** 无 embedder 时的召回兜底（D-0017）:KeywordRetriever（FTS5 关键词,零嵌入成本,大语料强基线);
+ *  FTS5 建虚表失败（FtsUnavailableError,见 D-0007）→ 降 NullRetriever(召回空、不崩)。 */
+function keywordOrNull(dbPath: string): Retriever {
+  try {
+    return new KeywordRetriever(dbPath);
+  } catch (e) {
+    if (e instanceof FtsUnavailableError) return new NullRetriever();
+    throw e;
+  }
+}
+
 export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
   const cfg = options.config ?? globalConfig;
   const stores = openStores(options.dbPath, cfg, options.clock);
@@ -220,7 +232,9 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
       return ec ? new OpenAICompatEmbedder(ec) : null;
     })();
     embedderRef = embedder;
-    retriever = embedder ? new VectorRetriever(vectorDbPath, embedder) : new NullRetriever();
+    // 无 embedder 兜底（D-0017,§14.4b 重评估）:优先 KeywordRetriever（FTS5,零嵌入;§19.2 LoCoMo 大语料 Recall
+    //   远胜空召回）;FTS5 不可用（FtsUnavailableError,D-0007)再降 NullRetriever(不崩)。有 embedder 照旧走向量。
+    retriever = embedder ? new VectorRetriever(vectorDbPath, embedder) : keywordOrNull(vectorDbPath);
     ownsRetriever = true;
   }
 
@@ -422,8 +436,9 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
       //   llmReady = 持有真的对话模型客户端。env 装配时：缺 chat 配 → pool.for('chat') 是 failStub（非
       //     OpenAICompatClient）→ false；有配 → OpenAICompatClient → true，与 testbench loadLLMConfig() 一致。
       //     注入自定义 client（如测试 stub）判 false——stub 不是真能聊的模型，语义正确。
-      //   embedReady = 持有向量召回器。env 装配时：有 EMBED 配置 → VectorRetriever → true；无 → NullRetriever
-      //     → false，与 testbench loadEmbedConfig() 一致。注入空召回器同样判 false。
+      //   embedReady = 持有【向量】召回器（专指"语义召回可用"）。有 EMBED 配置 → VectorRetriever → true;
+      //     无 → KeywordRetriever（D-0017,关键词召回仍可用但非语义）或 NullRetriever → false。注入空召回器同判 false。
+      //     ⚠ embedReady=false ≠ 召回恒空:D-0017 起,无 embedder 也有 keyword 召回;此位专表"语义/向量召回"。
       return {
         llmReady: pool.for('chat') instanceof OpenAICompatClient,
         embedReady: retriever instanceof VectorRetriever,
@@ -444,8 +459,8 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
 
     close() {
       stores.close();
-      // 自建的向量召回器有独立连接要关；NullRetriever 没有 close，注入的归调用方。
-      if (ownsRetriever && retriever instanceof VectorRetriever) retriever.close();
+      // 自建的向量/关键词召回器有独立连接要关；NullRetriever 没有 close，注入的归调用方。
+      if (ownsRetriever && (retriever instanceof VectorRetriever || retriever instanceof KeywordRetriever)) retriever.close();
     },
   };
 }

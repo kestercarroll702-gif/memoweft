@@ -15,7 +15,7 @@
 | **Node ≥ 24 (works out of the box) or Node 20/22 + `better-sqlite3` (fallback)** | Storage is backed by SQLite. The driver **prefers the built-in `node:sqlite`** and only falls back to the optional `better-sqlite3` if that cannot be loaded. On Node ≥ 24 `node:sqlite` is stable and needs zero extra deps; on Node 20 it is absent, so you **must** install `better-sqlite3` (`npm i better-sqlite3`, see §1.2); on Node 22 it depends on whether your version / flags already expose `node:sqlite` — install `better-sqlite3` only when it is not available. |
 | **One OpenAI-compatible chat model endpoint** | The recommended default is a cloud endpoint: least setup, easiest for a developer to get running. Anything compatible with `/chat/completions` works. |
 | **Optional: a small/fast write-path model endpoint** | Used for `distill → consolidate → attribute`. If unset, it falls back to the chat model. |
-| **Optional: an embedding endpoint** | Used for semantic recall. If unset, recall degrades to empty — the profile is still written, only long-term cognition is not injected. |
+| **Optional: an embedding endpoint** | Used for semantic recall. If unset, recall falls back to keyword search (FTS5) — the profile is still written; you lose only *semantic* recall, not recall itself. |
 | **Zero runtime dependencies** | Runtime `dependencies` is empty; storage / HTTP / vector math all use Node built-ins. `better-sqlite3` is only an **optional peer dependency** — Node ≥ 24 users never need to install it. |
 
 > ⚙️ **Install the optional `better-sqlite3` driver when `node:sqlite` cannot be loaded.** MemoWeft **prefers the built-in `node:sqlite`** and only falls back to `better-sqlite3` (a native module, see §1.2) when it cannot be loaded. `node:sqlite` only became stable in Node 24; on Node 20 it is absent, so you **must** install `better-sqlite3`; on Node 22 availability depends on your Node version / flags — install `better-sqlite3` only when it is not available (once installed it is picked only when `node:sqlite` cannot be loaded, and never overrides an already-usable built-in driver). Developing the library itself (running the `.ts` examples / testbench from the repo) has a stricter bar: Node 22 needs 22.18+ to strip `.ts` types natively and Node 20 cannot do it at all — use Node ≥ 24 to run `.ts`. **Using it as a library** (`import 'memoweft'`, which consumes the compiled `.js`) only needs a usable driver.
@@ -97,7 +97,7 @@ MEMOWEFT_WRITE_LLM_API_KEY=sk-xxxx
 MEMOWEFT_WRITE_LLM_MODEL=your-small-fast-model
 
 # ── Embedder (optional): semantic recall ────────────────────────
-# If unset, recall degrades to empty; evidence and profile writes are unaffected.
+# If unset, recall falls back to keyword search (FTS5); evidence and profile writes are unaffected.
 MEMOWEFT_EMBED_BASE_URL=https://your-cloud-endpoint/v1
 MEMOWEFT_EMBED_API_KEY=sk-xxxx
 MEMOWEFT_EMBED_MODEL=your-embedding-model
@@ -162,7 +162,7 @@ Local / hybrid suits desktop assistants, sensitive behavior observations, and lo
 | --- | --- | --- | --- |
 | Chat model | `MEMOWEFT_LLM_{BASE_URL,API_KEY,MODEL}` | `DLA_LLM_*` | Errors on a real call |
 | Write-path model | `MEMOWEFT_WRITE_LLM_{BASE_URL,API_KEY,MODEL}` | `DLA_WRITE_LLM_*` | Falls back to chat model |
-| Embedding recall | `MEMOWEFT_EMBED_{BASE_URL,API_KEY,MODEL}` | `DLA_EMBED_*` | Recall degrades to empty |
+| Embedding recall | `MEMOWEFT_EMBED_{BASE_URL,API_KEY,MODEL}` | `DLA_EMBED_*` | Recall falls back to keyword (FTS5) |
 
 > ⚠️ Do not commit `.env`. It contains secrets and should be ignored by `.gitignore`.
 
@@ -180,7 +180,7 @@ npm run testbench
 Testbench features:
 
 - Uses a separate `testbench/testbench-evidence.db` so it never pollutes your real database.
-- Uses vector recall when `MEMOWEFT_EMBED_*` is configured; otherwise recall is empty.
+- Uses vector recall when `MEMOWEFT_EMBED_*` is configured; otherwise falls back to keyword recall (FTS5).
 - Writes each turn's internals to `logs/run-*.jsonl` for diagnosis.
 - Supports chatting, inspecting evidence / events / profile, manual profile updates, attribution, proactive asks, and injecting active-window observations.
 
@@ -255,7 +255,7 @@ Yes, and that is the recommended default path. Get it running first, then decide
 
 ### Can I skip the embedder?
 
-Yes. Recall degrades to empty, but evidence is still stored and the profile is still written. The reply just will not have long-term cognition injected.
+Yes. Recall falls back to keyword search (FTS5), and evidence is still stored and the profile is still written. You lose semantic recall, but not recall itself.
 
 ### Does observed behavior data go to the cloud by default?
 

@@ -47,7 +47,7 @@ Storing evidence needs no model. Turning it into a **profile** — distilling fa
 MEMOWEFT_LLM_BASE_URL=https://your-endpoint/v1
 MEMOWEFT_LLM_API_KEY=sk-...
 MEMOWEFT_LLM_MODEL=your-model
-# Optional: an embedder unlocks semantic recall. Without it, recall degrades to empty; the write path still runs.
+# Optional: an embedder unlocks semantic recall. Without it, recall falls back to keyword search (FTS5); the write path still runs.
 MEMOWEFT_EMBED_BASE_URL=...
 MEMOWEFT_EMBED_API_KEY=...
 MEMOWEFT_EMBED_MODEL=...
@@ -65,7 +65,7 @@ const turn = await core.handleConversationTurn({ subjectId: 'alice', message: 'A
 console.log(turn.reply);
 ```
 
-Missing config degrades instead of crashing: no chat model → the profile step errors but evidence is still stored; no embedder → recall returns empty. Check with `core.health()`. The full runnable loop is [`examples/minimal.ts`](../examples/minimal.ts).
+Missing config degrades instead of crashing: no chat model → the profile step errors but evidence is still stored; no embedder → recall falls back to keyword search (FTS5), still returning results (semantic recall needs an embedder). Check with `core.health()`. The full runnable loop is [`examples/minimal.ts`](../examples/minimal.ts).
 
 ## Next
 

@@ -65,7 +65,7 @@ MEMOWEFT_WRITE_LLM_BASE_URL=https://your-cloud-endpoint/v1
 MEMOWEFT_WRITE_LLM_API_KEY=sk-xxxx
 MEMOWEFT_WRITE_LLM_MODEL=your-small-fast-model
 
-# 可选：语义召回。缺配则召回降级为空。
+# 可选：语义召回。缺配则召回降级为关键词检索（FTS5）。
 MEMOWEFT_EMBED_BASE_URL=https://your-cloud-endpoint/v1
 MEMOWEFT_EMBED_API_KEY=sk-xxxx
 MEMOWEFT_EMBED_MODEL=your-embedding-model

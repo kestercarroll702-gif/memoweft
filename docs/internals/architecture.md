@@ -212,7 +212,7 @@ Code: `src/retrieval/`
 
 The recall foundation is a **replaceable seam** (the `Retriever` interface), with two methods: `indexAll` (replacement-style index rebuild) + `search` (top-k). Two implementations:
 
-- `NullRetriever`: an empty implementation — used as a fallback when no embedder is configured; `search` returns `[]` (the reply injects no profile, without erroring).
+- When no embedder is configured, recall falls back to `KeywordRetriever` (FTS5 keyword search — D-0017); `NullRetriever` (an empty implementation whose `search` returns `[]`) is the last-resort fallback only when FTS5 is unavailable. Neither errors the reply.
 - `VectorRetriever`: SQLite stores vectors + **JS cosine similarity**, plenty for a single person's few thousand entries, **zero native dependencies** (does not use sqlite-vec). `indexAll` rebuilds by replacement; `search` embeds the query and then computes cosine to take top-k.
 
 `Embedder` is likewise replaceable (`OpenAICompatEmbedder` calls the OpenAI-compatible `/embeddings`); when configuration is missing, `loadEmbedConfig` returns `null`, and recall automatically degrades to empty without crashing.
