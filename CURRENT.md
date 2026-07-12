@@ -1,6 +1,6 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-12 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二~七批(中文版 / internals / README / glossary+naming / 文档 CI / 新人巡检处理)已落地本地;§18 实质全完成,只差打 tag phase-5-done(人类);Phase 6 进行中——LoCoMo 链路通 + cognition 层召回臂/会话日期注入 + §19.2 三臂×双embedder 完整矩阵已落地(本会话·纯 bench),本地)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
+更新于:2026-07-12 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二~七批(中文版 / internals / README / glossary+naming / 文档 CI / 新人巡检处理)已落地本地;§18 实质全完成,只差打 tag phase-5-done(人类);Phase 6 近完工——LoCoMo §19.1/§19.2 完整矩阵 + cognition 臂/日期注入 + §19.3 敏感性 + BENCHMARKS.md 均落地;仅剩 LongMemEval 完整跑(阻塞:数据集+gpt-4o judge)与 phase-6-done tag(本会话·纯 bench),本地)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
 
 ## Phase 6 起头(进行中·§19 公开基准):LoCoMo 冒烟链路通(本地)
 
@@ -26,9 +26,18 @@
   - **弱 embedder 上 hybrid≫vector**(50.6 vs 31.3,+19pt):keyword 补真信号——**refine D-0008 caveat**(hybrid 价值取决 embedder 强弱)。
   - **keyword-only 55.3% > 确定性向量/hybrid**:验证 D-0008「keyword 大语料被低估」。
   - **踩坑+鲁棒化**:全量单进程第 9 sample `node:sqlite` 累积 `:memory:` 连接 **native 崩**(exit 127·无 JS 错)→ 改**每 sample 独立进程**(`--offset`/`--limit`)+ JSON 分片 + **`--merge-matrix`** 合并,全 10 绿、可复现。分片+合并 runs 入 `bench/runs/`(gitignore)。
-  - **剩(§19):参数敏感性网格(§19.3)、LongMemEval_S、BENCHMARKS.md(§19.4)、token/费用完整记录。**
+- **§19.3 + BENCHMARKS + LongMemEval scaffold 一并落地(本会话·纯 bench+根 doc)**:
+  - **§19.3 参数敏感性网格**(`bench/sensitivity-confidence.mjs` + `.md`,**纯确定性零 LLM**:底分/半衰期是规则算的、与 LLM 无关 → 离线重算,不必 9× 重跑固化):底分 ±20% credStatus 翻转率 28.1% 但**野翻转(跳档)=0**(全相邻档、集中在 stated 底分 600 处 limited/stable 中点);半衰期→保留窗口线性。**未发现更优默认、不触发改默认/断言流程**。
+  - **BENCHMARKS.md**(§19.4,根目录):汇总 §19.2 矩阵 + §2 端到端 F1 + §19.3 敏感性 + LongMemEval 状态 + 复现命令 + 条件差异纪律(不做不对等比较)。
+  - **LongMemEval_S scaffold**(`bench/longmemeval-eval.mjs`):loader(web 核实 schema)/检索/答题/LLM-judge/弃权,`--selftest` 离线全绿(证 loader+只摄入user+judge)。**真实跑受阻**:①本机无数据集(需 LONGMEMEVAL_PATH)②无标准 gpt-4o judge(mimo 非标准)③铁律 3a 只摄入 user 回合 → single-session-assistant 类按设计答不出(如实报告)。
 - 数据 NC 许可:`bench/data/` + `bench/runs/*-locomo-*` 已 gitignore,数据只在本地(LOCOMO_PATH),绝不入库。
-- **Phase 6 完整还差**(大工程·多会话):完整 10 sample×~1986 QA + 三臂×双 embedder 矩阵(§19.2)+ 参数敏感性网格(§19.3)+ LongMemEval_S + BENCHMARKS.md(§19.4)+ token/费用完整记录。
+**Phase 6 验收(§19)**:
+- [x] LoCoMo 接入(§19.1)+ **§19.2 完整矩阵**(全 10 sample·1536 题·三臂×双 embedder)
+- [x] runs 可复现(per-sample 分片 + `--merge-matrix`);token/费用记录(答题 + core 侧 + embed 分桶)
+- [x] **§19.3 敏感性报告入库**(`bench/sensitivity-confidence.md`)
+- [x] **BENCHMARKS.md 就位**(根目录·§19.4)
+- [ ] **LongMemEval_S ≥1 次完整跑**:scaffold + selftest 就绪,**阻塞**于本机无数据集 + 无标准 gpt-4o judge(需用户提供;mimo 可出内部趋势但非标准)
+- [ ] 打 tag `phase-6-done`(发布动作,待人类;且待 LongMemEval 跑完)
 
 ## Phase 5:文档更不绕(§18)—— 第一批用户文档已上线(已推 origin main)
 
