@@ -36,7 +36,7 @@
 - [x] runs 可复现(per-sample 分片 + `--merge-matrix`);token/费用记录(答题 + core 侧 + embed 分桶)
 - [x] **§19.3 敏感性报告入库**(`bench/sensitivity-confidence.md`)
 - [x] **BENCHMARKS.md 就位**(根目录·§19.4)
-- [ ] **LongMemEval_S ≥1 次完整跑**:scaffold + selftest 就绪,**阻塞**于本机无数据集 + 无标准 gpt-4o judge(需用户提供;mimo 可出内部趋势但非标准)
+- [ ] **LongMemEval_S ≥1 次完整跑**:数据(500 题·278MB)已取本地、harness 真实数据端到端验证(dry + 6 题 mimo-judge 小样本);**仍阻塞**于标准 gpt-4o judge——用户所给 key 无配额(exceeded quota)。待有余额的 gpt-4o key(MEMOWEFT_JUDGE_*)即可跑标准分;全量约 3–5h,建议 per-item 进程隔离
 - [ ] 打 tag `phase-6-done`(发布动作,待人类;且待 LongMemEval 跑完)
 
 ## Phase 5:文档更不绕(§18)—— 第一批用户文档已上线(已推 origin main)

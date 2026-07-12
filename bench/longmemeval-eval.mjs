@@ -174,10 +174,16 @@ async function main() {
   let llm = null, judgeLLM = null;
   if (!DRY) {
     llm = new OpenAICompatClient();
-    // judge:默认复用答题端点(mimo)。⚠ 官方标准 judge 是 gpt-4o —— mimo-as-judge 非标准、分数不可对外比。
-    //   接标准 judge:给 OpenAICompatClient 传一个指向 gpt-4o 的 LLMConfig(需相应 key),此处留默认 mimo。
-    judgeLLM = llm;
-    console.log('answer model:', process.env.MEMOWEFT_LLM_MODEL || process.env.DLA_LLM_MODEL || '?', '· judge: mimo(=answer,非标准 gpt-4o)');
+    // judge:配了 MEMOWEFT_JUDGE_*(BASE_URL/API_KEY/MODEL)就用独立 judge(如 gpt-4o,温度 0);否则回退答题模型 mimo(非标准)。
+    //   key 只从环境变量读、绝不落代码/盘(铁律 9)。
+    const jb = process.env.MEMOWEFT_JUDGE_BASE_URL, jk = process.env.MEMOWEFT_JUDGE_API_KEY, jm = process.env.MEMOWEFT_JUDGE_MODEL;
+    if (jb && jk && jm) {
+      judgeLLM = new OpenAICompatClient({ baseUrl: jb, apiKey: jk, model: jm, temperature: 0 });
+      console.log('answer:', process.env.MEMOWEFT_LLM_MODEL || process.env.DLA_LLM_MODEL || '?', '· judge:', jm, '(独立端点·温度0)');
+    } else {
+      judgeLLM = llm;
+      console.log('answer:', process.env.MEMOWEFT_LLM_MODEL || process.env.DLA_LLM_MODEL || '?', '· judge: mimo(=answer,非标准 gpt-4o)');
+    }
   }
   const rows = [];
   for (const it of items) { process.stderr.write(`  item ${it.id} [${it.type}]: ${it.turns.length} turns…\n`); rows.push(await runItem(it, llm, judgeLLM)); }

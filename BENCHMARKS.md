@@ -3,7 +3,7 @@
 > 维护者账本,非营销页。原则:**每个数字都可复现、条件写清、不做不对等比较**。
 > 数据许可:LoCoMo 为 **CC BY-NC 4.0**(仅研究、非商用)——数据文件**绝不入库**,本页只发**聚合分数**。
 > 环境:本机 RTX 3090;答题/固化模型 = 小米 MiMo `mimo-v2.5-pro`(云端 OpenAI 兼容);嵌入 = 本地 `bge-m3`(1024 维,经 llama.cpp GPU)。
-> 状态:Phase 6 进行中,以下为**方向性快照**(未打 `phase-6-done`);LongMemEval 尚未跑(见 §4)。
+> 状态:Phase 6 进行中,以下为**方向性快照**(未打 `phase-6-done`);LongMemEval 数据+harness 就绪,待有配额的 gpt-4o judge(见 §4)。
 
 ---
 
@@ -45,15 +45,16 @@
 - **半衰期**:召回保留窗口随半衰期**线性**伸缩(×0.5/1/2 → 窗口 ×0.5/1/2),无悬崖。
 - **结论**:未发现更优默认参数,默认值行为有序可预测,不触发「改默认→D-xxxx」或「改 eval 断言→铁律1」。
 
-## 4. LongMemEval_S · 状态:脚手架就绪、待数据
+## 4. LongMemEval_S · 状态:数据 + harness 就绪,待有配额的 gpt-4o judge
 
-`bench/longmemeval-eval.mjs` 已建(loader/检索/答题/LLM-judge/弃权,`--selftest` 离线全绿)。**尚未跑**,受阻于:
+`bench/longmemeval-eval.mjs`(loader/检索/答题/LLM-judge/弃权,`--selftest` 离线全绿)。
 
-1. **无数据集**:本机只带 LoCoMo;需将 LongMemEval_S 的 JSON 放本地并经 `LONGMEMEVAL_PATH` 指向(数据许可自查,不入库)。
-2. **无标准 judge**:官方用 `gpt-4o`;本机只有 mimo。可用 mimo 当 judge 出内部趋势,但**非标准、不可对外比**。
-3. **原则性限制**:铁律 3a「助手输出永不成为证据」→ 只摄入 user 回合,`single-session-assistant` 类问题**按设计答不出**(如实报告,不为刷分破纪律)。
-
-数据 + 标准 judge 到位后即可跑,产出补入本页。
+- **数据 ✅**:LongMemEval_S(**500 题**·平均 haystack **494 回合/245 user**·最多 66 会话)已取本地(278MB,经 `LONGMEMEVAL_PATH`;**不入库**)。
+- **harness 真实数据端到端验证 ✅**:dry 结构验证 + 小样本(6 题 single-session-user)mimo-answer + mimo-judge 全链路跑通。
+- **标准 judge 仍阻塞**:官方用 `gpt-4o`;所提供的 key **配额/计费未启用(exceeded quota)**,无法作标准 judge。→ 待有余额的 gpt-4o key(设 `MEMOWEFT_JUDGE_BASE_URL/API_KEY/MODEL`),即可跑标准分。
+- **非标准直读(仅供参考,不可对外比)**:mimo-as-judge · keyword 检索 · 前 6 题 single-session-user → 正确率 50%。
+- **原则性限制**:铁律 3a 只摄入 user 回合 → `single-session-assistant`(56/500)按设计答不出。
+- **全量成本预估**:500 题 ×(ingest ~245 回合 + mimo 答题 + judge)≈ **3–5 小时** + 大量 mimo token;建议先跑子集。跑大样本用 per-item 进程隔离(同 §19.2,避 node:sqlite 累积 native 崩)。
 
 ## 5. 复现命令
 

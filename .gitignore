@@ -76,3 +76,6 @@ bench/runs/*-live.json
 bench/data/
 bench/runs/*-locomo-*.md
 bench/runs/*-locomo-*.json
+# LongMemEval_S:数据自查许可,同样【绝不入库】,经 LONGMEMEVAL_PATH 指向本地副本;runs 只发聚合分、留本地。
+bench/runs/*-longmemeval*.md
+bench/runs/*-longmemeval*.json
