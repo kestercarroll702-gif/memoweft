@@ -3,8 +3,9 @@
  *
  * 逐场景跑【真实模型】固化（updateProfile：distill→consolidate→attribute），两级比对：
  *   1) 结构性断言（程序判，先跑，不调 LLM）：从每个场景的 expect 逐项判 + 三条不变量（每场景都查）。
- *   2) 要点语义匹配（LLM-as-judge，后跑）：每个 shouldFormGist / shouldNotFormGist 用 judge 判，
- *      温度 0、跑 3 次取多数。产出 gistRecall / overInferRate。
+ *   2) 要点语义匹配（后跑）：shouldNotFormGist（及非-conflict 场景的 shouldFormGist）用 LLM-as-judge 判，
+ *      温度 0、跑 3 次取多数；conflict 场景的 shouldFormGist 改走确定性硬判（看是否落库 conflicted 状态，
+ *      因「只暴露不裁决」不产可判文本，见 scoreGists）。产出 gistRecall / overInferRate。
  * 汇总落 bench/consolidation-baseline.{md,json}（全量）或 bench/runs/*（部分跑）。**先入库基线，才谈优化。**
  *
  * 直接从 src 的 .ts import（Node ≥24 原生剥类型，无需 build）。只读依赖，绝不改 src/tests。
@@ -42,6 +43,14 @@ const RUNS_DIR = resolve(HERE, 'runs');
 const GEN_CMD = 'node bench/eval-consolidation.mjs';
 /** judge 每个要点跑几次取多数（温度 0，防真模型抖动）。 */
 const JUDGE_RUNS = 3;
+/**
+ * gist 评分【口径】版本。改的是「shouldForm/shouldNot 怎么算命中」这套方法学，不是 judge 措辞（那是 JUDGE_PROMPT_V1.version）。
+ * 与 judgePromptVersion 同理：口径变 → gistRecall/overInferRate 的语义变 → 跨版本 run 的软/硬判分数不可直接比。
+ *   v1：全部 shouldForm 走 LLM 软判（含 conflict——但 conflict 天生产不出可判文本 → 恒 0，度量盲区）。
+ *   v2：conflict 场景的 shouldForm 改走【确定性硬判】（看落库是否存在在册 conflicted 认知；见 scoreGists）；其它不变。
+ * diffRuns 跨版本对比时会据此高声告警（同 judgePromptVersion 的可比性纪律）。
+ */
+const GIST_SCORING_VERSION = 'v2';
 
 // ══════════════════════════════════════════════════════════════════════════
 // judge 判分提示词（带版本号常量）。
@@ -125,17 +134,45 @@ async function judgeMajority(judge, lang, question) {
   return { votes, yes: yesCount * 2 > JUDGE_RUNS }; // 严格多数：3 票里 ≥2 YES
 }
 
-/** 对一个场景的 shouldForm / shouldNot 要点逐条判分，算 gistRecall / overInferRate。 */
+/**
+ * 对一个场景的 shouldForm / shouldNot 要点逐条判分，算 gistRecall / overInferRate。
+ *
+ * shouldForm 的判分口径按 discipline 分两种：
+ *   - **conflict 场景 → 确定性硬判**（不调 judge）：conflict 的处理是「只暴露不裁决」——给旧认知打
+ *     credStatus='conflicted' 标 + 挂 contradict 证据，两条都留、不落一条断言矛盾的新认知（consolidate.ts:244-255）。
+ *     这条路径【天生】产不出可被 judge 从 active 认知文本里匹配到的「已暴露矛盾」句子，旧口径（judge 只看
+ *     active 认知文本）对 conflict 的 shouldForm 恒判 NO → gistRecall 恒 0，是【度量盲区非质量缺陷】
+ *     （诊断见 ROADMAP · CURRENT「B 靶子」· 软判方差见 D-0009）。改看落库终态：存在一条【仍 active 且
+ *     credStatus==='conflicted'】的认知 = 冲突已暴露且旧认知仍留档（暴露不裁决）即命中。比看
+ *     consolidated.conflicted 计数更 faithful：若模型把旧认知误删/失效（违反留档），它不再 active-conflicted
+ *     → 正确判 miss。
+ *   - **其它 discipline → LLM 软判**（judge 温度 0、3 次多数），沿用原口径。
+ * shouldNot（overInferRate）对所有 discipline【一律 LLM 软判】不变——conflict 的「不删/不覆盖/不裁决」正是能从
+ * 认知文本判的过度推断靶心，保留软判。
+ */
 async function scoreGists(scenario, run, judge) {
   const contents = run.active.map((c) => c.content);
   const lang = scenario.lang === 'zh' ? 'zh' : 'en';
   const forms = scenario.expect?.shouldFormGists ?? [];
   const nots = scenario.expect?.shouldNotFormGists ?? [];
+  const isConflict = scenario.discipline === 'conflict';
+  // conflict 的 shouldForm 确定性信号：落库里是否有「仍在册且被标 conflicted」的认知（冲突已暴露 + 旧认知留档）。
+  // 【信号是场景级全局布尔】——依赖当前 conflict 语料的两个前提（新增/改 conflict 场景时须维持，否则信号失真）：
+  //   ① 每个 conflict 场景恰 1 条 shouldFormGist（多条会全部坍缩成同一布尔，无法分辨哪条命中）；
+  //   ② seed 不预置 credStatus==='conflicted' 的认知（否则模型什么都不做也恒命中 = 假阳）。
+  // 现 7 条 conflict 语料（CC-001..007）均满足（各 1 条 shouldForm、seed 为 limited/stable）。要更精，可改成「校验本轮
+  // 【新】被标 conflicted 的认知」（需 runScenario 透出 seed 初始档），当前语料不触发该需求，按铁律 4 暂不加防御码。
+  const conflictSurfaced = run.active.some((c) => c.credStatus === 'conflicted');
 
   const formResults = [];
   for (const gist of forms) {
-    const { votes, yes } = await judgeMajority(judge, lang, JUDGE_PROMPT_V1.form(contents, gist, lang));
-    formResults.push({ gist, votes, hit: yes }); // 期望 YES：命中 = 形成了该要点
+    if (isConflict) {
+      // 确定性硬判：不调 judge（见函数 JSDoc）。命中 = 冲突已被暴露为在册的 conflicted 认知。
+      formResults.push({ gist, hit: conflictSurfaced, deterministic: true, signal: 'conflicted-status' });
+    } else {
+      const { votes, yes } = await judgeMajority(judge, lang, JUDGE_PROMPT_V1.form(contents, gist, lang));
+      formResults.push({ gist, votes, hit: yes }); // 期望 YES：命中 = 形成了该要点
+    }
   }
   const notResults = [];
   for (const gist of nots) {
@@ -327,10 +364,12 @@ function aggregate(summaries) {
 }
 
 function collectMeta(corpus, scenarios, llmCfg, filter) {
-  const judgeCalls = scenarios.reduce(
-    (a, s) => a + JUDGE_RUNS * ((s.expect?.shouldFormGists ?? []).length + (s.expect?.shouldNotFormGists ?? []).length),
-    0,
-  );
+  // conflict 场景的 shouldForm 走确定性硬判、不调 judge（见 scoreGists），故不计入 judge 调用估算。
+  const judgeCalls = scenarios.reduce((a, s) => {
+    const formCalls = s.discipline === 'conflict' ? 0 : (s.expect?.shouldFormGists ?? []).length;
+    const notCalls = (s.expect?.shouldNotFormGists ?? []).length;
+    return a + JUDGE_RUNS * (formCalls + notCalls);
+  }, 0);
   const limit = filter?.limit ?? null;
   const discipline = filter?.discipline ?? null;
   return {
@@ -352,6 +391,8 @@ function collectMeta(corpus, scenarios, llmCfg, filter) {
     // §15.3 归因：本轮用了哪版提示词 / judge / 模型，以及是否只跑了部分场景（决定产物落盘与可比性）。
     promptVersions: promptVersions(),
     judgePromptVersion: JUDGE_PROMPT_V1.version,
+    gistScoringVersion: GIST_SCORING_VERSION, // gist 命中口径版本（conflict 硬判起 v2）；跨版本 gistRecall 不可直接比
+
     judgeModel: llmCfg.model, // 目前同被测 model，仅温度 0 覆写；显式记下以防日后 judge 换端点。
     partial: Boolean(limit) || Boolean(discipline),
     filter: { limit, discipline },
@@ -400,6 +441,7 @@ function buildReport(summaries, agg, meta) {
   L.push(`| 被测 model（固化） | ${meta.model}（mimo，new OpenAICompatClient() 读根 .env） |`);
   L.push(`| judge model | ${meta.judgeModel}（复用同端点，温度 0 覆写） |`);
   L.push(`| judge 提示词版本 | ${meta.judgePromptVersion}（每要点 ${JUDGE_RUNS} 次取多数） |`);
+  L.push(`| gist 评分口径版本 | ${meta.gistScoringVersion ?? 'v1'}（v2: conflict shouldForm 确定性硬判；跨版本 gistRecall 不可比） |`);
   L.push(`| 被测提示词版本 | ${formatPromptVersions(meta.promptVersions)} |`);
   L.push(`| 语料 | tests/consolidation-corpus/corpus.json（跑 ${meta.scenarioCount}/${meta.totalScenarios} 场景） |`);
   L.push('');
@@ -442,7 +484,10 @@ function buildReport(summaries, agg, meta) {
     if (!s.formResults.length && !s.notResults.length) continue;
     L.push(`### ${s.id} — ${s.title}`);
     L.push('');
-    for (const r of s.formResults) L.push(`- shouldForm ${r.hit ? '✓命中' : '✗漏形成'}（票 ${r.votes.map((v) => (v ? 'Y' : 'N')).join('')}）：${r.gist}`);
+    for (const r of s.formResults) {
+      const basis = r.deterministic ? `确定性·${r.signal}` : `票 ${r.votes.map((v) => (v ? 'Y' : 'N')).join('')}`;
+      L.push(`- shouldForm ${r.hit ? '✓命中' : '✗漏形成'}（${basis}）：${r.gist}`);
+    }
     for (const r of s.notResults) L.push(`- shouldNot ${r.overInferred ? '✗误踩过度推断' : '✓未过度推断'}（票 ${r.votes.map((v) => (v ? 'Y' : 'N')).join('')}）：${r.gist}`);
     L.push('');
   }
@@ -451,6 +496,7 @@ function buildReport(summaries, agg, meta) {
   L.push('- **真实模型非确定**：被测 mimo 与 judge 均为真实 LLM，重跑分数会抖；judge 已用温度 0 + 3 次多数压抖，但仍非逐位可复现。');
   L.push('- **慢 + 耗 token**：每场景实测 82–141s 固化（distill+consolidate+attribute 三次真调，见 bench/consolidation-baseline-run.log）；judge 另需 3×(要点数) 次短调用。全量 42 场景约 77 分钟，由 Integrator 在 nightly / 本地执行。');
   L.push('- **结构断言是硬判**（程序判、与模型无关），可信度高；**要点判分是软判**（LLM-as-judge），仅供趋势参考，改 judge 提示词版本后不可跨版本比。');
+  L.push('- **conflict 场景的 gistRecall 是确定性硬判**（看落库是否存在 credStatus=`conflicted` 的在册认知 = 冲突已暴露且旧认知仍留档），非 LLM 软判——因为「只暴露不裁决」这条处理路径不产可被判官从认知文本匹配的句子，旧软判口径对 conflict 恒 0（度量盲区非缺陷）。其 shouldNotFormGists（不删/不覆盖/不裁决）仍为 LLM 软判。');
   L.push('- **置信度由系统按规则自算**，语料从不给期望置信数值；不变量②/③ 正是守"记≠信 / 证据白名单"这两条纪律。');
   L.push('- **先入库基线，才谈优化**：本报告是 §15.2 优化前的对照基准；任何提示词 / 参数改动后，重跑本命令产出 after 报告对比。');
   L.push('');
@@ -526,6 +572,11 @@ function diffRuns(a, b) {
   if (Boolean(am.partial) !== Boolean(bm.partial)) warnings.push(`partial 不一致：before partial=${Boolean(am.partial)}, after partial=${Boolean(bm.partial)}，不可直接比。`);
   if (am.model !== bm.model) warnings.push(`被测模型变了：${am.model} → ${bm.model}，分数不可直接归因到提示词。`);
   if (am.judgePromptVersion !== bm.judgePromptVersion) warnings.push(`judge 提示词变了：${am.judgePromptVersion} → ${bm.judgePromptVersion}，软判分数（gistRecall/overInferRate）不可比。`);
+  // gist 命中口径变更（缺字段 = 前 v2 的旧 run，按 v1 处理）：conflict 的 gistRecall 从软判恒 0 → 确定性 0/1，
+  // 会让旧基线对比出现「无告警的 conflict gistRecall 0→1 跳变」，正是 §15.3 归因要防的度量-变化误判为质量-变化。
+  const gsvA = am.gistScoringVersion ?? 'v1';
+  const gsvB = bm.gistScoringVersion ?? 'v1';
+  if (gsvA !== gsvB) warnings.push(`gist 评分口径变了：${gsvA} → ${gsvB}（v2 起 conflict 的 shouldForm 由 LLM 软判改确定性硬判）——conflict 的 gistRecall 与总体 avgGistRecall 不可跨版本比。`);
 
   // 提示词版本差异（归因核心）：并集里逐条比对。
   const pvA = am.promptVersions ?? {};
@@ -617,14 +668,16 @@ function printDiff(diff, beforePath, afterPath) {
   console.log('');
 
   console.log('── 按 discipline ──');
-  console.log(`软判列（gistRecall / overInferRate）同 ${SOFT_NOTE}`);
+  console.log(`overInferRate 全列 + gistRecall（conflict 外）软判 ${SOFT_NOTE}；conflict 的 gistRecall 为确定性硬判（看落库 conflicted 状态）`);
   for (const g of diff.byDiscipline) {
     if (g.onlyIn) {
       console.log(`${g.discipline.padEnd(20)} （仅存在于 ${g.onlyIn}，无法对比）`);
       continue;
     }
     const structCol = `${g.structPass.before}/${g.structTotal.before}→${g.structPass.after}/${g.structTotal.after} (Δ${signed(g.structRate.deltaPP, 1)}pp)`;
-    const gistCol = `gistRecall ${f2(g.gistRecall.before)}→${f2(g.gistRecall.after)}(Δ${signed(g.gistRecall.delta, 2)})`;
+    // conflict 的 gistRecall 是确定性硬判（scoreGists），别套「软判高方差」标——标出来避免与报告正文口径打架。
+    const gistDet = g.discipline === 'conflict' ? '[确定性]' : '';
+    const gistCol = `gistRecall ${f2(g.gistRecall.before)}→${f2(g.gistRecall.after)}(Δ${signed(g.gistRecall.delta, 2)})${gistDet}`;
     const overCol = `overInfer ${f2(g.overInferRate.before)}→${f2(g.overInferRate.after)}(Δ${signed(g.overInferRate.delta, 2)})`;
     console.log(`${g.discipline.padEnd(20)} 结构 ${structCol.padEnd(28)} ${gistCol}  ${overCol}`);
   }
@@ -858,6 +911,40 @@ async function selftest() {
   const c2 = checkStructural(s2, r2);
   ok(c2.every((c) => c.pass), `ST-2 结构断言全过 → ${checksInline(c2)}`);
 
+  // ── 2b) conflict 的 shouldForm gist = 确定性硬判（看落库 conflicted 状态，不调 judge） ──
+  console.log('[selftest] 2b) conflict 的 gistRecall 确定性硬判（不调 judge）');
+  const s2b = {
+    id: 'ST-2b',
+    discipline: 'conflict',
+    lang: 'zh',
+    title: '冲突 gist：暴露即命中（确定性）',
+    seed: [{ content: '用户喜欢早睡', contentType: 'preference', formedBy: 'stated', confidence: 600, credStatus: 'limited' }],
+    messages: [{ sourceKind: 'observed', rawContent: '凌晨3点还在打游戏' }],
+    expect: {
+      conflict: true,
+      newCognitions: { min: 0, max: 2, types: ['state'] },
+      shouldFormGists: ['把矛盾行为作为观察记录，并作为与早睡偏好矛盾的反证暴露出来'],
+      shouldNotFormGists: ['直接改写或删除旧的早睡偏好'],
+    },
+  };
+  const s2bmock = new MockLLMClient({ consolidate: (cogIds, evIds) => ({ conflict: [{ cognition_id: cogIds[0], support_evidence_ids: [evIds[0]] }] }) });
+  const r2b = await runScenario(s2b, s2bmock);
+  ok(r2b.active.some((a) => a.credStatus === 'conflicted'), `ST-2b 落库存在在册 conflicted 认知（暴露不裁决）`);
+  const judge2b = new MockJudge(['NO', 'NO', 'NO']); // 只有 shouldNot 会消耗 judge：3 次
+  const g2b = await scoreGists(s2b, r2b, judge2b);
+  ok(g2b.gistRecall === 1, `ST-2b conflict shouldForm 确定性命中 → gistRecall=1（实际 ${g2b.gistRecall}）`);
+  ok(g2b.formResults[0]?.deterministic === true, `ST-2b conflict 的 form 判分标记为确定性（signal=${g2b.formResults[0]?.signal}）`);
+  ok(judge2b.callCount === JUDGE_RUNS, `ST-2b judge 只判 shouldNot、不判 conflict 的 shouldForm（callCount=${judge2b.callCount}，期望 ${JUDGE_RUNS}）`);
+  ok(g2b.overInferRate === 0, `ST-2b shouldNot 全 NO → overInferRate=0（实际 ${g2b.overInferRate}）`);
+
+  // ── 2c) conflict 未暴露 → 确定性判 miss（证明非永真，不是恒 1） ──
+  console.log('[selftest] 2c) conflict 未暴露时确定性判 miss（非永真）');
+  const s2cmock = new MockLLMClient({ consolidate: () => ({ new: [], reinforce: [], correct: [], conflict: [] }) });
+  const r2c = await runScenario(s2b, s2cmock); // 同场景但 mock 什么都不标
+  ok(!r2c.active.some((a) => a.credStatus === 'conflicted'), `ST-2c 未暴露冲突 → 落库无 conflicted 认知`);
+  const g2c = await scoreGists(s2b, r2c, new MockJudge(['NO', 'NO', 'NO']));
+  ok(g2c.gistRecall === 0, `ST-2c 冲突未暴露 → conflict gist 确定性判 miss、gistRecall=0（非永真，实际 ${g2c.gistRecall}）`);
+
   // ── 3) 结构断言 · chitchat-negative（不该形成认知） ──
   console.log('[selftest] 3) 结构断言 · chitchat-negative');
   const s3 = {
@@ -911,6 +998,7 @@ async function selftest() {
       partial: o.partial ?? false,
       model: o.model ?? 'mimo',
       judgePromptVersion: o.judgePromptVersion ?? 'v1',
+      gistScoringVersion: o.gistScoringVersion, // 不传 = 缺字段（模拟 v2 前的旧 run），diffRuns 按 'v1' 处理
       promptVersions: o.promptVersions ?? { consolidate: 'v2', distill: 'v1' },
     },
     agg: {
@@ -964,6 +1052,13 @@ async function selftest() {
   // 6e) judge 提示词变更 → 软判不可比警示
   const diffJudge = diffRuns(mkRun({ structPass: 200, structTotal: 223, judgePromptVersion: 'v1' }), mkRun({ structPass: 200, structTotal: 223, judgePromptVersion: 'v2' }));
   ok(diffJudge.warnings.some((w) => /judge 提示词变了/.test(w)), 'diffRuns judge 版本变更 → 警示「judge 提示词变了」');
+
+  // 6f) gist 评分口径变更（旧基线缺字段=v1 vs 新 run v2）→ 高声警示「gist 评分口径变了」、不可跨版本比
+  const diffGsv = diffRuns(mkRun({ structPass: 200, structTotal: 223 }), mkRun({ structPass: 200, structTotal: 223, gistScoringVersion: 'v2' }));
+  ok(diffGsv.warnings.some((w) => /gist 评分口径变了/.test(w)), 'diffRuns gist 口径变更（缺字段→v2）→ 警示「gist 评分口径变了」');
+  // 同口径（都 v2）→ 不误报
+  const diffGsvSame = diffRuns(mkRun({ structPass: 200, structTotal: 223, gistScoringVersion: 'v2' }), mkRun({ structPass: 200, structTotal: 223, gistScoringVersion: 'v2' }));
+  ok(!diffGsvSame.warnings.some((w) => /gist 评分口径变了/.test(w)), 'diffRuns 同 gist 口径（v2=v2）→ 不误报口径变更');
 
   if (failures === 0) {
     console.log('\n[selftest] ✓ 全部通过（结构断言判定、不变量、检测器负例、judge 多数投票、gist 判分、diffRuns 前后对比均离线验证）');
