@@ -1,10 +1,19 @@
-# 机读快照必须逐字比对 —— 钉死 LF。
+# 全仓文本行尾归一为 LF（ROADMAP Next,2026-07-12）。
 #
-# 背景（2026-07-10 实测）：仓库无 .gitattributes 且开发机 core.autocrlf=true 时，
-# fresh clone 会把这些文本快照 smudge 成 CRLF（`git ls-files --eol` 显示 w/crlf），
-# 而生成器用 '\n' 拼串 → `current === stored` 必然不成立 → api-freeze / 提示词哈希闸门
-# 在 Windows 新克隆上【假红】。CI 跑 Linux 故一直没暴露。
-#
-# 这里只钉这两个机读快照，不做全仓 eol 归一（那会让 200+ 既有文件产生无关 diff）。
+# 背景:开发机 core.autocrlf=true 会把工作树检出成 CRLF,与 .prettierrc(endOfLine: lf)冲突——
+# `npm run format` 在 Windows 报 200+ 假 style issue,且每次 git 操作刷 "LF will be replaced by CRLF"。
+# 下面这条让 git 统一按 LF 处理所有文本(索引本已全 LF,`git add --renormalize .` 无内容 diff);
+# 二进制由 text=auto 自动识别不转,另对常见二进制显式 -text 兜底。
+# 工作树已检出的 CRLF 文件不会自动变——要就地归一:`git add --renormalize . && git checkout .`。
+* text=auto eol=lf
+*.png -text
+*.gif -text
+*.jpg -text
+*.jpeg -text
+*.ico -text
+*.db -text
+*.gguf -text
+
+# 机读快照另显式钉死 LF —— 逐字比对;api-freeze / 提示词哈希闸门在 Windows 新克隆上曾因 CRLF 假红(2026-07-10 实测)。
 tests/api/api-surface.snapshot        text eol=lf
 tests/prompts/prompt-hashes.snapshot  text eol=lf
