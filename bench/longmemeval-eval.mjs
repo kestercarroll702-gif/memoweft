@@ -20,7 +20,7 @@
  *   LONGMEMEVAL_PATH=/path/to/longmemeval_s.json node bench/longmemeval-eval.mjs --dry --limit 2   # 验 loader/检索结构(无答题)
  *   LONGMEMEVAL_PATH=... node bench/longmemeval-eval.mjs --limit 5    # 接 mimo 答题 + judge(judge 默认=答题模型 mimo,非标准)
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -37,6 +37,8 @@ const DRY = argv.includes('--dry');
 const SELFTEST = argv.includes('--selftest');
 const getNum = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] ? Number(argv[i + 1]) : d; };
 const LIMIT = getNum('--limit', Infinity);
+const OFFSET = getNum('--offset', 0); // 分批跑:跳过前 N 题(配 --limit)。node:sqlite 累积 :memory: 连接在大单进程会 native 崩,分批规避(同 §19.2)。
+const MERGE = argv.includes('--merge'); // 合并同 commit 的分片 JSON → 完整 LongMemEval 报告
 
 // ── loader:LongMemEval_S 实例 → 归一 ─────────────────────────────────────────
 // 实例 schema:{question_id, question_type, question, answer, question_date,
@@ -165,12 +167,41 @@ async function runItemWith(item, ansLLM, judgeLLM) {
 // ── main ──────────────────────────────────────────────────────────────────────
 async function main() {
   if (SELFTEST) { await selftest(); return; }
+  if (MERGE) {
+    const commit = (() => { try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'nogit'; } })();
+    const files = readdirSync(RUNS_DIR).filter((f) => new RegExp(`-${commit}-longmemeval-s\\d+n\\d+\\.json$`).test(f)).sort();
+    if (!files.length) { console.error(`无匹配分片(先跑 per-batch --offset/--limit;commit ${commit})`); process.exit(1); }
+    const byType = {}; let ansTok = 0; const ids = new Set(); let judgeModel = '?', answerModel = '?';
+    for (const f of files) {
+      const j = JSON.parse(readFileSync(resolve(RUNS_DIR, f), 'utf8'));
+      judgeModel = j.judge; answerModel = j.answerModel; ansTok += j.answerTokens || 0;
+      for (const it of j.items) ids.add(it.id);
+      for (const [t, b] of Object.entries(j.byType)) { byType[t] ??= { n: 0, correctN: 0, yes: 0 }; byType[t].n += b.n; byType[t].correctN += b.correctN; byType[t].yes += b.yes; }
+    }
+    const totN = Object.values(byType).reduce((a, b) => a + b.n, 0);
+    const totYes = Object.values(byType).reduce((a, b) => a + b.yes, 0);
+    const totJudged = Object.values(byType).reduce((a, b) => a + b.correctN, 0);
+    const L = [`# LongMemEval_S · 完整 (accuracy · LLM-judge, 合并 ${files.length} 批)`, ''];
+    L.push(`- commit: \`${commit}\` · items: ${totN} (unique ${ids.size}) · answer: ${answerModel} · judge: ${judgeModel} · answer tokens: ${ansTok}`);
+    L.push('- 摄入纪律:只 user 回合(铁律 3a);single-session-assistant 类按设计答不出。会话日期已注入。judge=gpt-4o 快照即标准口径。');
+    L.push('', '| question_type | n | 正确率 |', '|---|---|---|');
+    for (const t of Object.keys(byType).sort()) { const b = byType[t]; L.push(`| ${t} | ${b.n} | ${b.correctN ? (b.yes / b.correctN * 100).toFixed(1) + '%' : 'n/a'} |`); }
+    L.push(`| **overall** | ${totN} | **${totJudged ? (totYes / totJudged * 100).toFixed(1) + '%' : 'n/a'}** |`);
+    const report = L.join('\n') + '\n';
+    console.log('\n' + report);
+    if (!existsSync(RUNS_DIR)) mkdirSync(RUNS_DIR, { recursive: true });
+    const date = new Date().toISOString().slice(0, 10);
+    writeFileSync(resolve(RUNS_DIR, `${date}-${commit}-longmemeval-merged.md`), report);
+    console.log('written merged.');
+    return;
+  }
   if (!LONGMEMEVAL_PATH || !existsSync(LONGMEMEVAL_PATH)) {
     console.error(`LongMemEval 数据缺失。设 LONGMEMEVAL_PATH 指向本地 longmemeval_s.json(数据自查许可,不入库;从 github.com/xiaowu0162/LongMemEval 获取)。\n无数据也可验管线:node bench/longmemeval-eval.mjs --selftest`);
     process.exit(1);
   }
   const data = JSON.parse(readFileSync(LONGMEMEVAL_PATH, 'utf8'));
-  const items = (Array.isArray(data) ? data : data.questions || []).slice(0, LIMIT).map(loadItem);
+  const raw = Array.isArray(data) ? data : data.questions || [];
+  const items = raw.slice(OFFSET, OFFSET + LIMIT).map(loadItem);
   let llm = null, judgeLLM = null;
   if (!DRY) {
     llm = new OpenAICompatClient();
@@ -186,7 +217,11 @@ async function main() {
     }
   }
   const rows = [];
-  for (const it of items) { process.stderr.write(`  item ${it.id} [${it.type}]: ${it.turns.length} turns…\n`); rows.push(await runItem(it, llm, judgeLLM)); }
+  for (const it of items) {
+    process.stderr.write(`  item ${it.id} [${it.type}]: ${it.turns.length} turns…\n`);
+    try { rows.push(await runItem(it, llm, judgeLLM)); }
+    catch (e) { process.stderr.write(`  item ${it.id} FAILED(跳过): ${e?.message || e}\n`); rows.push({ id: it.id, type: it.type, isAbstention: it.isAbstention, evidenceCount: 0, userTurns: 0, pred: '(error)', correct: null, failed: true }); }
+  }
   const sum = summarize(rows);
   const commit = (() => { try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'nogit'; } })();
 
@@ -205,8 +240,17 @@ async function main() {
   if (!DRY) {
     if (!existsSync(RUNS_DIR)) mkdirSync(RUNS_DIR, { recursive: true });
     const date = new Date().toISOString().slice(0, 10);
-    writeFileSync(resolve(RUNS_DIR, `${date}-${commit}-longmemeval.md`), report);
-    console.log('written runs report.');
+    const batched = OFFSET > 0 || Number.isFinite(LIMIT);
+    const base = `${date}-${commit}-longmemeval${batched ? `-s${OFFSET}n${items.length}` : ''}`;
+    writeFileSync(resolve(RUNS_DIR, `${base}.md`), report);
+    // JSON 侧车(供 --merge 合并 + 复现):byType 原始计数 + 每题对错。
+    writeFileSync(resolve(RUNS_DIR, `${base}.json`), JSON.stringify({
+      commit, date, offset: OFFSET, judge: process.env.MEMOWEFT_JUDGE_MODEL || 'mimo',
+      answerModel: process.env.MEMOWEFT_LLM_MODEL || process.env.DLA_LLM_MODEL || '?',
+      byType: sum.byType, answerTokens: llm?.usage?.totalTokens ?? 0,
+      items: rows.map((r) => ({ id: r.id, type: r.type, correct: r.correct, failed: !!r.failed })),
+    }, null, 2));
+    console.log('written:', `${base}.md (+ .json)`);
   }
 }
 
