@@ -19,17 +19,23 @@
  *   --retriever semantic --limit 1       # evidence 层·bge-m3 语义检索臂
  *   --layer cognition --limit 1 --qa 5   # cognition 层:updateProfile 消化→core.recall 召回→答题（需 LLM,不能 --dry）
  *   --no-dates …                         # 关掉会话日期注入,做 temporal A/B 对比
+ *   --matrix --limit 1                   # §19.2 检索矩阵:3臂(vector/keyword/hybrid)×双 embedder(Hash/bge-m3),Recall@topK,dry 免答题 LLM
  *   （无 flag）                           # 全量（慢,需 mimo key）
  *
  * 纪律:排除 category 5（adversarial,Mem0 惯例）;会话日期默认注入 evidence content + occurredAt（修 temporal 偏差,可 --no-dates 关）。
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { createMemoWeftCore } from '../src/core/createCore.ts';
 import { OpenAICompatClient } from '../src/llm/client.ts';
 import { loadEmbedConfig, OpenAICompatEmbedder } from '../src/retrieval/embedder.ts';
+// §19.2 矩阵:生产级 retrievers（只读 import，不改 src/tests）+ 确定性 HashEmbedder（测试目录的单一真身，避免重造）。
+import { KeywordRetriever } from '../src/retrieval/keywordRetriever.ts';
+import { VectorRetriever } from '../src/retrieval/vectorRetriever.ts';
+import { HybridRetriever } from '../src/retrieval/hybridRetriever.ts';
+import { HashEmbedder } from '../tests/retrieval/hashEmbedder.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNS_DIR = resolve(HERE, 'runs');
@@ -49,6 +55,9 @@ const RETRIEVER = (() => { const i = argv.indexOf('--retriever'); return i >= 0 
 const MAXTURNS = getNum('--max-turns', Infinity); // 冒烟限回放轮数（本地 embed 慢,减 evidence 量;keyword 与 semantic 用同值才可比）
 const LAYER = (() => { const i = argv.indexOf('--layer'); return i >= 0 && argv[i + 1] ? argv[i + 1] : 'evidence'; })(); // evidence | cognition（cognition = updateProfile→core.recall,用消化后的画像答题;需 LLM,不能 --dry）
 const DATES = !argv.includes('--no-dates'); // 默认注入会话日期（修 temporal 偏差,§19 剩余项）;--no-dates 关掉做 A/B 对比
+const MATRIX = argv.includes('--matrix'); // §19.2 三臂×双 embedder 检索矩阵（evidence 层 Recall@topK,dry 免答题 LLM;只 bge embed 有成本）
+const OFFSET = getNum('--offset', 0); // 跳过前 N 个 sample（配 --limit 分批跑:node:sqlite 累积开关 :memory: 连接在全量单进程下会 native 崩，分批规避）
+const MERGE_MATRIX = argv.includes('--merge-matrix'); // 合并 per-sample 矩阵分片 JSON（同 commit 的 *-matrix-s*n1.json）→ 完整矩阵报告
 
 // ── F1（归一化 partial-match 词重叠,LoCoMo 标准）──────────────────────────────
 const STOP = new Set(['a', 'an', 'the', 'of', 'to', 'in', 'on', 'at', 'is', 'was', 'were', 'and', 'or', 'for']);
@@ -210,14 +219,167 @@ function summarize(sampleResults) {
   return { total: all.length, byCat };
 }
 
+// ── §19.2 矩阵:一个 sample × 5 臂（evidence 层 Recall@topK）────────────────────
+// 臂 = {vector, keyword, hybrid} × {HashEmbedder 确定性, bge-m3 真实}。keyword 与 embedder 无关（单列）。
+//   共享底座:hybrid 复用同一 vector/keyword 实例（避免重复 embed 证据）→ bge 每 sample 只 embed 一遍证据。
+//   dry:只量检索命中（gold dia_id 是否进 top-k），不调答题 LLM;bge embed token 经 embedder.usage 如实记（§19.0）。
+async function runMatrix(sample) {
+  const core = createMemoWeftCore({ dbPath: ':memory:' });
+  const subjectId = sample.id;
+  for (const t of sample.turns.slice(0, MAXTURNS)) {
+    const content = DATES && t.date ? `[${t.date}] ${t.speaker}: ${t.text}` : `${t.speaker}: ${t.text}`;
+    const occurredAt = DATES ? parseLocomoDate(t.date) : null;
+    await core.ingestUserMessage({ subjectId, content, originId: t.diaId, occurredAt: occurredAt ?? undefined });
+  }
+  const allEv = core.memory.listEvidence({ subjectId });
+  const items = allEv.map((e) => ({ id: e.originId, text: e.rawContent })); // id=dia_id → search 命中直接对 gold
+
+  const cfg = loadEmbedConfig();
+  if (!cfg) { console.error('--matrix 需 embedder（MEMOWEFT_EMBED_* / DLA_EMBED_*）'); process.exit(1); }
+  const bge = new OpenAICompatEmbedder(cfg);
+  const kw = new KeywordRetriever(':memory:');
+  const vHash = new VectorRetriever(':memory:', new HashEmbedder());
+  const vBge = new VectorRetriever(':memory:', bge);
+  await kw.indexAll(items);
+  await vHash.indexAll(items);
+  await vBge.indexAll(items);
+  const arms = {
+    keyword: kw,
+    'vector-hash': vHash,
+    'vector-bge': vBge,
+    'hybrid-hash': new HybridRetriever([vHash, kw]),
+    'hybrid-bge': new HybridRetriever([vBge, kw]),
+  };
+  const armNames = Object.keys(arms);
+
+  const rows = [];
+  for (const q of sample.qa.slice(0, QA_LIMIT)) {
+    if (!q.evidence.length) continue; // 无 gold evidence 的题不计入检索命中
+    const perArm = {};
+    for (const name of armNames) {
+      const hits = await arms[name].search(q.question, TOP_K);
+      const ids = new Set(hits.map((h) => h.id));
+      perArm[name] = q.evidence.some((id) => ids.has(id));
+    }
+    rows.push({ category: q.category, perArm });
+  }
+  const embedUsage = bge.usage; // bge embed token（证据 + query 两侧都经它）
+  kw.close(); vHash.close(); vBge.close(); core.close();
+  return { id: sample.id, evidenceCount: allEv.length, rows, armNames, embedUsage };
+}
+
+function summarizeMatrix(sampleResults) {
+  const armNames = sampleResults.find((s) => s.armNames)?.armNames || [];
+  const all = sampleResults.flatMap((s) => s.rows);
+  const byCat = {};
+  for (const r of all) {
+    byCat[r.category] ??= { n: 0, hits: Object.fromEntries(armNames.map((a) => [a, 0])) };
+    byCat[r.category].n++;
+    for (const a of armNames) if (r.perArm[a]) byCat[r.category].hits[a]++;
+  }
+  return { total: all.length, armNames, byCat };
+}
+
 // ── main ────────────────────────────────────────────────────────────────────
 async function main() {
+  // ── §19.2 合并:把 per-sample 分片 JSON 聚合成完整矩阵（不读 LOCOMO 数据）────────
+  if (MERGE_MATRIX) {
+    const commit = (() => { try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'nogit'; } })();
+    const files = readdirSync(RUNS_DIR).filter((f) => new RegExp(`-${commit}-locomo-matrix-s\\d+n1\\.json$`).test(f)).sort();
+    if (!files.length) { console.error(`无匹配矩阵分片（先跑 per-sample --matrix;commit ${commit}）`); process.exit(1); }
+    let armNames = null; const agg = {}; let embTot = 0, embCalls = 0; const ids = [];
+    for (const f of files) {
+      const j = JSON.parse(readFileSync(resolve(RUNS_DIR, f), 'utf8'));
+      armNames ??= j.armNames; embTot += j.embedTokens || 0; embCalls += j.embedCalls || 0;
+      for (const s of j.samples) ids.push(s.id + (s.failed ? '(FAIL)' : ''));
+      for (const [c, b] of Object.entries(j.byCat)) {
+        agg[c] ??= { n: 0, hits: Object.fromEntries(armNames.map((a) => [a, 0])) };
+        agg[c].n += b.n; for (const a of armNames) agg[c].hits[a] += b.hits[a];
+      }
+    }
+    const cols = armNames;
+    const lines = [`# LoCoMo §19.2 检索矩阵·完整 (Recall@${TOP_K}, DRY, 合并 ${files.length} sample)`, ''];
+    lines.push(`- commit: \`${commit}\` · samples: ${ids.length} (${ids.join(', ')})`);
+    lines.push(`- 臂:vector / keyword / hybrid × HashEmbedder(确定性) / bge-m3(真实);evidence 层;会话日期${DATES ? '已注入' : '未注入'}`);
+    lines.push(`- bge-m3 embed tokens: ${embTot} (calls: ${embCalls}) · 逐 sample 独立进程跑（规避 node:sqlite 累积 native 崩），本文件由 --merge-matrix 聚合`);
+    lines.push('', `| category | n | ${cols.join(' | ')} |`, `|---|---|${cols.map(() => '---').join('|')}|`);
+    const overall = { n: 0, hits: Object.fromEntries(cols.map((a) => [a, 0])) };
+    for (const c of Object.keys(agg).sort()) {
+      const b = agg[c]; overall.n += b.n;
+      for (const a of cols) overall.hits[a] += b.hits[a];
+      lines.push(`| ${c} ${CAT_NAME[c] || ''} | ${b.n} | ${cols.map((a) => (b.hits[a] / b.n * 100).toFixed(1) + '%').join(' | ')} |`);
+    }
+    lines.push(`| **overall** | ${overall.n} | ${cols.map((a) => `**${(overall.hits[a] / overall.n * 100).toFixed(1)}%**`).join(' | ')} |`);
+    const report = lines.join('\n') + '\n';
+    console.log('\n' + report);
+    if (!existsSync(RUNS_DIR)) mkdirSync(RUNS_DIR, { recursive: true });
+    const date = new Date().toISOString().slice(0, 10);
+    writeFileSync(resolve(RUNS_DIR, `${date}-${commit}-locomo-matrix-merged.md`), report);
+    console.log('written:', resolve(RUNS_DIR, `${date}-${commit}-locomo-matrix-merged.md`));
+    return;
+  }
   if (!existsSync(LOCOMO_PATH)) {
     console.error(`LoCoMo 数据缺失:${LOCOMO_PATH}\n设 LOCOMO_PATH 指向本地 locomo10.json（数据 CC BY-NC,不入库;从 github.com/snap-research/locomo 获取）。`);
     process.exit(1);
   }
   const data = JSON.parse(readFileSync(LOCOMO_PATH, 'utf8'));
-  const samples = data.slice(0, LIMIT).map(loadSample);
+  const samples = data.slice(OFFSET, OFFSET + LIMIT).map(loadSample);
+  const commitOf = () => { try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'nogit'; } };
+
+  // ── §19.2 矩阵路径（自包含,dry:只量检索命中,不调答题 LLM）─────────────────────
+  if (MATRIX) {
+    const mResults = [];
+    for (const s of samples) {
+      process.stderr.write(`  [matrix] sample ${s.id}: ${s.turns.length} turns, ${Math.min(s.qa.length, QA_LIMIT)} QA…\n`);
+      try {
+        mResults.push(await runMatrix(s));
+      } catch (e) {
+        process.stderr.write(`  [matrix] sample ${s.id} FAILED(跳过): ${e?.message || e}\n`);
+        mResults.push({ id: s.id, failed: true, rows: [], armNames: null });
+      }
+    }
+    const msum = summarizeMatrix(mResults);
+    const commit = commitOf();
+    const embTot = mResults.reduce((a, r) => a + (r.embedUsage?.totalTokens || 0), 0);
+    const embCalls = mResults.reduce((a, r) => a + (r.embedUsage?.callsWithUsage || 0), 0);
+    const cols = msum.armNames;
+    const lines = [];
+    lines.push(`# LoCoMo §19.2 检索矩阵 (Recall@${TOP_K}, DRY)`);
+    lines.push('');
+    lines.push(`- commit: \`${commit}\` · samples: ${samples.length} · QA(有 gold evidence): ${msum.total} (已排除 category 5)`);
+    lines.push(`- 臂:vector / keyword / hybrid × HashEmbedder(确定性) / bge-m3(真实);evidence 层;会话日期${DATES ? '已注入' : '未注入'}`);
+    lines.push(`- bge-m3 embed tokens: ${embTot} (calls with usage: ${embCalls})`);
+    lines.push('');
+    lines.push(`| category | n | ${cols.join(' | ')} |`);
+    lines.push(`|---|---|${cols.map(() => '---').join('|')}|`);
+    const overall = { n: 0, hits: Object.fromEntries(cols.map((a) => [a, 0])) };
+    for (const c of Object.keys(msum.byCat).sort()) {
+      const b = msum.byCat[c];
+      overall.n += b.n;
+      for (const a of cols) overall.hits[a] += b.hits[a];
+      const cells = cols.map((a) => (b.n ? (b.hits[a] / b.n * 100).toFixed(1) + '%' : 'n/a'));
+      lines.push(`| ${c} ${CAT_NAME[c] || ''} | ${b.n} | ${cells.join(' | ')} |`);
+    }
+    const ocells = cols.map((a) => (overall.n ? (overall.hits[a] / overall.n * 100).toFixed(1) + '%' : 'n/a'));
+    lines.push(`| **overall** | ${overall.n} | ${ocells.map((x) => `**${x}**`).join(' | ')} |`);
+    const failed = mResults.filter((r) => r.failed).map((r) => r.id);
+    if (failed.length) lines.push('', `- ⚠ 跳过(失败)sample: ${failed.join(', ')}`);
+    const report = lines.join('\n') + '\n';
+    console.log('\n' + report);
+    if (!existsSync(RUNS_DIR)) mkdirSync(RUNS_DIR, { recursive: true });
+    const date = new Date().toISOString().slice(0, 10);
+    // 分批跑时(offset>0 或 limit 有限)文件名带 sample 范围,避免互相覆盖;JSON 侧车存原始计数供合并/复现。
+    const batched = OFFSET > 0 || Number.isFinite(LIMIT);
+    const base = `${date}-${commit}-locomo-matrix${DATES ? '' : '-nodates'}${batched ? `-s${OFFSET}n${samples.length}` : ''}`;
+    writeFileSync(resolve(RUNS_DIR, `${base}.md`), report);
+    writeFileSync(resolve(RUNS_DIR, `${base}.json`), JSON.stringify({
+      commit, date, topK: TOP_K, dates: DATES, offset: OFFSET, armNames: cols, byCat: msum.byCat,
+      samples: mResults.map((r) => ({ id: r.id, evidenceCount: r.evidenceCount ?? null, failed: !!r.failed, qaCounted: r.rows?.length ?? 0 })),
+      embedTokens: embTot, embedCalls: embCalls,
+    }, null, 2));
+    console.log('written:', resolve(RUNS_DIR, `${base}.md`), '(+ .json)');
+    return;
+  }
 
   let llm = null;
   if (!DRY) {

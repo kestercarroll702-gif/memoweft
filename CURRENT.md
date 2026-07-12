@@ -1,6 +1,6 @@
 # CURRENT — 当前状态(Integrator 每个工作段落结束更新)
 
-更新于:2026-07-12 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二~七批(中文版 / internals / README / glossary+naming / 文档 CI / 新人巡检处理)已落地本地;§18 实质全完成,只差打 tag phase-5-done(人类);Phase 6 进行中——LoCoMo 链路通 + cognition 层召回臂/会话日期注入已落地(本会话·纯 bench),本地)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
+更新于:2026-07-12 | 所在 Phase:**5 文档更不绕(§18·第一批英文页已上线 main + 第二~七批(中文版 / internals / README / glossary+naming / 文档 CI / 新人巡检处理)已落地本地;§18 实质全完成,只差打 tag phase-5-done(人类);Phase 6 进行中——LoCoMo 链路通 + cognition 层召回臂/会话日期注入 + §19.2 三臂×双embedder 完整矩阵已落地(本会话·纯 bench),本地)**(Phase 3/4 全绿,已推 main,待打 `phase-3-done`/`phase-4-done` tag)
 
 ## Phase 6 起头(进行中·§19 公开基准):LoCoMo 冒烟链路通(本地)
 
@@ -19,7 +19,14 @@
   - **日期注入对 temporal 决定性**:keyword 臂 temporal 平均 F1 **0.131→0.613(×4.7)**(命中率两边同 88%,差在模型读到日期才答得出)——旧「已知偏差」实修。
   - **evidence 层语义完胜关键词**:multi-hop F1 0.133→**0.407**(命中 20%→60%)、temporal 0.613→0.658、open-domain 命中 50%→100%(呼应+扩展 D-0008:真实 embedder 是召回提升来源,LoCoMo 大语料上 multi-hop 尤显)。
   - **cognition 层在逐句题上更差**:temporal F1 **0.025**(命中 31%)、multi-hop 0.343、成本 **87k token(≈2×,其 76k 在消化)**——消化丢 episodic 细节,是「画像级 recall vs 逐句事实召回粒度落差」的硬量化(非缺陷,定位使然)。
-  - **结论**:LoCoMo 逐句 episodic 题 **evidence 层 + 语义 bge-m3 是赢家**(F1 最高、更省);cognition 层不适合此类题。4 份 runs 入 `bench/runs/`(gitignore)。**剩(§19):完整矩阵(§19.2·三臂×双 embedder×全 10 sample)、参数敏感性网格(§19.3)、LongMemEval_S、BENCHMARKS.md(§19.4)、token/费用完整记录。**
+  - **结论**:LoCoMo 逐句 episodic 题 **evidence 层 + 语义 bge-m3 是赢家**(F1 最高、更省);cognition 层不适合此类题。4 份 runs 入 `bench/runs/`(gitignore)。
+- **§19.2 三臂×双 embedder 完整矩阵已跑(全 10 sample·1536 有-gold 题·Recall@15·dry;本会话·纯 bench,范围锁 `bench/locomo-eval.mjs`)**:生产级 retrievers(Vector/Keyword/HybridRetriever)× HashEmbedder(确定性)/bge-m3(真实),evidence 层。overall:**vector-bge 78.6% / hybrid-bge 77.7% / keyword 55.3% / hybrid-hash 50.6% / vector-hash 31.3%**。
+  - **真实 bge-m3 压倒性**:+47pt vs 确定性向量(>D-0008 自建集 +35%)——最大杠杆,每类别都碾压。
+  - **强 embedder 上 hybrid≡vector**(77.7≈78.6,微降):在 LoCoMo 大语料再次坐实 **D-0008「hybrid 不进公共 API」**;生产 vector-only 正确。
+  - **弱 embedder 上 hybrid≫vector**(50.6 vs 31.3,+19pt):keyword 补真信号——**refine D-0008 caveat**(hybrid 价值取决 embedder 强弱)。
+  - **keyword-only 55.3% > 确定性向量/hybrid**:验证 D-0008「keyword 大语料被低估」。
+  - **踩坑+鲁棒化**:全量单进程第 9 sample `node:sqlite` 累积 `:memory:` 连接 **native 崩**(exit 127·无 JS 错)→ 改**每 sample 独立进程**(`--offset`/`--limit`)+ JSON 分片 + **`--merge-matrix`** 合并,全 10 绿、可复现。分片+合并 runs 入 `bench/runs/`(gitignore)。
+  - **剩(§19):参数敏感性网格(§19.3)、LongMemEval_S、BENCHMARKS.md(§19.4)、token/费用完整记录。**
 - 数据 NC 许可:`bench/data/` + `bench/runs/*-locomo-*` 已 gitignore,数据只在本地(LOCOMO_PATH),绝不入库。
 - **Phase 6 完整还差**(大工程·多会话):完整 10 sample×~1986 QA + 三臂×双 embedder 矩阵(§19.2)+ 参数敏感性网格(§19.3)+ LongMemEval_S + BENCHMARKS.md(§19.4)+ token/费用完整记录。
 
