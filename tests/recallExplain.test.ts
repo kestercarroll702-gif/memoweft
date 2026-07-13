@@ -104,6 +104,68 @@ function makeStub2() {
   };
 }
 
+test('D-0023 core.memory.muteCognition → 该认知不再召回，但仍 active + confidence 不变；unmute 恢复召回', async () => {
+  const core = createMemoWeftCore({ dbPath: ':memory:', llm: makeStub(), retriever: wordRetriever() });
+  try {
+    await core.ingestUserMessage({ content: 'I like tea', subjectId: 'u' });
+    await core.updateProfile({ subjectId: 'u' });
+    const q = 'tea drink like';
+
+    const c0 = core.memory.listCognitions({ subjectId: 'u' }).find((c) => c.content.includes('tea'))!;
+    assert.ok(c0?.id, '先有该认知');
+    assert.ok((await core.recall({ query: q, subjectId: 'u' })).some((h) => h.id === c0.id), '静音前能召回');
+
+    // 静音
+    const muted = core.memory.muteCognition({ cognitionId: c0.id, muted: true, reason: '这条召回没用' });
+    assert.ok(muted?.mutedAt, 'muteCognition(muted:true) → mutedAt 置上');
+    assert.equal(muted!.confidence, c0.confidence, '静音不改 confidence（铁律 3b：与置信度正交）');
+    assert.ok(!(await core.recall({ query: q, subjectId: 'u' })).some((h) => h.id === c0.id), '静音后不再召回该认知');
+    // 但仍 active（仍在 listCognitions、仍参与画像演化）——区别于 archive 的全面雪藏
+    const listed = core.memory.listCognitions({ subjectId: 'u' });
+    assert.ok(listed.some((c) => c.id === c0.id && c.mutedAt), '静音认知仍在 listCognitions（仍 active、仅从召回雪藏）');
+
+    // 取消静音 → 恢复召回
+    const unmuted = core.memory.muteCognition({ cognitionId: c0.id, muted: false, reason: '恢复' });
+    assert.equal(unmuted?.mutedAt, null, 'muteCognition(muted:false) → mutedAt 清空');
+    assert.ok((await core.recall({ query: q, subjectId: 'u' })).some((h) => h.id === c0.id), '取消静音后又能召回');
+
+    // 不存在的 id → null（不抛）
+    assert.equal(core.memory.muteCognition({ cognitionId: 'nope', muted: true, reason: 'x' }), null, '不存在的认知 → null');
+  } finally {
+    core.close();
+  }
+});
+
+test('D-0023 索引排除（对抗审查加固）：muted 认知重建索引后不进检索索引，但仍 active', async () => {
+  // 记录型 retriever：留住最近一次 indexAll 收到的 id 集，用来验证 muted 是否被排除出索引。
+  let lastIndexed: string[] = [];
+  const ret: Retriever = {
+    async indexAll(items) {
+      lastIndexed = items.map((i) => i.id);
+    },
+    async search(query, topK) {
+      return lastIndexed.slice(0, topK).map((id) => ({ id, score: 1 }));
+    },
+  };
+  const core = createMemoWeftCore({ dbPath: ':memory:', llm: makeStub(), retriever: ret });
+  try {
+    await core.ingestUserMessage({ content: 'I like tea', subjectId: 'u' });
+    await core.updateProfile({ subjectId: 'u' });
+    const c0 = core.memory.listCognitions({ subjectId: 'u' }).find((c) => c.content.includes('tea'))!;
+    assert.ok(lastIndexed.includes(c0.id), '未静音时在检索索引里');
+
+    core.memory.muteCognition({ cognitionId: c0.id, muted: true, reason: '没用' });
+    // 触发重建索引（ingest 新事件 → updateProfile 不早退）
+    await core.ingestUserMessage({ content: 'hello there friend', subjectId: 'u' });
+    await core.updateProfile({ subjectId: 'u' });
+    assert.ok(!lastIndexed.includes(c0.id), '静音后重建索引【不含】它——不占 top-K 检索槽（不饿死同话题召回）');
+    // 但仍 active（仍在 listCognitions、consolidation 仍能见它）
+    assert.ok(core.memory.listCognitions({ subjectId: 'u' }).some((c) => c.id === c0.id && c.mutedAt), '仍在 listCognitions（仍 active、仅从索引/召回排除）');
+  } finally {
+    core.close();
+  }
+});
+
 test('D-0022 core.recall({ contentTypes }) → 只召回指定类型；不传 = 全类型；结果带 contentType', async () => {
   const core = createMemoWeftCore({ dbPath: ':memory:', llm: makeStub2(), retriever: wordRetriever() });
   try {

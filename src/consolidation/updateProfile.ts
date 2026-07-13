@@ -92,7 +92,10 @@ export async function updateProfile(subjectId: string, deps: UpdateProfileDeps):
   const t3 = Date.now();
   // 重建召回索引：只索引【未失效】的认知（被纠正/失效的不再被召回；含新产假设）。
   // 索引是读路径优化（cell 4）——嵌入器挂了也不该让已落库的画像更新失败（呼应 conversation 的"召回失败不挡"）。
-  const cogs = deps.cognitionStore.active(subjectId);
+  // 排除 muted（D-0023 召回负反馈·对抗审查加固）：静音认知仍 active（consolidation/attribute 照常见它、仍演化），
+  //   但【不进召回索引】——否则它永久占 top-K 检索槽、门控后跳过又不补足 topK，会饿死同话题其它召回。
+  //   recall.ts 的 `if (c.mutedAt) continue` 门控留作【刚静音、索引尚未重建】那段窗口的守门（双保险）。
+  const cogs = deps.cognitionStore.active(subjectId).filter((c) => !c.mutedAt);
   let indexed = 0;
   let indexError: string | null = null;
   try {

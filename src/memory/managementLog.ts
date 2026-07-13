@@ -22,7 +22,7 @@ CREATE INDEX IF NOT EXISTS ix_mgmt_target ON management_log(target_id);
 
 /** 一条审计行（读出形状；detail 已从 JSON 解析）。 */
 export interface ManagementLogEntry {
-  /** 操作名：invalidate / archive / merge / remove_evidence / remove_cognition / update_authorization。 */
+  /** 操作名：invalidate / archive / mute / unmute / merge / remove_evidence / remove_cognition / update_authorization。 */
   op: string;
   /** 目标类型：cognition / evidence。 */
   targetKind: string;

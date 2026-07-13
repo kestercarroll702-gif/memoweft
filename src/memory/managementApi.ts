@@ -94,6 +94,13 @@ export interface ArchiveCognitionInput {
   reason: string;
 }
 
+export interface MuteCognitionInput {
+  cognitionId: string;
+  /** true = 静音（mutedAt=now，召回跳过）；false = 取消静音（mutedAt=null，恢复召回）。 */
+  muted: boolean;
+  reason: string;
+}
+
 /** 完整性问题一条：某张溯源链的 join 行指向了不存在的行。 */
 export interface IntegrityIssue {
   kind: 'orphan_event_evidence' | 'orphan_cognition_evidence';
@@ -160,6 +167,9 @@ export interface MemoryManagementAPI {
   mergeCognition(input: MergeCognitionInput): MergeCognitionResult;
   /** 归档（archivedAt=now）+ 审计。召回跳过 archived（共享召回函数门控）；数据保留、可经 update 恢复。 */
   archiveCognition(input: ArchiveCognitionInput): Cognition | null;
+  /** 召回负反馈（D-0023）：静音/取消静音 + 审计。muted:true → mutedAt=now（召回跳过，但认知仍 active、仍参与 consolidation/画像演化，
+   *  区别于 archive 的全面雪藏）；muted:false → mutedAt=null（恢复召回）。与 confidence 正交、不碰置信度自算（铁律 3b）。不存在返回 null。 */
+  muteCognition(input: MuteCognitionInput): Cognition | null;
   /** 完整性检查 v1：只报告不修——孤儿 event_evidence / cognition_evidence（指向不存在的行）。 */
   checkIntegrity(): IntegrityReport;
 
@@ -384,6 +394,16 @@ export function createMemoryManagementAPI(
         const updated = cognitionStore.update(cognitionId, { archivedAt: clock().toISOString() });
         if (!updated) return null;
         managementLog.append({ op: 'archive', targetKind: 'cognition', targetId: cognitionId, reason, detail: null });
+        return updated;
+      });
+    },
+
+    muteCognition({ cognitionId, muted, reason }) {
+      return transaction(() => {
+        // 仅动 mutedAt（召回门控），不碰 confidence/credStatus（铁律 3b 正交）；muted:false 清标恢复召回。
+        const updated = cognitionStore.update(cognitionId, { mutedAt: muted ? clock().toISOString() : null });
+        if (!updated) return null;
+        managementLog.append({ op: muted ? 'mute' : 'unmute', targetKind: 'cognition', targetId: cognitionId, reason, detail: null });
         return updated;
       });
     },

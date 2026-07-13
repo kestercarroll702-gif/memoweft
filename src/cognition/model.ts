@@ -55,6 +55,10 @@ export interface Cognition {
   /** 归档时间（批次2 受控管理）：非 null = 已归档——召回跳过（invalid 同款待遇），数据保留、可恢复。
    *  可选字段以兼容既有构造处（旧代码不填 = 未归档）。 */
   archivedAt?: string | null;
+  /** 静音时间（D-0023 召回负反馈）：非 null = 已静音——【仅】从召回跳过,但仍 active、仍参与 consolidation/画像演化
+   *  （区别于 archive 的全面雪藏、invalidate 的不再为真）。与 confidence 正交、不碰置信度自算（铁律 3b）。
+   *  可选字段以兼容既有构造处（旧代码不填 = 未静音）；经 core.memory.muteCognition 置/清。 */
+  mutedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

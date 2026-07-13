@@ -15,6 +15,7 @@ export {
   type MergeCognitionInput,
   type MergeCognitionResult,
   type ArchiveCognitionInput,
+  type MuteCognitionInput,
   type IntegrityIssue,
   type IntegrityReport,
   type MemoryManagementDeps,

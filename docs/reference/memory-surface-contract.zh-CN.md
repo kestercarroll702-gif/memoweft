@@ -68,6 +68,7 @@
 | `removeCognitionSafely(input)` | `RemoveCognitionSafelyInput` | `RemoveCognitionResult` | stable | 删认知连溯源链 + 审计；审计 detail **只存元数据、不存内容原文**。 |
 | `mergeCognition(input)` | `MergeCognitionInput` | `MergeCognitionResult` | stable | 仅同 subject；source 链搬到 target（去重）、target 置信重算、source 标失效不硬删。source/target 不存在、跨 subject、target 已失效/已归档 → **抛错**（什么都不改）。 |
 | `archiveCognition(input)` | `ArchiveCognitionInput` | `Cognition \| null` | stable | 归档（`archivedAt=now`）+ 审计；召回跳过 archived；数据保留可恢复；不存在返回 `null`。 |
+| `muteCognition(input)` | `MuteCognitionInput` | `Cognition \| null` | stable | D-0023 召回负反馈：`muted:true`→`mutedAt=now`（**召回跳过它，但它仍 active、仍参与画像演化**——区别于 archive 的全面雪藏）；`muted:false`→`mutedAt=null`（取消静音）；与 confidence 正交（铁律 3b）；不存在返回 `null`。 |
 | `checkIntegrity()` | — | `IntegrityReport` | stable | 只读不改、不落审计、无 `reason`；报孤儿 join 行。 |
 | `listEvidence(input?)` | `ListMemoryInput` | `Evidence[]` | stable | 列某 subject 全部证据；只读、不落审计。 |
 | `listCognitions(input?)` | `ListMemoryInput` | `CognitionWithMeta[]` | stable | 列某 subject 全部认知，每条配溯源链 + **读时算**的 `effectiveConfidence`（不持久化，见隐性契约第 5 条）。 |
@@ -110,7 +111,7 @@
 4. **`Event`** — stable。事件落库形状：`id / subjectId / summary / occurredAt / createdAt`。依据 `src/event/model.ts:10-18`。
 5. **`EventInput`** — **experimental**。宿主一般不直接构造（由 `distill` 内部产）；Host 侧无直接构造点（grep `apps/memoweft-host` 无命中）。依据 `src/event/model.ts:20-26`。
 6. **`EventWithEvidence`** — stable（`core.memory.listEvents` 返回项）：`Event + evidenceIds: string[]`。依据 `src/event/model.ts:28-30`。
-7. **`Cognition`** — stable。认知落库形状：`id / subjectId / content / contentType / formedBy / confidence(0~1000) / credStatus / scope / validAt / invalidAt / askedAt / archivedAt? / createdAt / updatedAt`。`askedAt` 字段本身 stable，其**写入时机**（M5 主动询问）属 experimental 面。依据 `src/cognition/model.ts:40-60`。
+7. **`Cognition`** — stable。认知落库形状：`id / subjectId / content / contentType / formedBy / confidence(0~1000) / credStatus / scope / validAt / invalidAt / askedAt / archivedAt? / mutedAt? / createdAt / updatedAt`（`mutedAt?` = D-0023 召回静音：非 null → 召回跳过，但认知仍 active；与 confidence 正交）。`askedAt` 字段本身 stable，其**写入时机**（M5 主动询问）属 experimental 面。依据 `src/cognition/model.ts:40-60`。
 8. **`CognitionInput`** — **experimental**。宿主不直接构造（`confidence`/`credStatus` 由 `consolidate` 算好后传入；Host grep 无命中）。依据 `src/cognition/model.ts:63-75`。
 9. **`ContentType`** — stable 枚举：`fact | preference | goal | project | state | trait | hypothesis | trend`。加值不算破坏、须留 default。依据 `src/cognition/model.ts:15-23`。
 10. **`FormedBy`** — stable 枚举：`stated | observed | ruled | inferred`。依据 `src/cognition/model.ts:26`。

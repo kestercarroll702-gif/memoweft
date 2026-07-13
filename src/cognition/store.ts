@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS cognition (
   invalid_at   TEXT,
   asked_at     TEXT,
   archived_at  TEXT,
+  muted_at     TEXT,
   created_at   TEXT    NOT NULL,
   updated_at   TEXT    NOT NULL
 );
@@ -58,6 +59,7 @@ interface CognitionRow {
   invalid_at: string | null;
   asked_at: string | null;
   archived_at: string | null;
+  muted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +78,7 @@ function fromRow(r: CognitionRow): Cognition {
     invalidAt: r.invalid_at,
     askedAt: r.asked_at,
     archivedAt: r.archived_at,
+    mutedAt: r.muted_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -92,6 +95,8 @@ export interface CognitionPatch {
   askedAt?: string | null;
   /** 归档时间（批次2 受控管理）：非 null = 已归档，召回跳过；传 null 可恢复。经 core.memory.archiveCognition 写入。 */
   archivedAt?: string | null;
+  /** 静音时间（D-0023 召回负反馈）：非 null = 已静音，召回跳过【但仍 active、仍参与画像演化】；传 null 可取消。经 core.memory.muteCognition 写入。 */
+  mutedAt?: string | null;
 }
 
 export interface CognitionStore {
@@ -133,7 +138,9 @@ export class SqliteCognitionStore implements CognitionStore {
     this.migrate();
   }
 
-  /** 幂等迁移：旧库补上后加的列（阶段 3 asked_at / 批次2 archived_at）。新库由 SCHEMA 直接带上。 */
+  /** 幂等迁移：旧库补上后加的列（阶段 3 asked_at / 批次2 archived_at / D-0023 muted_at）。新库由 SCHEMA 直接带上。
+   *  为何 muted_at 走这里而非 migrations.ts v2：它是与 archived_at 同族的 nullable 状态位，缺列补对【任何构造路径】
+   *  （含直接构造老库、不经 openStores/runMigrations）都稳；formal 迁移路径留给需版本化/备份/数据变换的迁移（见 D-0023）。 */
   private migrate(): void {
     const cols = this.db
       .prepare("SELECT name FROM pragma_table_info('cognition')")
@@ -143,6 +150,9 @@ export class SqliteCognitionStore implements CognitionStore {
     }
     if (!cols.some((c) => c.name === 'archived_at')) {
       this.db.exec('ALTER TABLE cognition ADD COLUMN archived_at TEXT');
+    }
+    if (!cols.some((c) => c.name === 'muted_at')) {
+      this.db.exec('ALTER TABLE cognition ADD COLUMN muted_at TEXT');
     }
   }
 
@@ -161,6 +171,7 @@ export class SqliteCognitionStore implements CognitionStore {
       invalidAt: input.invalidAt ?? null,
       askedAt: null, // 新建的认知一律未问过；提问后由 proposeAsk 经 update 写入
       archivedAt: null, // 新建的认知一律未归档；归档走 core.memory.archiveCognition
+      mutedAt: null, // 新建的认知一律未静音；静音走 core.memory.muteCognition（D-0023）
       createdAt: now,
       updatedAt: now,
     };
@@ -168,9 +179,9 @@ export class SqliteCognitionStore implements CognitionStore {
       .prepare(
         `INSERT INTO cognition (
           id, subject_id, content, content_type, formed_by,
-          confidence, cred_status, scope, valid_at, invalid_at, asked_at, archived_at, created_at, updated_at
+          confidence, cred_status, scope, valid_at, invalid_at, asked_at, archived_at, muted_at, created_at, updated_at
         ) VALUES ($id,$subject_id,$content,$content_type,$formed_by,
-          $confidence,$cred_status,$scope,$valid_at,$invalid_at,$asked_at,$archived_at,$created_at,$updated_at)`,
+          $confidence,$cred_status,$scope,$valid_at,$invalid_at,$asked_at,$archived_at,$muted_at,$created_at,$updated_at)`,
       )
       // 绑定用【裸键】（无 $ 前缀）：node:sqlite 裸键 / $ 前缀都收，行为不变；
       // 与 evidence store 统一，且为步2 的 better-sqlite3（只认裸键）铺路。
@@ -187,6 +198,7 @@ export class SqliteCognitionStore implements CognitionStore {
         invalid_at: cog.invalidAt,
         asked_at: cog.askedAt,
         archived_at: cog.archivedAt,
+        muted_at: cog.mutedAt,
         created_at: cog.createdAt,
         updated_at: cog.updatedAt,
       } as unknown as Record<string, SQLInputValue>);
@@ -246,13 +258,14 @@ export class SqliteCognitionStore implements CognitionStore {
       invalidAt: patch.invalidAt === undefined ? cur.invalidAt : patch.invalidAt,
       askedAt: patch.askedAt === undefined ? cur.askedAt : patch.askedAt,
       archivedAt: patch.archivedAt === undefined ? (cur.archivedAt ?? null) : patch.archivedAt,
+      mutedAt: patch.mutedAt === undefined ? (cur.mutedAt ?? null) : patch.mutedAt,
       updatedAt: this.clock().toISOString(),
     };
     this.db
       .prepare(
-        'UPDATE cognition SET content=?, confidence=?, cred_status=?, scope=?, invalid_at=?, asked_at=?, archived_at=?, updated_at=? WHERE id=?',
+        'UPDATE cognition SET content=?, confidence=?, cred_status=?, scope=?, invalid_at=?, asked_at=?, archived_at=?, muted_at=?, updated_at=? WHERE id=?',
       )
-      .run(next.content, next.confidence, next.credStatus, next.scope, next.invalidAt, next.askedAt, next.archivedAt, next.updatedAt, id);
+      .run(next.content, next.confidence, next.credStatus, next.scope, next.invalidAt, next.askedAt, next.archivedAt, next.mutedAt, next.updatedAt, id);
     return this.get(id);
   }
 
@@ -269,9 +282,9 @@ export class SqliteCognitionStore implements CognitionStore {
       .prepare(
         `INSERT INTO cognition (
           id, subject_id, content, content_type, formed_by,
-          confidence, cred_status, scope, valid_at, invalid_at, asked_at, archived_at, created_at, updated_at
+          confidence, cred_status, scope, valid_at, invalid_at, asked_at, archived_at, muted_at, created_at, updated_at
         ) VALUES ($id,$subject_id,$content,$content_type,$formed_by,
-          $confidence,$cred_status,$scope,$valid_at,$invalid_at,$asked_at,$archived_at,$created_at,$updated_at)`,
+          $confidence,$cred_status,$scope,$valid_at,$invalid_at,$asked_at,$archived_at,$muted_at,$created_at,$updated_at)`,
       )
       // 裸键绑定（同 put）：node:sqlite 两种键都收，为步2 better-sqlite3 铺路，行为零变化。
       .run({
@@ -287,6 +300,7 @@ export class SqliteCognitionStore implements CognitionStore {
         invalid_at: cognition.invalidAt,
         asked_at: cognition.askedAt,
         archived_at: cognition.archivedAt ?? null, // 旧包没有此字段 → null（未归档）
+        muted_at: cognition.mutedAt ?? null, // 旧包没有此字段 → null（未静音）
         created_at: cognition.createdAt,
         updated_at: cognition.updatedAt,
       } as unknown as Record<string, SQLInputValue>);
