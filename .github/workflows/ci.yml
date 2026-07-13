@@ -139,6 +139,18 @@ jobs:
       - name: AI SDK Adapter Build
         run: npm run build -w @memoweft/adapter-ai-sdk
 
+      # Claude Agent SDK 适配器（0.1.0·hooks 型进程内适配器，D-0025）：同上靠 Core dist 做 typecheck/test、
+      #   自带 build 出可发布 dist。SDK @anthropic-ai/claude-agent-sdk 是 peer + dev；它经 optionalDependencies
+      #   附带平台 native 二进制（下载而非编译），npm ci 会拉取——比其它包稍重但不阻塞（Core 主包仍零依赖）。
+      - name: Claude Agent SDK Adapter Typecheck
+        run: npm run typecheck -w @memoweft/adapter-claude-agent-sdk
+
+      - name: Claude Agent SDK Adapter Test
+        run: npm test -w @memoweft/adapter-claude-agent-sdk
+
+      - name: Claude Agent SDK Adapter Build
+        run: npm run build -w @memoweft/adapter-claude-agent-sdk
+
       # docs 里【未标 snippet:skip】的 ts 围栏逐个冒烟跑(无 key、内存库)。放在所有 workspace build
       #   之后:vercel recipe 的验证片段 import '@memoweft/adapter-ai-sdk',需 adapter 的 dist 也 build 好(§18.3)。
       - name: Docs — runnable snippets
@@ -326,7 +338,7 @@ jobs:
           fi
 
       # --workspaces 发所有【非 private】workspace 包：memoweft（根）+ @memoweft/mcp-server +
-      #   @memoweft/adapter-ai-sdk；private:true 的 host / collector 自动跳过。按 workspaces 数组顺序
+      #   @memoweft/adapter-ai-sdk + @memoweft/adapter-claude-agent-sdk；private:true 的 host / collector 自动跳过。按 workspaces 数组顺序
       #   （"." 排第一）memoweft 先发，满足新包对 memoweft 的 peer ^0.5.0。每个包 publish 前各自跑
       #   prepublishOnly（typecheck && test && build）当保险丝。--provenance 为每个包签发来源证明。
       # 【注意·作者发布前实测】--workspaces 与 --provenance 组合在旧 npm 上曾有坑；用 Node 24 自带的

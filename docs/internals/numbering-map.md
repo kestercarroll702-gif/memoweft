@@ -52,6 +52,8 @@
 | **D-0022** | 召回按 contentType 过滤:`core.recall({ contentTypes })` 按类型允许名单筛 + 结果暴露 `contentType` |
 | **D-0023** | 召回负反馈 = Mute:加 `mutedAt` 状态位,召回跳过但认知仍 active、仍参与画像演化(mute⊂archive⊂invalidate) |
 | **D-0024** | 召回 v2 端到端收口:透传 explain/contentTypes/provenance/contentType 到两适配器 + MCP 新增 mute tool + provenance 按 tier 预筛 |
+| **D-0025** | §16.5 新增 Claude Agent SDK 适配器(`@memoweft/adapter-claude-agent-sdk`,hooks 型进程内)+ MCP 挂载备选文档 |
+| **D-0026** | Reranker NO-GO:真实检索序近最优、fusion 净负,不实装(同 D-0008 手法·数据驱动证伪;bench 入仓作背书) |
 
 ---
 
