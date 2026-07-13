@@ -6,6 +6,37 @@
 > Single source of truth. Peer to `INSTALL` / `integration.md`; hosts read it directly.
 > Belongs to: overall plan Step 2; the shared foundation for Step 7's plugin contract and Step 10's 1.0 API lock-down.
 
+## Table of Contents
+
+- [How to read this contract (three tiers + break policy)](#how-to-read-this-contract-three-tiers--break-policy)
+- [I. Facade methods chapter (25 host-facing methods)](#i-facade-methods-chapter-25-host-facing-methods)
+  - [1.0 Factory](#10-factory)
+  - [1.1 Facade top-level 9 methods (`MemoWeftCore.*`)](#11-facade-top-level-9-methods-memoweftcore)
+  - [1.2 `core.memory` (controlled memory management API, 11 methods)](#12-corememory-controlled-memory-management-api-11-methods)
+  - [1.3 `core.portable` (portable memory bundle, 3 methods)](#13-coreportable-portable-memory-bundle-3-methods)
+  - [1.4 `core.graph` (graph view, 1 method)](#14-coregraph-graph-view-1-method)
+- [II. Key data shapes chapter (≥30 items)](#ii-key-data-shapes-chapter-30-items)
+  - [2.1 Three-layer persistence shapes (stable)](#21-three-layer-persistence-shapes-stable)
+  - [2.2 Input shapes of the facade methods](#22-input-shapes-of-the-facade-methods)
+  - [2.3 Return shapes of the facade methods](#23-return-shapes-of-the-facade-methods)
+  - [2.4 Management API input/output shapes](#24-management-api-inputoutput-shapes)
+  - [2.5 Bundle shapes](#25-bundle-shapes)
+  - [2.6 Graph payload shapes](#26-graph-payload-shapes)
+  - [2.7 Perception input shapes](#27-perception-input-shapes)
+  - [2.8 Version / config](#28-version--config)
+- [III. Implicit contract chapter (the pitfalls hosts most easily step on)](#iii-implicit-contract-chapter-the-pitfalls-hosts-most-easily-step-on)
+- [IV. experimental list chapter (a consolidated list of "will change later")](#iv-experimental-list-chapter-a-consolidated-list-of-will-change-later)
+- [V. Breaking-change policy (pre-1.0, moderately loose)](#v-breaking-change-policy-pre-10-moderately-loose)
+  - [5.1 What counts as "breaking stable"](#51-what-counts-as-breaking-stable)
+  - [5.2 The three requirements for breaking stable](#52-the-three-requirements-for-breaking-stable)
+  - [5.3 Enum value-adding rule](#53-enum-value-adding-rule)
+  - [5.4 experimental surface (loose rule)](#54-experimental-surface-loose-rule)
+  - [5.5 internal surface](#55-internal-surface)
+- [VI. Questionable symbol tiering (conclusions confirmed back to source)](#vi-questionable-symbol-tiering-conclusions-confirmed-back-to-source)
+- [VII. Adapter degradation semantics (§16.2)](#vii-adapter-degradation-semantics-162)
+
+---
+
 ## How to read this contract (three tiers + break policy)
 
 **Three stability tiers**:

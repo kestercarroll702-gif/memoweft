@@ -1,5 +1,7 @@
 # Reference Host Demo
 
+**English** | [简体中文](./reference-host.zh-CN.md)
+
 The bundled host under `apps/memoweft-host` is a reference implementation.
 
 It exists to demonstrate how a host can use MemoWeft Core. It is not the main product of this repository.

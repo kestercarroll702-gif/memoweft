@@ -1,5 +1,7 @@
 # MemoWeft docs
 
+**English** | [简体中文](./README.zh-CN.md)
+
 MemoWeft is a library that gives AI apps portable long-term memory — it keeps facts, guesses, conflicts, and stale states apart.
 
 ## Start here
