@@ -146,7 +146,7 @@
 7. **`Cognition`** — stable。认知落库形状：`id / subjectId / content / contentType / formedBy / confidence(0~1000) / credStatus / scope / validAt / invalidAt / askedAt / archivedAt? / mutedAt? / createdAt / updatedAt`（`mutedAt?` = D-0023 召回静音：非 null → 召回跳过，但认知仍 active；与 confidence 正交）。`askedAt` 字段本身 stable，其**写入时机**（M5 主动询问）属 experimental 面。依据 `src/cognition/model.ts:40-60`。
 8. **`CognitionInput`** — **experimental**。宿主不直接构造（`confidence`/`credStatus` 由 `consolidate` 算好后传入；Host grep 无命中）。依据 `src/cognition/model.ts:63-75`。
 9. **`ContentType`** — stable 枚举：`fact | preference | goal | project | state | trait | hypothesis | trend`。加值不算破坏、须留 default。依据 `src/cognition/model.ts:15-23`。
-10. **`FormedBy`** — stable 枚举：`stated | observed | ruled | inferred`。依据 `src/cognition/model.ts:26`。
+10. **`FormedBy`** — stable 枚举：`stated | observed | ruled | confirmed | inferred`。`confirmed`（附和，D-0033）= 用户点头认可 AI 主动提出的猜测；弱于 `stated`/`observed`、强于 `inferred`（底分 280、自然封顶 480 < `limited`）。加值属 additive（见下 §10 破坏政策）。依据 `src/cognition/model.ts:26`。
 11. **`CredStatus`** — stable 枚举：`candidate | low | limited | stable | conflicted`。依据 `src/cognition/model.ts:29`。
 12. **`EvidenceRelation`** — stable 枚举：`support | contradict`。依据 `src/cognition/model.ts:32`。
 13. **`EvidenceLink`** — stable：`{ evidenceId, relation: EvidenceRelation }`。依据 `src/cognition/model.ts:34-37`。

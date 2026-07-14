@@ -75,7 +75,9 @@ export async function aggregateTrends(
   // 收集窗口内的"状态证据"：state 类认知（含已失效，趋势看的是"曾反复出现"）的支撑证据里、发生时间在窗内的。
   // 保持 all()（批次3 PM 拍板）：趋势聚合是【历史口径】——看"曾反复出现"，本就计入已失效，
   // 已归档同理计入历史，不随"归档全面雪藏"改成 active()。
-  const states = deps.cognitionStore.all(subjectId).filter((c) => c.contentType === 'state');
+  // 排除 confirmed（附和，D-0033）：防"AI 诱导性提问风暴 + 用户连答是的"被规则数成一条更可信的 ruled 趋势，
+  //   绕过 confirmed 的低把握度封顶（结构性对抗护栏，勿删）。
+  const states = deps.cognitionStore.all(subjectId).filter((c) => c.contentType === 'state' && c.formedBy !== 'confirmed');
   const items: Array<{ id: string; state: string; text: string; at: string }> = [];
   const windowEvidence = new Set<string>();
   // 隐私关（按当前模型 tier）：tier=cloud 筛 allowCloudRead / tier=local 筛 allowLocalRead。缺省 'cloud'。

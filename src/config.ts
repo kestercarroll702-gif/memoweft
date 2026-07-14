@@ -38,7 +38,7 @@ export interface MemoWeftConfig {
   /** 画像把握度算法参数（阶段 1a；MemoWeft 自算，非 LLM 自报。运行后校准）。 */
   consolidation: {
     /** 按形成方式的起步分（推测最低——难点 1：特质做不到，只当假设）。 */
-    baseByFormedBy: { stated: number; observed: number; ruled: number; inferred: number };
+    baseByFormedBy: { stated: number; observed: number; ruled: number; confirmed: number; inferred: number };
     /** 每多一条支持证据加分、封顶条数。 */
     supportStep: number;
     supportCap: number;
@@ -107,7 +107,7 @@ export const config: MemoWeftConfig = {
   workingMemory: { maxTurns: 8 },
   retrieval: { topK: 5, minEffectiveConfidence: 80, minSimilarity: 0 },
   consolidation: {
-    baseByFormedBy: { stated: 600, observed: 350, ruled: 450, inferred: 200 },
+    baseByFormedBy: { stated: 600, observed: 350, ruled: 450, confirmed: 280, inferred: 200 }, // confirmed（附和，D-0033）夹 inferred/observed 之间：自然封顶 280+支持满200=480<limited500 → 纯附和顶天"低置信"
     supportStep: 40,
     supportCap: 5,
     contradictPenalty: 120,

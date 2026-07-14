@@ -83,7 +83,7 @@ function citedIds(c: RawCog | RawRef): string[] {
 }
 
 const VALID_TYPES = ['fact', 'preference', 'goal', 'project', 'state', 'trait'];
-const VALID_FORMED = ['stated', 'observed', 'ruled', 'inferred'];
+const VALID_FORMED = ['stated', 'observed', 'ruled', 'confirmed', 'inferred'];
 
 /** 从原始候选里抽出认知（容错字段名 + 缺类型给保守默认：fact/inferred）。无内容返回 null。 */
 function pickCognition(c: RawCog): { content: string; contentType: ContentType; formedBy: FormedBy } | null {

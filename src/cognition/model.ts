@@ -22,8 +22,11 @@ export type ContentType =
   | 'hypothesis'
   | 'trend';
 
-/** 形成方式 —— 来源强度（亲口 > 观察 > 规则 > LLM 推测）。 */
-export type FormedBy = 'stated' | 'observed' | 'ruled' | 'inferred';
+/** 形成方式 —— 来源强度（亲口 > 观察 > 规则 > 附和 > LLM 推测）。
+ *  `confirmed`（附和，D-0033）：用户【点头认可 AI 主动提出的猜测】（AI:"你喜欢爬山吧?" 用户:"是的"）——
+ *  比 inferred 强（用户确实点了头）、比 observed/stated 弱（附和诱导性猜测有客气/顺着说成分，非主动披露）。
+ *  底分 280、自然封顶 480（<limited 500）→ 纯附和顶天"低置信"；只有用户【主动】说才升级破顶（见 D-0033）。 */
+export type FormedBy = 'stated' | 'observed' | 'ruled' | 'confirmed' | 'inferred';
 
 /** 可信状态（地图 cell 8 规则 9）。 */
 export type CredStatus = 'candidate' | 'low' | 'limited' | 'stable' | 'conflicted';
