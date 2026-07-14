@@ -129,7 +129,7 @@ export const config: MemoWeftConfig = {
     askableStatuses: ['candidate', 'low'], // 只问低置信假设（规则 6）
   },
   profileUpdate: {
-    batchSize: 5,    // 核心①：攒够 5 条新对话才更新画像（别一聊完就算，太勤又费；dogfood 后调）
+    batchSize: 12,   // 核心①：攒够 12 条新对话才更新画像（别一聊完就算，太勤又费；dogfood 调参 5→12：整理次数↓→画像重发↓→更省 token，且 distill 手里前后文更多、引用消解更准；idle 兜底不变，静默期照常整理）
     idleMinutes: 30, // 或空闲 30 分钟没动静就更新一次（与 batchSize 先到先触发）
   },
   background: {
