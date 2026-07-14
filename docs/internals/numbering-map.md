@@ -56,6 +56,7 @@
 | **D-0026** | Reranker NO-GO:真实检索序近最优、fusion 净负,不实装(同 D-0008 手法·数据驱动证伪;bench 入仓作背书) |
 | **D-0027** | 新增 OpenAI Agents SDK 适配器(`@memoweft/adapter-openai-agents`,run-wrapper 型)—— 更多适配器批次 ① |
 | **D-0028** | 新增 LangChain 适配器(`@memoweft/adapter-langchain`,retriever + callback 型)—— 更多适配器批次 ② |
+| **D-0029** | 新增 LlamaIndex 适配器(`@memoweft/adapter-llamaindex`,memory-block + stream-tap 型)—— 更多适配器批次 ③(末);含上游 @llamaindex 弃维取舍(重定向伞包) |
 
 ---
 

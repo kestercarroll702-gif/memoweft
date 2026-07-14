@@ -175,6 +175,18 @@ jobs:
       - name: LangChain Adapter Build
         run: npm run build -w @memoweft/adapter-langchain
 
+      # LlamaIndex 适配器（0.1.0·memory-block + stream-tap 型进程内适配器，D-0029）：同上靠 Core dist、自带 build。
+      #   SDK 是 peer + dev：llamaindex（维护中的伞包，供 BaseMemoryBlock 等）+ @llamaindex/workflow（事件驱动
+      #   agent API；上游标弃维但为伞包自身依赖，见 D-0029 取舍）；typecheck/test 只需类型 + 不跑真实 agent。
+      - name: LlamaIndex Adapter Typecheck
+        run: npm run typecheck -w @memoweft/adapter-llamaindex
+
+      - name: LlamaIndex Adapter Test
+        run: npm test -w @memoweft/adapter-llamaindex
+
+      - name: LlamaIndex Adapter Build
+        run: npm run build -w @memoweft/adapter-llamaindex
+
       # docs 里【未标 snippet:skip】的 ts 围栏逐个冒烟跑(无 key、内存库)。放在所有 workspace build
       #   之后:vercel recipe 的验证片段 import '@memoweft/adapter-ai-sdk',需 adapter 的 dist 也 build 好(§18.3)。
       - name: Docs — runnable snippets
@@ -362,7 +374,7 @@ jobs:
           fi
 
       # --workspaces 发所有【非 private】workspace 包：memoweft（根）+ @memoweft/mcp-server +
-      #   @memoweft/adapter-ai-sdk + @memoweft/adapter-claude-agent-sdk + @memoweft/adapter-openai-agents + @memoweft/adapter-langchain；private:true 的 host / collector 自动跳过。按 workspaces 数组顺序
+      #   @memoweft/adapter-ai-sdk + @memoweft/adapter-claude-agent-sdk + @memoweft/adapter-openai-agents + @memoweft/adapter-langchain + @memoweft/adapter-llamaindex；private:true 的 host / collector 自动跳过。按 workspaces 数组顺序
       #   （"." 排第一）memoweft 先发，满足新包对 memoweft 的 peer ^0.5.0。每个包 publish 前各自跑
       #   prepublishOnly（typecheck && test && build）当保险丝。--provenance 为每个包签发来源证明。
       # 【注意·作者发布前实测】--workspaces 与 --provenance 组合在旧 npm 上曾有坑；用 Node 24 自带的

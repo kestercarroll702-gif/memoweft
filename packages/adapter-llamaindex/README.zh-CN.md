@@ -1,0 +1,85 @@
+# @memoweft/adapter-llamaindex
+
+> English · [README.md](./README.md)
+
+**[MemoWeft](https://github.com/memoweft/memoweft) 的 LlamaIndex 适配器。** 通过三条缝给你的 LlamaIndex agent（`llamaindex` + `@llamaindex/workflow`）接上长期记忆：**读** = 一个 `BaseMemoryBlock`，每次模型调用前召回相关记忆、作为一条中性的 `role:'memory'` 消息注入；**写** = 一个包住 `agent.runStream(...)` 的透传式包装器，原样 re-yield 每个事件、顺路沉淀用户原话与每条工具结果。
+
+这是一个**外部集成包**。它封装 MemoWeft 的公开 Core facade（`createMemoWeftCore`），不碰 Core 内部。`llamaindex` 与 `@llamaindex/workflow` 是 peer 依赖（自带）。
+
+> **上游说明。** LlamaIndex.TS 正在重构:其细分的 `@llamaindex/*` 包在 npm 上被标 *deprecated*,而维护中的伞包 `llamaindex@^0.12` 仍依赖它们。本适配器 peer 依赖伞包 `llamaindex`(故不直接依赖弃维的 `@llamaindex/core`),但它需要的事件驱动 agent API(`agent` / `runStream` / `agentToolCallResultEvent`)只住在 `@llamaindex/workflow`——它也被标弃维、且本身是 `llamaindex@0.12` 的依赖。安装时可能从这些传递依赖打印弃维警告;适配器当前功能完好。见 `DECISIONS.md` D-0029。
+
+## 安装
+
+```bash
+npm i llamaindex @llamaindex/workflow memoweft @memoweft/adapter-llamaindex
+```
+
+`@llamaindex/core` `^0.6.23`、`@llamaindex/workflow` `^1.1.25` 与 `memoweft` `^0.5.0` 是 peer 依赖。
+
+## 为何召回走 memory-block、写走 stream-tap
+
+**读——走 memory-block，而非手工拼 prompt。** LlamaIndex 的 `Memory` 会在**每次模型调用前**调各 block 的 `get(messages)`、把返回的「记忆上下文」拼进 prompt——这正是召回注入的缝。`MemoWeftMemoryBlock` 在 `get()` 里做一次语义召回、把中性知识块作为一条 `role:'memory'` 消息返回——故你只要把它塞进 `createMemory({ memoryBlocks: [block] })`，注入就自动发生，你不写一行拼 prompt 的代码。
+
+**写——走透传式 stream-tap，而非 block 的 `put()`。** `BaseMemoryBlock` 也有 `put()` 钩子，但 `Memory` 会把**整段会话**（含助手回话与已注入的记忆）喂给它——在此落库会把助手输出当"证据"存回去（脏数据）。故本块的 `put()` 是**空实现**，写全走 `persistFromAgentStream`：用户原话由宿主显式传入（注入前持有），工具结果【只】从 `agentToolCallResultEvent` 认。
+
+## 一个工厂、四件套、三条路径
+
+`createMemoWeftLlamaIndex(core, opts?)` 返回 `{ memoryBlock, persistFromAgentStream, persistUserTurn, formatKnowledge }`。
+
+```ts
+import { createMemory } from '@llamaindex/core/memory';
+import { agent } from '@llamaindex/workflow';
+import { createMemoWeftCore } from 'memoweft';
+import { createMemoWeftLlamaIndex } from '@memoweft/adapter-llamaindex';
+
+const core = createMemoWeftCore({ dbPath: './memory.db' });
+const mw = createMemoWeftLlamaIndex(core, { lang: 'en' });
+
+// ① read: drop the block into Memory → recall is injected automatically before every model call.
+const memory = createMemory({ memoryBlocks: [mw.memoryBlock] });
+const myAgent = agent({ llm, tools, memory }); // bring your own ToolCallLLM + tools
+
+// ②③ write: wrap runStream — re-yields every event untouched, persisting the user's words + tool results in passing.
+for await (const ev of mw.persistFromAgentStream(myAgent.runStream(userText), { userMessage: userText, originId: turnId })) {
+  // …consume ev as usual (events pass through untouched)…
+}
+```
+
+三条路径、三件事：
+
+- **① 召回注入（读）——`memoryBlock`。** `mw.memoryBlock` 是 `MemoWeftMemoryBlock extends BaseMemoryBlock`。`Memory` 在每次模型调用前调 `block.get(messages)`；本块取末条 user 消息当 query、召回、返回**一条** `role:'memory'` 消息，其 content 是中性知识块——MemoWeft 自己的措辞，逐字照搬 Core 的 `knowledgeBlock`。低置信条目明确标注*"only guesses — do not treat as established facts"*。适配器**不自造任何人格/人设 prompt**。（`priority: 0` 表示该块总是被纳入记忆上下文。）
+- **② 用户原话（写）——经 `persistFromAgentStream` 的 `userMessage`。** 把你手里已持有的那份原话（注入**之前**）作为 `extras.userMessage` 传入。别从流里回捞：发给模型的输入已被召回记忆注入过，回捞会把注入的记忆当"用户原话"存回去。存成 `spoken` 证据。（另提供独立的 `persistUserTurn({ text, originId })` 闭包，供自己驱动 `runStream` 的宿主单独落原话。）
+- **③ 工具结果（写）——经 `persistFromAgentStream` 的事件 tap。** 包装器 re-yield 每个事件，【只】沉淀匹配 `agentToolCallResultEvent` 的那些（工具真实的**返回结果**，`event.data.toolOutput.result`）→ 存成 `tool` 证据，以 `toolId` 作幂等键。它**绝不**匹配 `agentToolCallEvent`——故模型的工具**调用意图 / 入参**永不到达写路径（铁律 3a，代码级 by-construction：结果判别器物理上不认调用意图与助手输出事件类型）。
+
+## 隐私硬约束（D-0024）
+
+`provenance`（证据原文 + 授权位）**绝不**进入被注入的 `role:'memory'` 消息，也绝不进入 `formatKnowledge` 块。被注入的内容只用 `content` / `confidence` / `credStatus`（`buildKnowledgeBlock`）。更丰富的召回面——`id`、`contentType`、`score`，以及（带 `explain` 时）含 `allowCloudRead` / `allowInference` 授权位的 `provenance`——**只**经 `onRecall` 回调交给宿主，你可在转发云模型前自筛。因注入落在模型 prompt（绝不回写进捕获的用户原话），存下的 `spoken` 证据永不含被注入的记忆。
+
+## 降级（§16.2）
+
+- 召回受 `recallTimeoutMs`（默认 200ms）限制。超时/抛错则 `block.get()` 返回 `[]`——本轮**不注入**继续；召回失败绝不阻塞回话，也绝不向 `Memory` 抛。读路径不重试。
+- 写（`ingest`）遇真错重试一次（超时的写不重试，因它可能已提交）；仍失败则记日志（若提供 `logger`）并静默吞。摄入失败**绝不**向流抛或中断流——每个事件都照样 re-yield。
+
+## 选项
+
+工厂：`{ subjectId?, lang?: 'en' | 'zh', contentTypes?, explain?, onRecall?, recallTimeoutMs?, ingestTimeoutMs?, logger?, memoryBlockId?, memoryBlockPriority? }`
+
+每轮（经 `persistFromAgentStream`）：`{ userMessage, originId?, subjectId? }`
+
+## 完整示例
+
+见 [`examples/basic.ts`](./examples/basic.ts)——两轮对话：把每轮的话与工具结果存进去、经召回注入进下一轮的记忆块；真实的 `agent(...).runStream(...)` 接线与离线演示一并示意。
+
+## 为何不实现 `FactExtractionMemoryBlock` 式抽取
+
+LlamaIndex 内建的 `FactExtractionMemoryBlock` 用**LLM 自报事实**再存下。这与 MemoWeft 正交：MemoWeft **区分事实与猜测、置信度由规则算（非模型自报）、只存用户原话与工具结果、绝不存助手回话。** 故本适配器的 block 只做召回注入（`get()`）、`put()` 留空实现，写全走 stream-tap。
+
+## 它不做什么
+
+- 不注入人格/人设 prompt（Core 无头——语气/角色是宿主的事）。
+- 不存助手回话，只存用户原话与工具结果。
+- 从不读工具调用的入参（`agentToolCallEvent`），写路径不带任何上云授权位。
+
+## License
+
+MIT
