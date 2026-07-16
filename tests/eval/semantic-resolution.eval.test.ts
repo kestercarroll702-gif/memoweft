@@ -141,3 +141,27 @@ test('Phase 2 边界：无 semanticResolutionStore → 不落解析、consolidat
     s.close();
   }
 });
+
+test('来源收窄：[行为观察] 证据不落解析——结构保证，不靠提示词自觉', async () => {
+  const s = openStores(':memory:');
+  try {
+    // 一条 spoken（用户真说的）+ 一条 observed（行为观察，不是用户在说话）；两条都显式放行隐私门，
+    // 确保 observed 真进了 prompt/validEvidence——否则测的就是隐私门而不是来源收窄了。
+    const spoken = s.evidenceStore.put({ subjectId: 'u', sourceKind: 'spoken', hostId: 'h', rawContent: '是', precedingAiContext: '你喜欢爬山吗?', allowCloudRead: true });
+    const observed = s.evidenceStore.put({ subjectId: 'u', sourceKind: 'observed', hostId: 'h', rawContent: '凌晨3点还在打游戏', allowCloudRead: true });
+    s.eventStore.put({ subjectId: 'u', summary: 'evt', occurredAt: spoken.occurredAt, evidenceIds: [spoken.id, observed.id] });
+    // LLM 不听话：对 observed 也编了一份「这句在回应什么」——对行为观察本就无意义。
+    const stub = stubReturning(JSON.stringify({
+      new: [{ content: '用户喜欢爬山', content_type: 'preference', formed_by: 'confirmed', support_evidence_ids: [spoken.id] }],
+      resolutions: [
+        { evidence_id: spoken.id, resolved_content: '用户确认喜欢爬山', response_act: 'affirm' },
+        { evidence_id: observed.id, resolved_content: '用户在打游戏', response_act: 'elaborate' },
+      ],
+    }));
+    await consolidate('u', { eventStore: s.eventStore, evidenceStore: s.evidenceStore, cognitionStore: s.cognitionStore, semanticResolutionStore: s.semanticResolutionStore, transaction: s.transaction, llm: stub });
+    assert.ok(s.semanticResolutionStore.ofEvidence(spoken.id), '[用户说] 照常落解析');
+    assert.equal(s.semanticResolutionStore.ofEvidence(observed.id), null, '[行为观察] 不落解析——模型不听话也进不了表');
+  } finally {
+    s.close();
+  }
+});

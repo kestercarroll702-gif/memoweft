@@ -30,6 +30,7 @@ import { dirname, resolve } from 'node:path';
 import { SqliteEvidenceStore } from '../src/evidence/store.ts';
 import { SqliteEventStore } from '../src/event/store.ts';
 import { SqliteCognitionStore } from '../src/cognition/store.ts';
+import { SqliteSemanticResolutionStore } from '../src/interaction/semanticResolutionStore.ts';
 import { NullRetriever } from '../src/retrieval/nullRetriever.ts';
 import { updateProfile } from '../src/consolidation/updateProfile.ts';
 import { OpenAICompatClient, loadLLMConfig } from '../src/llm/client.ts';
@@ -200,6 +201,10 @@ async function runScenario(scenario, llm) {
   const ev = new SqliteEvidenceStore(':memory:');
   const evt = new SqliteEventStore(':memory:');
   const cog = new SqliteCognitionStore(':memory:');
+  // 语义解析 store（v0.6 Phase 2·D-0034）：接上它，v4 教模型产的 resolutions 才真落库、才评得到。
+  //   不接的话 eval 对 v4 的【主要产出】完全是瞎的——模型吐一堆垃圾 resolutions，前后分照样平，
+  //   而 §15.3 贴出来的分会被读成「resolutions 没问题」。
+  const sem = new SqliteSemanticResolutionStore(':memory:');
   try {
     for (const s of scenario.seed ?? []) {
       cog.put({
@@ -213,8 +218,10 @@ async function runScenario(scenario, llm) {
     }
     // occurredAt 递增（放在过去 1h 内），保证多条 message 的时序，且落在 attribute 时间窗内。
     const base = Date.now() - 3600_000;
+    /** 逐条 message ↔ 落库 evidence 的映射：resolutions 机判要知道「哪条原话带了 AI 上文、来源是什么」。 */
+    const evidenceMeta = [];
     scenario.messages.forEach((m, i) => {
-      ev.put({
+      const e = ev.put({
         subjectId: 'owner',
         sourceKind: m.sourceKind,
         hostId: 'local',
@@ -227,12 +234,14 @@ async function runScenario(scenario, llm) {
         occurredAt: new Date(base + i * 1000).toISOString(),
         allowCloudRead: true, // 见函数注释：让被测云模型真读到全部语料证据
       });
+      evidenceMeta.push({ id: e.id, sourceKind: m.sourceKind, hasAiContext: !!(m.precedingAiContext ?? '').trim() });
     });
 
     const result = await updateProfile('owner', {
       evidenceStore: ev,
       eventStore: evt,
       cognitionStore: cog,
+      semanticResolutionStore: sem, // v0.6 Phase 2：接上才落 resolutions（见 sem 声明处的说明）
       retriever: new NullRetriever(),
       llm,
     });
@@ -263,14 +272,26 @@ async function runScenario(scenario, llm) {
       active,
       cogSources,
       evidenceIds,
+      // 语义解析产出（v0.6 Phase 2·D-0034）：逐条 message 配上它落库的 resolution（没落到 = res:null）。
+      //   带 hasAiContext/sourceKind 是给 checkStructural 判「该有解析的有没有」——见 short-reply 盘的机判。
+      resolutions: evidenceMeta.map((x) => {
+        const r = sem.ofEvidence(x.id);
+        return {
+          ...x,
+          res: r
+            ? { resolvedContent: r.resolvedContent, responseAct: r.responseAct, promptAct: r.promptAct, propositionOrigin: r.propositionOrigin, assertionStrength: r.assertionStrength }
+            : null,
+        };
+      }),
       timings: result.timings,
     };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e), consolidated: null, active: [], cogSources: [], evidenceIds: new Set(), timings: null };
+    return { error: e instanceof Error ? e.message : String(e), consolidated: null, active: [], cogSources: [], evidenceIds: new Set(), resolutions: [], timings: null };
   } finally {
     ev.close();
     evt.close();
     cog.close();
+    sem.close();
   }
 }
 
@@ -278,16 +299,17 @@ async function runScenario(scenario, llm) {
  * 结构性断言（程序判，不调 LLM）：
  *   from expect：conflict→conflicted≥1；correct→corrected≥1；newCognitions→created∈[min,max] 且类型⊆types
  *                （可选 formedBy → created 来源⊆formedBy）；discipline==='chitchat-negative'→created===0；
- *                discipline==='short-reply'→confirmed 封顶不变量（见下）。
+ *                discipline==='short-reply'→带 AI 上文的原话都落了解析（+ 可选 expect.resolutions.responseAct 允许集）。
  *   不变量（每场景都查，与模型判定无关）：
  *     ① 每条 active 认知 confidence ∈ (0,1000]；
  *     ② 每条 state 认知 credStatus ∈ {candidate,low}（情绪封顶）；
  *     ③ 每条认知的证据链引用的 evidenceId 都真实存在于 evidence store（证据白名单/虚构丢弃）。
  *
- * 【口径纪律·可比性】v0.6 Phase 2 新增的两条断言（expect.newCognitions.formedBy / short-reply 封顶）都是
- *   **条件触发**——语料不声明就不加 check。旧 42 场景 expect 无 formedBy 字段、discipline 也非 short-reply
- *   → 一条 check 都不多 → structTotal 逐字不变 → 6 个旧盘的前后分仍严格可比（别改成全场景不变量：
- *   那会让每场景 +1 条恒 pass 的 check，分母虚涨、把旧基线的分数抬高成假提升）。
+ * 【口径纪律·可比性】v0.6 Phase 2 新增的三条断言（expect.newCognitions.formedBy / short-reply 的解析覆盖 /
+ *   expect.resolutions.responseAct）全是**条件触发**——语料不声明、或 discipline 不是 short-reply 就不加 check。
+ *   旧 42 场景 expect 无 formedBy/resolutions 字段、discipline 也非 short-reply → 一条 check 都不多 →
+ *   structTotal 逐字不变 → 6 个旧盘的前后分仍严格可比（别改成全场景不变量：那会让每场景 +1 条恒 pass 的
+ *   check，分母虚涨、把旧基线的分数抬高成假提升——v0.6 Phase 2 起草时就在 short-reply 封顶那条上犯过一次）。
  */
 function checkStructural(scenario, run) {
   if (run.error) return [{ name: 'run', pass: false, detail: `updateProfile 抛错: ${run.error}` }];
@@ -324,7 +346,33 @@ function checkStructural(scenario, run) {
   //   → `formedBy==='confirmed' && (confidence>480 || credStatus∈{limited,stable})` 数学上不可证伪。
   //   加了它就是给每个 short-reply 场景 +1 条恒绿 check、把 structRate 抬成假提升——正是本函数头
   //   【口径纪律】禁止的事。config 被改高底分的回归由单测守（confirmedLaundering.test.ts），eval 不是回归测试。
-  //   本盘真正有鉴别力的机判是上面的 `created来源⊆{...}`（模型把 AI 的臆断标成 stated 就红）。
+  //   本盘真正有鉴别力的机判是上面的 `created来源⊆{...}`（模型把 AI 的臆断标成 stated 就红）+ 下面的 resolutions 两条。
+  if (scenario.discipline === 'short-reply') {
+    // resolutions 机判（v0.6 Phase 2）：v4 教模型产的语义解析是本次改动的【主要产出】，不判它，
+    //   §15.3 贴出的前后分对它一个字都说不了——模型吐一堆垃圾解析，分数照样平，还会被读成「没问题」。
+    // ① 覆盖：每条【带 AI 上文的 spoken 原话】都该落一份解析（命题只活在 AI 那句里，不产解析＝没解析）。
+    const need = run.resolutions.filter((x) => x.hasAiContext && x.sourceKind === 'spoken');
+    const missing = need.filter((x) => !x.res);
+    checks.push({
+      name: '带AI上文的原话都落了解析',
+      pass: need.length > 0 && missing.length === 0,
+      detail: need.length === 0
+        ? '语料无带AI上文的spoken原话（CORP-20 本应拦住）'
+        : missing.length ? `${missing.length}/${need.length} 条缺解析` : `${need.length}/${need.length} 条有解析`,
+    });
+    // ② 内容：expect.resolutions.responseAct（可选允许集）——本盘的语义靶心。尤其 CC-049 的 negate：
+    //    把「不是」读成 affirm 就是把否认洗成肯定，是这套机制最灾难性的失败模式。
+    if (ex.resolutions?.responseAct) {
+      const allow = new Set(ex.resolutions.responseAct);
+      const acts = need.map((x) => x.res?.responseAct).filter((a) => a != null);
+      const bad = [...new Set(acts.filter((a) => !allow.has(a)))];
+      checks.push({
+        name: `resolution.responseAct⊆{${ex.resolutions.responseAct.join(',')}}`,
+        pass: acts.length > 0 && bad.length === 0,
+        detail: acts.length === 0 ? '无解析可判（①已判红）' : bad.length ? `越界: ${bad.join(',')}` : acts.join(','),
+      });
+    }
+  }
 
   // 不变量①：confidence ∈ (0,1000]
   const confBad = run.active.filter((a) => !(a.confidence > 0 && a.confidence <= 1000));

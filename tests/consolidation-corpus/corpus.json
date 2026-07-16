@@ -629,6 +629,7 @@
         "conflict": false,
         "correct": false,
         "newCognitions": { "min": 1, "max": 1, "types": ["preference"], "formedBy": ["confirmed"] },
+        "resolutions": { "responseAct": ["affirm"] },
         "shouldFormGists": ["形成一条『用户喜欢爬山』的偏好认知"],
         "shouldNotFormGists": [
           "把一句『是啊』扩写成『用户热爱户外运动／经常去爬山／是个资深户外爱好者』这类它确认不了的结论",
@@ -652,6 +653,7 @@
         "conflict": false,
         "correct": false,
         "newCognitions": { "min": 1, "max": 4, "types": ["preference"], "formedBy": ["confirmed"] },
+        "resolutions": { "responseAct": ["affirm"] },
         "shouldFormGists": [
           "记下『用户周末更愿意待在家』这条被点头认下的偏好",
           "记下『用户不太爱去人多的酒吧』这条被点头认下的偏好"
@@ -719,6 +721,7 @@
         "conflict": false,
         "correct": false,
         "newCognitions": { "min": 1, "max": 1, "types": ["preference"], "formedBy": ["confirmed"] },
+        "resolutions": { "responseAct": ["select"] },
         "shouldFormGists": ["Resolve 'the former' against the assistant's window-or-aisle question and record that the user prefers the window seat over the aisle"],
         "shouldNotFormGists": [
           "The user prefers the aisle seat",
@@ -759,6 +762,7 @@
         "conflict": false,
         "correct": false,
         "newCognitions": { "min": 0, "max": 1, "types": ["fact", "preference"], "formedBy": ["stated"] },
+        "resolutions": { "responseAct": ["negate"] },
         "shouldFormGists": ["The user is not a vegetarian"],
         "shouldNotFormGists": [
           "The user is a vegetarian (the AI's guess, laundered into a stored fact)",

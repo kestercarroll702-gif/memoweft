@@ -159,6 +159,12 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
   // 事件视图 + 合法原话集合：把每个新事件覆盖的原话（带 id+原文）摊开给 LLM 引用；
   // 只有这些 id 是合法支撑（防 LLM 编造/自证，证据级溯源）。
   const validEvidence = new Set<string>();
+  /** 合法原话里【来源=spoken】的子集（v0.6 Phase 2·D-0034）：resolutions 只对【用户真说出口的话】落解析。
+   *  [行为观察]/[工具返回] 不是用户在说话——「这句在回应谁提出的什么、是肯定还是否定」对一条行为观察
+   *  本就无意义，落进表里就是脏数据（而 Phase 3 的 deriveFormedBy 要读这张表：垃圾进→垃圾出）。
+   *  提示词 v4 也教了同样的收窄，但**这里是结构保证**：模型不听话也进不了表（同 validEvidence 守 3d 的思路——
+   *  纪律靠结构、不靠提示词自觉）。 */
+  const spokenEvidence = new Set<string>();
   // 隐私关（按当前写模型 tier）+ 推理门：事件覆盖的原话里，只把【当前模型可读】且【可推画像】的喂给 LLM、
   //   也只让它们当合法支撑——被挡的既不进 prompt、也进不了 validEvidence（不成为所生认知的依据）。
   //   tier=cloud 筛 allowCloudRead / tier=local 筛 allowLocalRead；inference=false 不进画像（distill/attribute 三处一致）。
@@ -173,6 +179,7 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
       .filter((e) => e.allowInference)
       .map((e) => {
         validEvidence.add(e.id);
+        if (e.sourceKind === 'spoken') spokenEvidence.add(e.id); // resolutions 的落库白名单（见 spokenEvidence 声明）
         // 来源感知（D-0018）:原话带来源前缀,让 LLM 定 formedBy 时知道哪些不是用户亲口。
         // 附和/AI 上下文（D-0033 Phase 1b）:把 preceding_ai_context【追加进本原话的 text 后缀】
         //   (经专用只读 precedingAiContextOf,只对已过隐私门的证据取)——让 LLM 看懂"是的"这类孤儿回应
@@ -311,7 +318,7 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
     //   prompt 版本可追溯。resolved_content 是【解释结果、不是证据】，永不进 consolidate 的 support 白名单（3a）。
     for (const r of out.resolutions ?? []) {
       const eid = r.evidence_id;
-      if (!eid || !validEvidence.has(eid)) continue; // 3d：只对真证据落解析（伪造 / AI 上文 id 丢弃）
+      if (!eid || !spokenEvidence.has(eid)) continue; // 3d + 来源收窄：只对【用户真说的】真证据落（伪造 id / AI 上文 / observed / tool 全丢弃；spokenEvidence ⊆ validEvidence，故 3d 一并守住）
       const resolved = (r.resolved_content ?? '').trim();
       if (!resolved) continue; // resolved_content 非空
       if (deps.semanticResolutionStore?.ofEvidence(eid)) continue; // 幂等：同证据不重复落

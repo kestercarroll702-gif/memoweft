@@ -34,6 +34,8 @@ const PRODUCIBLE_TYPES = ['fact', 'preference', 'goal', 'project', 'state', 'tra
  *  而形成 → 底分 280、封顶 480<limited）；本镜像当初漏更新，导致任何用 confirmed 的 seed 会被误判非法。 */
 const FORMED_BY = ['stated', 'observed', 'ruled', 'confirmed', 'inferred'];
 const CRED_STATUS = ['candidate', 'low', 'limited', 'stable', 'conflicted'];
+/** 对齐 src/interaction/model.ts 的 ResponseAct 与 consolidate.ts 的 VALID_RESPONSE_ACT（非法值会被静默收敛成 null）。 */
+const RESPONSE_ACT = ['affirm', 'negate', 'select', 'elaborate', 'ask', 'none', 'other'];
 const SOURCE_KIND = ['spoken', 'inferred', 'observed'];
 const DISCIPLINES = ['conflict', 'correct', 'emotion-cap', 'fact-vs-belief', 'no-over-inference', 'chitchat-negative', 'short-reply'];
 const LANGS = ['zh', 'en', 'mixed'];
@@ -43,6 +45,8 @@ interface Expect {
   correct: boolean;
   /** formedBy（可选）：created 的来源强度允许集。short-reply 盘的机判靶心——附和 → confirmed、绝不可洗成 stated。 */
   newCognitions: { min: number; max: number; types?: string[]; formedBy?: string[] };
+  /** resolutions（可选，v0.6 Phase 2）：语义解析的期望。responseAct = 带 AI 上文那几条原话的解析允许集。 */
+  resolutions?: { responseAct?: string[] };
   shouldFormGists: string[];
   shouldNotFormGists: string[];
 }
@@ -259,6 +263,19 @@ test('CORP-19 expect.newCognitions.formedBy(若有)⊆ FormedBy 枚举', () => {
     assert.ok(Array.isArray(fb) && fb.length >= 1, `[${s.id}] newCognitions.formedBy 应为非空数组`);
     for (const f of fb) {
       assert.ok(FORMED_BY.includes(f), `[${s.id}] newCognitions.formedBy 含非法来源：${f}`);
+    }
+  }
+});
+
+test('CORP-21 expect.resolutions.responseAct(若有)⊆ ResponseAct 枚举', () => {
+  // 同 CORP-19 的道理：非法值在 consolidate.ts 会被静默收敛成 null，评测器的允许集则永不满足 →
+  //   该断言永久红，而报告只说「越界: null」不说是语料把 'negate' 写成了 'negative'。
+  for (const s of scenarios) {
+    const ra = s.expect?.resolutions?.responseAct;
+    if (ra === undefined) continue;
+    assert.ok(Array.isArray(ra) && ra.length >= 1, `[${s.id}] resolutions.responseAct 应为非空数组`);
+    for (const a of ra) {
+      assert.ok(RESPONSE_ACT.includes(a), `[${s.id}] resolutions.responseAct 含非法值：${a}`);
     }
   }
 });
