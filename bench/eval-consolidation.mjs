@@ -11,7 +11,12 @@
  * 直接从 src 的 .ts import（Node ≥24 原生剥类型，无需 build）。只读依赖，绝不改 src/tests。
  *
  * 用法：
- *   node bench/eval-consolidation.mjs                        # 真实全量跑（慢；实测 82–141s/场景 + judge 调用，全量 42 场景约 77 分钟；由 Integrator 执行）
+ *   node bench/eval-consolidation.mjs                        # 真实全量跑（慢；实测 50–200s/场景 + judge 调用，全量 49 场景约 90 分钟、438 次 judge 调用；由 Integrator 执行）
+ *     └ 远超单条命令的超时上限，**必须后台跑**；--out 前缀要带 "consolidation" 才吃得到 .gitignore 的
+ *       `bench/runs/*-consolidation-*` 规则（否则对照臂产物会逃过 ignore、等着被误提交）。
+ *     └ §15.3 前后对拍的 before 臂跑法：`git show <sha>:src/consolidation/prompts.ts > src/consolidation/prompts.ts`
+ *       临时回退提示词 → 跑 → `git checkout src/consolidation/prompts.ts` 恢复。**语料与口径都用新的**，
+ *       只让提示词一个自变量动（别拿旧基线当 before：语料集或口径一变，它就不可比了）。
  *   node bench/eval-consolidation.mjs --limit N              # 只跑前 N 个场景（dev 起跑 / 冒烟）——PARTIAL，写 bench/runs/，绝不碰基线
  *   node bench/eval-consolidation.mjs --discipline <name>    # 只跑某 discipline（如 chitchat-negative）——PARTIAL，写 bench/runs/，绝不碰基线
  *   node bench/eval-consolidation.mjs --out <prefix>         # 覆盖产物前缀：写 <prefix>.md 与 <prefix>.json
