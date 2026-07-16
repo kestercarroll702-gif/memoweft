@@ -19,6 +19,14 @@
  *     （每条原话一份语义解析 → semantic_resolution 表，见 consolidate.ts）。
  *     v3 的四类判断、闲聊守卫、support_evidence_ids、既有 formed_by 来源规则**全部一字不改**（铁律 3）；
  *     新内容一律追加，不改写旧句。resolved_content 是解释、不是证据——提示词里明写它不得进 support。
+ *   - v5（2026-07-16 · v0.6 Phase 2 · 冲烟驱动 + 人类拍板）：补 **select（二选一）分支**。冲烟实测（CC-047）
+ *     mimo 把「window or aisle?」+「The former.」标成 stated/600/limited，语料期望 confirmed —— 一查发现
+ *     已批的派生表（docs/internal/v0.6-impact-report.md:88）**只议定了 affirm 与 negate，select 是灰区**。
+ *     人类拍板 **select → confirmed**，判据是「这条信息的载体是谁的话」而非「AI 有没有预设答案」：「前者」
+ *     两个字不承载任何内容，解析完全依赖 AI 那句（若上文被 240 字截断、或选项顺序记反，解出来就是反的），
+ *     这种「理解依赖上下文」的不确定性正是 confirmed 低置信（280、封顶 480）的用途；凭两个字给 600/limited 偏高。
+ *     同时修一个真 bug：v4 的点头清单只列了「后者」/"The latter"，而语料用的是「前者」/"The former."，
+ *     模型可能压根没把它归进清单。
  *
  * 改动纪律（§15.3 / D-0009）：改内容必须 bump version、重跑 bench/eval-consolidation.mjs 全量、
  *   commit 正文附前后分数对比。认知纪律措辞（「只标冲突，不替换」「support_evidence_ids」）是纯位置
@@ -28,7 +36,7 @@ import type { VersionedPrompt } from '../prompts/types.ts';
 
 export const CONSOLIDATE_PROMPT: VersionedPrompt = {
   id: 'consolidate',
-  version: 'v4',
+  version: 'v5',
   text: {
     zh: [
       '你在维护对用户的认知画像。给你【现有画像】和【新材料】（事件 + 其下逐条原话，每条原话带 id 和来源标注：[用户说]=用户亲口 / [行为观察]=观察到的行为 / [工具返回]=工具返回的客观数据）。',
@@ -45,7 +53,8 @@ export const CONSOLIDATE_PROMPT: VersionedPrompt = {
       '【关键】每条认知必须给 support_evidence_ids = 真正支撑它的【那几条原话 id】；',
       '  只挑真正相关的，别把同一事件里无关的原话也算上；引不出确切原话就【不要给这条】。',
       'formed_by：按每条支撑原话的来源标注定——[用户说] 且用户明确表达=stated；[行为观察] 不是用户亲口=observed；[工具返回] 是外部客观数据、绝不可标 stated；你自己推断出来的=inferred（如从"怎么找女朋友"推"单身"）。性格/特质多为 inferred 且保守。',
-      '  【附和】若某条原话带 ⟨AI 前一句⟩ 后缀、命题是 AI 提出的、用户只是点头认下（"是啊"/"对"/"嗯"/"后者"）而没有主动说出内容 → formed_by=confirmed，【不是 stated】——那句话的内容是 AI 说的，不是用户亲口讲的。反之，用户自己把内容说出来了（哪怕 AI 前一句也提到过同一件事）→ 仍是 stated。',
+      '  【附和】若某条原话带 ⟨AI 前一句⟩ 后缀、命题是 AI 提出的、用户只是点头认下（"是啊"/"对"/"嗯"）而没有主动说出内容 → formed_by=confirmed，【不是 stated】——那句话的内容是 AI 说的，不是用户亲口讲的。反之，用户自己把内容说出来了（哪怕 AI 前一句也提到过同一件事）→ 仍是 stated。',
+      '  【附和·选择】若 AI 前一句给的是二选一/多选一（"A 还是 B?"），而用户只回一个指代（"前者"/"后者"/"第一个"/"A"）→ 同样是 formed_by=confirmed，不是 stated：那两个字本身不承载任何内容，选项和内容都在 AI 那句里、解析全靠它。先把指代解对（"前者"=AI 先说的那个，"后者"=AI 后说的那个），再按解出来的内容记。',
       '  【附和·与上面闲聊守卫的关系】守卫里说的"哈哈/好的/嗯"这类附和，指的是【空转附和】——不带 ⟨AI 前一句⟩ 后缀、或从后缀里解不出具体命题的。若带了后缀、且 AI 那句提的是单个具体命题，那声"嗯"就不是无实质信息：照【附和】产认知，不要输出空。',
       '  【附和·否认】若用户是【否认/纠正】AI 提的命题（"不是"/"没有"/"我不是"）→ 该记的是那个【否定命题】（AI 问"你是左撇子吧?"、用户答"不是" → 记"用户不是左撇子"），而这是用户自己的明确表达 → formed_by=stated，不是 confirmed（confirmed 只给"点头认下 AI 命题"这一种情形）。',
       '  【附和·含糊】若用户的点头本身是含糊的（"可能吧"/"大概"/"应该吧"）→ 优先不产认知；若要产，仍是 confirmed（命题还是 AI 提的，不因你没把握就变成你的推断），且 content 必须写成带不确定限定的暂定表述（如"用户可能不太会做饭（含糊认可、未明确）"），绝不可写成板上钉钉的结论。',
@@ -81,7 +90,8 @@ export const CONSOLIDATE_PROMPT: VersionedPrompt = {
       '[Key] Every cognition must give support_evidence_ids = the [specific utterance ids] that genuinely support it;',
       '  pick only the truly relevant ones, do not count unrelated utterances from the same event; if you cannot cite a definite utterance, [do not emit that item].',
       'formed_by: decide by the source tag of each supporting utterance—[user said] and explicitly expressed = stated; [observed behavior] is not the user\'s own words = observed; [tool result] is external objective data and must never be stated; what you inferred yourself = inferred (e.g., inferring "single" from "how do I find a girlfriend"). Personality/traits are mostly inferred and should be conservative.',
-      '  [Affirmation] If an utterance carries a ⟨preceding AI turn⟩ suffix, the proposition came from the AI, and the user merely nodded along ("Yeah"/"Right"/"Uh-huh"/"The latter") without volunteering the content → formed_by=confirmed, [not stated]—that content was the AI\'s words, not something the user said themselves. Conversely, if the user did volunteer the content (even if the preceding AI turn happened to mention the same thing) → still stated.',
+      '  [Affirmation] If an utterance carries a ⟨preceding AI turn⟩ suffix, the proposition came from the AI, and the user merely nodded along ("Yeah"/"Right"/"Uh-huh") without volunteering the content → formed_by=confirmed, [not stated]—that content was the AI\'s words, not something the user said themselves. Conversely, if the user did volunteer the content (even if the preceding AI turn happened to mention the same thing) → still stated.',
+      '  [Affirmation · selection] If the preceding AI turn offered a choice ("A or B?") and the user replied with nothing but a pointer ("the former"/"the latter"/"the first one"/"A") → also formed_by=confirmed, not stated: those two words carry no content of their own—both the options and the content live in the AI\'s turn, and resolving them depends entirely on it. Resolve the pointer first ("the former" = whichever the AI named first, "the latter" = the one it named second), then record the resolved content.',
       '  [Affirmation · vs. the small-talk guard above] The "haha/ok/sure" fillers that guard names are [idle fillers]—ones carrying no ⟨preceding AI turn⟩ suffix, or from which no specific proposition can be recovered. When the suffix is there and the AI turn proposed a single specific thing, that "sure" is not "no substantive information": form the cognition per [Affirmation]; do not output empty.',
       '  [Affirmation · denial] If the user [denies/corrects] the AI\'s proposition ("No"/"Nope"/"I\'m not") → what gets recorded is the [negated proposition] (AI asks "You\'re left-handed, right?", user says "Nope" → record "The user is not left-handed"), and that is the user\'s own explicit assertion → formed_by=stated, not confirmed (confirmed is only for nodding along to a proposition the AI put forward).',
       '  [Affirmation · hedged] If the nod itself is hedged ("maybe"/"I guess"/"probably") → prefer forming nothing; if you do form one, it is still confirmed (the proposition remains the AI\'s—your lack of certainty does not turn it into your own inference), and its content must be worded as a tentative claim carrying a hedge (e.g., "The user may not be much of a cook (hedged acceptance, not explicit)"), never as a settled conclusion.',
