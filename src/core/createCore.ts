@@ -483,6 +483,7 @@ export function createMemoWeftCore(options: CreateCoreOptions): MemoWeftCore {
         evidenceStore,
         eventStore,
         cognitionStore,
+        semanticResolutionStore: stores.semanticResolutionStore, // v0.6 Phase 2·D-0034：落语义解析
         retriever,
         llm: pool.for('write'), // 写路径走小快模型（缺配自动回退 chat，见 llm/pool.ts）
         transaction,

@@ -14,6 +14,8 @@ import type { EvidenceStore } from '../evidence/store.ts';
 import type { CognitionStore } from '../cognition/store.ts';
 import type { Cognition, ContentType, FormedBy } from '../cognition/model.ts';
 import type { Evidence } from '../evidence/model.ts';
+import type { SemanticResolutionStore } from '../interaction/semanticResolutionStore.ts';
+import type { ResponseAct, PromptAct, PropositionOrigin, AssertionStrength } from '../interaction/model.ts';
 import type { LLMClient, ChatMessage } from '../llm/client.ts';
 import { computeConfidence, deriveCredStatus } from './confidence.ts';
 import { filterReadableByTier } from '../evidence/privacy.ts';
@@ -29,6 +31,9 @@ export interface ConsolidateDeps {
   /** 证据层：证据级溯源要读原话文本喂给 LLM（地基债 · 证据级引用）。 */
   evidenceStore: EvidenceStore;
   cognitionStore: CognitionStore;
+  /** 语义解析 store（v0.6 Phase 2·D-0034，可选）：接了则把每条证据的语义解析落 semantic_resolution 表。
+   *  Phase 2 只 produce+store、不碰 formedBy（那是 Phase 3）；不接（旧调用方/bench 单测）= 不落解析、行为同旧。 */
+  semanticResolutionStore?: SemanticResolutionStore;
   llm: LLMClient;
   /** 事务器（可选）：接了共享连接就传它，把下方多步写（new/correct/conflict/reinforce + markConsolidated）
    *  原子化——崩在中间整段回滚，不留半拉画像。不传（如各开各连接的测试）= 直接跑，行为同旧。见 store/openStores.ts。 */
@@ -73,11 +78,23 @@ interface RawRef {
    *  confirmed 认知升级破顶(见 reinforce 分支)。Phase 2 提示词才教它标;Phase 1b 缺省 undefined = 不升级。 */
   formed_by?: string;
 }
+/** 一条候选语义解析（v0.6 Phase 2·D-0034）：LLM 对某条原话的解析（这句在回应谁提出的什么、是肯定/否定/选择/含糊）。
+ *  字段全 string 容错；落库前经 VALID_* 收敛（非法值落 null）。**是解释、不是证据**，永不进 support 白名单（3a/3d）。 */
+interface RawResolution {
+  evidence_id?: string;
+  resolved_content?: string;
+  response_act?: string;
+  prompt_act?: string;
+  proposition_origin?: string;
+  assertion_strength?: string;
+  required_context?: string;
+}
 interface LLMOut {
   new?: RawCog[];
   reinforce?: RawRef[];
   correct?: Array<{ cognition_id?: string } & RawCog>;
   conflict?: RawRef[];
+  resolutions?: RawResolution[];
 }
 
 /** 从候选里取它引的原话 id（容错字段名）。 */
@@ -87,6 +104,11 @@ function citedIds(c: RawCog | RawRef): string[] {
 
 const VALID_TYPES = ['fact', 'preference', 'goal', 'project', 'state', 'trait'];
 const VALID_FORMED = ['stated', 'observed', 'ruled', 'confirmed', 'inferred'];
+// 语义解析枚举（v0.6 Phase 2·D-0034）：落库前收敛，非法值落 null（与 model.ts 的 `... | null` 一致）。
+const VALID_RESPONSE_ACT = ['affirm', 'negate', 'select', 'elaborate', 'ask', 'none', 'other'];
+const VALID_PROMPT_ACT = ['propose', 'ask', 'state', 'none', 'other'];
+const VALID_ORIGIN = ['user_stated', 'assistant_proposed'];
+const VALID_STRENGTH = ['explicit', 'weak', 'none'];
 
 /** 从原始候选里抽出认知（容错字段名 + 缺类型给保守默认：fact/inferred）。无内容返回 null。 */
 function pickCognition(c: RawCog): { content: string; contentType: ContentType; formedBy: FormedBy } | null {
@@ -283,6 +305,27 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
       conflicted++;
     }
 
+    // 语义解析落库（v0.6 Phase 2·D-0034）：对每条【真证据】落一份 resolution（resolvedContent + 各解析维度）。
+    //   **只 produce+store、绝不碰 formedBy**（那是 Phase 3 的 deriveFormedBy）。复用 validEvidence 白名单
+    //   （3d：只对真证据落、伪造/AI-上文 id 结构性丢弃）；幂等（同证据已有解析则跳过）；resolverVersion 绑
+    //   prompt 版本可追溯。resolved_content 是【解释结果、不是证据】，永不进 consolidate 的 support 白名单（3a）。
+    for (const r of out.resolutions ?? []) {
+      const eid = r.evidence_id;
+      if (!eid || !validEvidence.has(eid)) continue; // 3d：只对真证据落解析（伪造 / AI 上文 id 丢弃）
+      const resolved = (r.resolved_content ?? '').trim();
+      if (!resolved) continue; // resolved_content 非空
+      if (deps.semanticResolutionStore?.ofEvidence(eid)) continue; // 幂等：同证据不重复落
+      deps.semanticResolutionStore?.put({
+        evidenceId: eid,
+        resolvedContent: resolved,
+        responseAct: VALID_RESPONSE_ACT.includes(r.response_act ?? '') ? (r.response_act as ResponseAct) : null,
+        promptAct: VALID_PROMPT_ACT.includes(r.prompt_act ?? '') ? (r.prompt_act as PromptAct) : null,
+        propositionOrigin: VALID_ORIGIN.includes(r.proposition_origin ?? '') ? (r.proposition_origin as PropositionOrigin) : null,
+        assertionStrength: VALID_STRENGTH.includes(r.assertion_strength ?? '') ? (r.assertion_strength as AssertionStrength) : null,
+        requiredContext: (r.required_context ?? '').trim() || null,
+        resolverVersion: `consolidate@${CONSOLIDATE_PROMPT.version}`,
+      });
+    }
     deps.eventStore.markConsolidated(newEvents.map((e) => e.id));
     return { created, reinforced, corrected, conflicted };
   });
