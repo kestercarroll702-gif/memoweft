@@ -19,6 +19,7 @@ import type { LLMClient, ChatMessage } from '../llm/client.ts';
 import { computeConfidence, deriveCredStatus } from '../consolidation/confidence.ts';
 import { filterReadableByTier } from '../evidence/privacy.ts';
 import { parseJsonObjectWithRepair } from '../llm/jsonRepair.ts';
+import { resolveEchoedId } from '../llm/echoedId.ts';
 import { TRENDS_PROMPT } from './prompts.ts';
 
 export interface AggregateTrendsDeps {
@@ -42,20 +43,31 @@ interface RawTrend {
   based_on_evidence_ids?: string[];
 }
 
-function buildMessages(items: Array<{ id: string; state: string; text: string; at: string }>, lang: Lang): ChatMessage[] {
+function buildMessages(
+  items: Array<{ id: string; state: string; text: string; at: string }>,
+  lang: Lang,
+): { messages: ChatMessage[]; tagToId: Map<string, string> } {
   const zh = lang === 'zh';
+  // 发短标号 [e1] 而非 36 字符 UUID（D-0036）：模型会模仿示例的 id 形态、间歇性把长 UUID 截断回写
+  //   → windowEvidence 精确匹配落空 → 趋势被静默丢弃。发标号 = 示例与真实形态一致，模型写不错。
+  const tagToId = new Map<string, string>();
   const list = items
-    .map((i) =>
-      zh
-        ? `- [${i.id}] (${i.at.slice(0, 10)}) 状态「${i.state}」← 原话：${i.text}`
-        : `- [${i.id}] (${i.at.slice(0, 10)}) state "${i.state}" ← utterance: ${i.text}`,
-    )
+    .map((i, k) => {
+      const tag = `e${k + 1}`;
+      tagToId.set(tag, i.id);
+      return zh
+        ? `- [${tag}] (${i.at.slice(0, 10)}) 状态「${i.state}」← 原话：${i.text}`
+        : `- [${tag}] (${i.at.slice(0, 10)}) state "${i.state}" ← utterance: ${i.text}`;
+    })
     .join('\n');
   const body = zh ? `【近期反复出现的状态】：\n${list}` : `[Recent recurring states]:\n${list}`;
-  return [
-    { role: 'system', content: TRENDS_PROMPT.text[lang] },
-    { role: 'user', content: body },
-  ];
+  return {
+    messages: [
+      { role: 'system', content: TRENDS_PROMPT.text[lang] },
+      { role: 'user', content: body },
+    ],
+    tagToId,
+  };
 }
 
 interface LLMOut {
@@ -107,9 +119,10 @@ export async function aggregateTrends(
   // 仍失败 → null（按"本轮无趋势产出"处理，等价旧的返回空对象）。重试复用同一批已过滤 messages
   // （隐私红线 C：只复用已过滤上下文 + 追加提示，不引入新证据文本）。重试会多调一次模型，故计数取前后差。
   const before = deps.llm.callCount;
+  const { messages, tagToId } = buildMessages(items, lang);
   const out = (await parseJsonObjectWithRepair<LLMOut>({
     llm: deps.llm,
-    messages: buildMessages(items, lang),
+    messages,
     lang,
   })) ?? {};
   const llmCalls = deps.llm.callCount - before;
@@ -118,7 +131,14 @@ export async function aggregateTrends(
   for (const raw of out.trends ?? []) {
     const content = (raw.content ?? raw.trend ?? '').trim();
     if (!content) continue;
-    const cited = [...new Set((raw.based_on_evidence_ids ?? []).filter((id) => windowEvidence.has(id)))];
+    // 经 resolveEchoedId 归一（D-0036）：标号 e1 / 精确 UUID / 截断前缀都解回真 id；捏造 / 歧义仍丢。
+    const cited = [
+      ...new Set(
+        (raw.based_on_evidence_ids ?? [])
+          .map((id) => resolveEchoedId(id, windowEvidence, tagToId))
+          .filter((id): id is string => id !== null),
+      ),
+    ];
     if (cited.length === 0) continue; // 没引到真实状态证据 → 不硬编
     const confidence = computeConfidence({ contentType: 'trend', formedBy: 'ruled', supportCount: cited.length, contradictCount: 0 }, fullCfg);
     trends.push(

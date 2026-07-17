@@ -22,6 +22,7 @@ import { deriveFormedBy } from './deriveFormedBy.ts';
 import { filterReadableByTier } from '../evidence/privacy.ts';
 import { sourceLabel, aiContextSuffix } from '../evidence/sourceLabel.ts';
 import { parseJsonObjectWithRepair } from '../llm/jsonRepair.ts';
+import { resolveEchoedId } from '../llm/echoedId.ts';
 import { noopTransaction, type Transaction } from '../store/transaction.ts';
 import { resolveLang, type Lang, type MemoWeftConfig } from '../config.ts';
 import { systemClock, type Clock } from '../clock.ts';
@@ -241,6 +242,20 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
   // 现有画像 = active()（未失效且未归档）：归档全面雪藏（批次3 用户拍板）——已归档认知不进
   // 「现有画像」prompt、不参与强化/纠正/冲突比对（数据保留、可经恢复归档重新生效）。
   const existing = deps.cognitionStore.active(subjectId);
+  // reinforce/correct/conflict 引用【已有认知】的 cognition_id 白名单（D-0036 同款陷阱收口）：
+  //   这三条路径的 cognition_id 走 cognitionStore.get() 精确匹配、零容错零告警。实测模型对 cognition_id
+  //   从不截断（它出现次数少、不像原话 id 每条一个），但那是 v6 观察——补上「容错 + 认不出就告警」这层
+  //   安全网,复用与证据/attribute/trends 同一个 resolveEchoedId(此处无标号映射,只走精确 + 唯一前缀兜底)。
+  const existingIds = new Set(existing.map((c) => c.id));
+  const resolveCogId = (rawId: string | undefined, op: string): string | null => {
+    const id = resolveEchoedId(rawId, existingIds);
+    if (rawId && !id) {
+      console.warn(
+        `[memoweft/consolidate] ${op} 引用的 cognition_id 认不出（模型写的：${JSON.stringify(rawId)}）——多半是它把 id 截断了`,
+      );
+    }
+    return id;
+  };
 
   // 事件视图 + 合法原话集合：把每个新事件覆盖的原话（带 id+原文）摊开给 LLM 引用；
   // 只有这些 id 是合法支撑（防 LLM 编造/自证，证据级溯源）。
@@ -418,7 +433,8 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
 
     // reinforce
     for (const c of out.reinforce ?? []) {
-      const cog = c.cognition_id ? deps.cognitionStore.get(c.cognition_id) : null;
+      const cogId = resolveCogId(c.cognition_id, 'reinforce');
+      const cog = cogId ? deps.cognitionStore.get(cogId) : null;
       if (!cog || cog.invalidAt) continue;
       const cited = pickSupport(citedIds(c));
       if (cited.length === 0) continue; // 没引到有效原话 → 无操作（地基债 fork 决策）
@@ -470,7 +486,8 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
 
     // correct：旧失效保留，采纳新的
     for (const c of out.correct ?? []) {
-      const old = c.cognition_id ? deps.cognitionStore.get(c.cognition_id) : null;
+      const oldId = resolveCogId(c.cognition_id, 'correct');
+      const old = oldId ? deps.cognitionStore.get(oldId) : null;
       const p = pickCognition(c);
       if (!old || old.invalidAt || !p) continue;
       const support = pickSupport(citedIds(c));
@@ -494,7 +511,8 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
 
     // conflict：标记暴露，不消解
     for (const c of out.conflict ?? []) {
-      const cog = c.cognition_id ? deps.cognitionStore.get(c.cognition_id) : null;
+      const cogId = resolveCogId(c.cognition_id, 'conflict');
+      const cog = cogId ? deps.cognitionStore.get(cogId) : null;
       if (!cog || cog.invalidAt) continue;
       const contra = pickSupport(citedIds(c));
       if (contra.length === 0) continue; // 没引到冲突原话 → 不凭空标冲突（无操作，地基债 fork 决策）

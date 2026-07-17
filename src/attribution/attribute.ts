@@ -20,6 +20,7 @@ import type { LLMClient, ChatMessage } from '../llm/client.ts';
 import { computeConfidence, deriveCredStatus } from '../consolidation/confidence.ts';
 import { filterReadableByTier } from '../evidence/privacy.ts';
 import { parseJsonObjectWithRepair } from '../llm/jsonRepair.ts';
+import { resolveEchoedId } from '../llm/echoedId.ts';
 import { systemClock, type Clock } from '../clock.ts';
 import { ATTRIBUTE_PROMPT } from './prompts.ts';
 
@@ -61,18 +62,29 @@ function buildMessages(
   phenomenon: string,
   evidences: Array<{ id: string; sourceKind: string; occurredAt: string; text: string }>,
   lang: Lang,
-): ChatMessage[] {
+): { messages: ChatMessage[]; tagToId: Map<string, string> } {
+  // 发短标号 [e1] 而非 36 字符 UUID（D-0036）：模型会模仿提示词示例的 id 形态、间歇性把长 UUID
+  //   截成前缀写回 → candidateIds 精确匹配落空 → 假设被静默丢弃。发标号 = 示例与真实形态一致，
+  //   模型结构上写不错（consolidate 拍板 B 同款手法）。tagToId 落库前把标号翻译回真证据 id。
+  const tagToId = new Map<string, string>();
   const list = evidences
-    .map((e) => `- [${e.id}] (${e.sourceKind} ${e.occurredAt.slice(0, 16)}) ${e.text}`)
+    .map((e, i) => {
+      const tag = `e${i + 1}`;
+      tagToId.set(tag, e.id);
+      return `- [${tag}] (${e.sourceKind} ${e.occurredAt.slice(0, 16)}) ${e.text}`;
+    })
     .join('\n');
   const body =
     lang === 'zh'
       ? `【现象】：${phenomenon}\n\n【可能相关的行为/观察证据（只能从这里选原因）】：\n${list}`
       : `[Phenomenon]: ${phenomenon}\n\n[Possibly relevant behavior/observation evidence (causes may only be chosen from here)]:\n${list}`;
-  return [
-    { role: 'system', content: ATTRIBUTE_PROMPT.text[lang] },
-    { role: 'user', content: body },
-  ];
+  return {
+    messages: [
+      { role: 'system', content: ATTRIBUTE_PROMPT.text[lang] },
+      { role: 'user', content: body },
+    ],
+    tagToId,
+  };
 }
 
 /** 减去 windowHours 小时，返回 ISO（用于时间窗下界）。 */
@@ -155,18 +167,24 @@ export async function attribute(subjectId: string, deps: AttributeDeps): Promise
     // 结构化输出加固（jsonRepair）：去围栏 → 解析对象；失败落日志 + 最多重试一次（提示"只输出 JSON"）。
     // 仍失败 → null（按"本轮此现象无产出"处理，等价旧的返回空对象）。重试复用同一批已过滤 messages
     // （隐私红线 C：只复用已过滤上下文 + 追加提示，不引入新证据文本）。
+    const { messages, tagToId } = buildMessages(phenom.content, candidates, lang);
     const out = (await parseJsonObjectWithRepair<LLMOut>({
       llm: deps.llm,
-      messages: buildMessages(phenom.content, candidates, lang),
+      messages,
       lang,
     })) ?? {};
     for (const raw of out.hypotheses ?? []) {
       const content = (raw.content ?? raw.hypothesis ?? '').trim();
       if (!content) continue;
       // 只采纳引用了真实候选原因的依据（防 LLM 编造 id / 自证），并【硬封顶】条数（防过度归因）。
-      const citedCauses = (raw.based_on_evidence_ids ?? [])
-        .filter((id) => candidateIds.has(id))
-        .slice(0, cfg.maxCausesPerHypothesis);
+      // 经 resolveEchoedId 归一（D-0036）：标号 e1 / 精确 UUID / 截断前缀都解回真 id；捏造 / 歧义仍丢。
+      const citedCauses = [
+        ...new Set(
+          (raw.based_on_evidence_ids ?? [])
+            .map((id) => resolveEchoedId(id, candidateIds, tagToId))
+            .filter((id): id is string => id !== null),
+        ),
+      ].slice(0, cfg.maxCausesPerHypothesis);
       if (citedCauses.length === 0) continue; // 没引到真实原因 → 不硬编
       // 支撑 = ≤N 条原因证据 + 1 个现象锚点（现象锚同时让"已归因"判定有据，dedup 可靠）。
       const basedOn = [...new Set([...citedCauses, ...(anchorEvidence ? [anchorEvidence.id] : [])])];
