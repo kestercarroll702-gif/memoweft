@@ -302,6 +302,30 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
   }
 
   /**
+   * 覆盖率仪表（只观测·2026-07-17）：模型**产了解析、却一条都没落地** ⇒ 它写回的 evidence_id
+   * 系统性认不出（id 契约破了）。这类失败此前**零信号**——JSON 合法、jsonRepair 不告警、
+   * llmCalls 正常，只有落库是空的；而 weftmate 侧不记 llmCalls、jsonRepair 默认 sink 不记原文，
+   * 故 2026-07-17 那 5 次整批空转的真凶靠数据库终态**永远分不开**（终态是有损结果）。补上判别信号。
+   *
+   * **刻意只抓「产了但全没落地」**：「模型压根没产 resolutions」不告警——那是模型能力/材料问题，
+   * 也是既有测试简化 stub 的常见形态（见 writePathMetrics.test.ts），对着它喊狼来了只会淹掉真信号。
+   * 「部分没落地」同样不告警：3d 收窄 / resolved_content 空 / 同证据先到先得都会合法地挡掉一些。
+   *
+   * **只观测、不改行为**：仍按原样标 consolidated。要改成「没覆盖就不标、留待下次」得给 event 加
+   * 重试计数（schema 变更 + 防死循环），属另一个变更、需人类批准。
+   * 隐私：只记 id 与计数，**不记原话**（同 jsonRepair.ts:67-69 的取向；id 不是用户内容）。
+   */
+  const rawResolutionCount = (out.resolutions ?? []).length;
+  if (rawResolutionCount > 0 && resolutionOf.size === 0 && spokenEvidence.size > 0) {
+    const sample = (out.resolutions ?? []).slice(0, 3).map((r) => JSON.stringify(r.evidence_id)).join(' ');
+    console.warn(
+      `[memoweft/consolidate] 模型产了 ${rawResolutionCount} 条解析、却一条都没落地` +
+        `（spoken 证据 ${spokenEvidence.size} 条、llmCalls=${llmCalls}）——` +
+        `多半是它写回的 evidence_id 认不出。模型写的前几个：${sample}`,
+    );
+  }
+
+  /**
    * 算一条认知的 formedBy（v0.6 Phase 3·D-0035）。
    * 模型报「我推断的」→ `inferred`（拍板①：推断距离这一维仍归模型，代码只接管载体维）；
    * 否则由 `deriveFormedBy` 从支持证据的【载体维】算（取最弱，含「spoken 无解析」的结构性兜底）。

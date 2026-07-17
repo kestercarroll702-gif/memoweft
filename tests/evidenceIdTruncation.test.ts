@@ -148,3 +148,52 @@ test('模型写对完整 id 时行为零变化（精确匹配优先）', async (
     assert.ok(s.sr.ofEvidence(eId));
   } finally { closeAll(s); }
 });
+
+// ── ③ 覆盖率仪表：「模型产了、却一条都没落地」必须留下判别信号 ──
+//
+// 2026-07-17 那场调查最大的障碍就是**信号蒸发**：weftmate 侧不记 llmCalls、
+// jsonRepair 默认 sink 不记原文、weftmate-console.log 当时还没落盘 ⇒ 历史那 5 次的真凶
+// 靠数据库终态**永远分不开**（终态是有损结果）。这组测试钉住那条补上的信号。
+
+/** 捕获 console.warn，返回 [告警数组, 还原函数]。 */
+function captureWarn(): [string[], () => void] {
+  const warns: string[] = [];
+  const real = console.warn;
+  console.warn = (...a: unknown[]) => { warns.push(a.map(String).join(' ')); };
+  return [warns, () => { console.warn = real; }];
+}
+
+test('仪表：模型产了解析、却一条都没落地 → 落告警（含模型写的 id 形态，一眼看出问题）', async () => {
+  const s = fresh();
+  const [warns, restore] = captureWarn();
+  try {
+    said(s, '2026-06-01T08:00:00.000Z', '我今年26岁');
+    // 模型产了解析，但 id 全是认不出的（非任何真 id 前缀）→ 全被白名单挡掉
+    await consolidate('u', deps(s, stubOf(reply('totally-bogus-id'))));
+    const hit = warns.find((w) => w.includes('[memoweft/consolidate]'));
+    assert.ok(hit, `应落一条 consolidate 告警，实得：${JSON.stringify(warns)}`);
+    assert.match(hit!, /totally-bogus-id/, '告警要带上模型写的 id 形态——这正是判别 id 契约破裂的钥匙');
+  } finally { restore(); closeAll(s); }
+});
+
+test('仪表：模型正常产出 → 不告警（不许对着好路径喊狼来了）', async () => {
+  const s = fresh();
+  const [warns, restore] = captureWarn();
+  try {
+    const eId = said(s, '2026-06-01T08:00:00.000Z', '我今年26岁');
+    await consolidate('u', deps(s, stubOf(reply(eId))));
+    assert.equal(warns.filter((w) => w.includes('[memoweft/consolidate]')).length, 0);
+  } finally { restore(); closeAll(s); }
+});
+
+test('仪表：模型压根不产 resolutions → 不告警（这是既有测试 stub 的常见形态，不是本 bug 的靶）', async () => {
+  const s = fresh();
+  const [warns, restore] = captureWarn();
+  try {
+    said(s, '2026-06-01T08:00:00.000Z', '我今年26岁');
+    // 四类全空、无 resolutions 字段 —— 同 writePathMetrics.test.ts 的 emptyOutputStub
+    await consolidate('u', deps(s, stubOf('{"new":[],"reinforce":[],"correct":[],"conflict":[]}')));
+    assert.equal(warns.filter((w) => w.includes('[memoweft/consolidate]')).length, 0,
+      '「模型没产」与「产了但落不了地」是两回事，只告警后者');
+  } finally { restore(); closeAll(s); }
+});
