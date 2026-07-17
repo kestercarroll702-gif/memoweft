@@ -144,9 +144,17 @@ test('注入:consolidate 的 LLM 输入带 AI 上文;AI 上文只作原话后缀
     const llm = { callCount: 0, tier: 'cloud' as const, async chat(msgs: Array<{ role: string; content: string }>) { this.callCount++; captured = msgs.map((m) => m.content).join('\n'); return '{"new":[]}'; } };
     await consolidate('u', { eventStore: evt, evidenceStore: ev, cognitionStore: cog, llm });
     assert.match(captured, /你喜欢爬山吧\?/, 'consolidate 输入含 AI 上文');
-    // 真证据 id 出现一次（作为 [id] 前缀）；AI 上文没有自己的 [id] 条目
-    const idOccurrences = captured.split(`[${e.id}]`).length - 1;
-    assert.equal(idOccurrences, 1, '真证据 id 只作一条 [id] 原话出现，AI 上文不另起带 id 的条目');
+    // 结构墙语义不变，只是 id 的【书写形态】随 v7 变了（D-0036 拍板 B·治本）：
+    //   原话不再发 36 字符 UUID、改发短标号 [e1]（模型会模仿示例的 id 形态而非照抄真 id，
+    //   v6 的 4 字符占位示例 `ev-1` 诱使它把 UUID 截成前 8 位 → 白名单精确匹配全落空 → 整批静默丢弃）。
+    //   **AI 上文照旧只作那条真原话的后缀、共用它的标号，绝不另起自己的带标号条目** —— 3a/3d 一寸未让。
+    // 断言随之【加强】（不是放宽）：除原有的「条目只出现一次」，另钉两条 v7 新不变量。
+    // 数【条目行】而非整串出现次数：v7 的 system 提示词里本就举了 [e1]/[e2] 作形态示例，
+    // 拿整串计数会把说明文字算进去（原断言用 UUID 计数不受此扰，因为 system 里没有真 UUID）。
+    const items = captured.match(/^\s+- \[[^\]]+\]/gm) ?? [];
+    assert.equal(items.length, 1, '原话条目总数=1 —— AI 上文没铸出独立条目（3a/3d 结构墙）');
+    assert.match(items[0]!, /\[e1\]/, '唯一那条条目用的是该原话的标号');
+    assert.equal(captured.includes(e.id), false, 'v7:真 UUID 不再进 prompt（改发标号，根除截断诱因）');
   } finally {
     ev.close(); evt.close(); cog.close();
   }

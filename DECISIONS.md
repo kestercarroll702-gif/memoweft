@@ -670,8 +670,32 @@ JSON **完全合法** → jsonRepair 零告警、`finish_reason=stop`、`llmCall
 - **完整 C(待批·涉 schema)**:「有 spoken 证据却零解析落库 → **不标 consolidated**、留待下次」需给 `event` 加重试计数(防死循环)⇒ schema 变更,按 develop-memoweft §1 需人类批准。按实测漏读率,重试 3 次可把丢失率压到 ~5%。
 - **新发现 · LLM 超时不可配且会真触发**:`client.ts:174` 默认 **120s**,而 weftmate 用 `config-store.injectEnv()` 只注入 9 个 ENV_KEYS、**`MEMOWEFT_LLM_TIMEOUT_MS` 不在其中** ⇒ **weftmate 运行期超时恒为 120s**。本窗实测撞上过(17 证据 + 17 认知的 prompt,响应 20K 字 / 8233 tok,就在 2 分钟边界)。这是**随规模恶化**的——攒批越多 prompt 越大,与 `batchSize=12`(D-0032)的攒批策略对冲。
 
+**同款陷阱:三条同构路径未修(B 的对抗审查发现·8 agent 零 blocker·已亲自坐实)**
+「示例短占位 id + 真实喂 UUID + 精确匹配 + 静默 continue/落空」这套结构,全仓**不止 consolidate 一处**:
+- **attribute**(`attribution/prompts.ts:29`zh/:41en 示例 `["ev-1"]` · `attribute.ts:66` 喂 `[${e.id}]` UUID ·
+  `:168` `candidateIds.has` 精确匹配 · `:170` `continue` 静默丢)——**无 A 兜底 / 无 B 标号 / 无 C 告警**,比修复前的 consolidate 更脆。
+- **trends**(`background/prompts.ts:25`zh/:34en 示例 `["ev-1","ev-2","ev-3"]` · `trends.ts:50` 喂 `[${i.id}]` UUID · 同款精确匹配+静默丢)——同上。
+- **cognition_id 通道**(consolidate 自身内):`reinforce/correct/conflict` 走 `cognitionStore.get(cognition_id)`
+  精确匹配、**零容错零告警**;示例 `"cog-x"`(`prompts.ts:101/141`)与真实 UUID 形态不一致的**诱因仍在**。
+  B **刻意不动它**:实测模型对 cognition_id **从不截断**(dogfood 报文逐字完整、出现频率低)——但这是 **v6 观察、v7 未验**。
+- **分级(诚实)**:机制在 consolidate/evidence-id 路**已实测**(6 撞 5);上述三条**是否实际触发未证实**
+  (eval 触发不了 = eval 盲区;也未被 dogfood 同强度压过)⇒ **结构同构的潜在同类风险**,非已实测 bug。
+- **不阻塞 B**(非 B 引入、v6 及更早就在);**待人类拍板的独立跟进**:attribute+trends 可直接复用 B 的「发标号」手法一次收口;
+  cognition_id 至少该补一条「get 落空但模型给了 cognition_id」的告警(同 C 的取向)。**范围纪律:本窗不顺手改。**
+
 **环境坑订正(D-0035 环境坑③ 是错的)**
 「外部进程只读打开该库恒读到 0 行·原因未明」**与 SQLite 无关**:真相是 **Git Bash(MSYS)的文件视图陈旧**(连它派生的 powershell.exe 都中招),会拿到数小时前的快照。**正解:读该库一律用 PowerShell 工具直接发起 node。** 本窗全程照此执行,零异常。
+
+**⚠ 已证实的 eval 盲区(比修复本身更值得记)**
+**§15.3 全量 eval 结构上抓不到这类 bug。** 实测:在**同一份代码**(含 A/C + client.ts 修复)上重立的 v6 基线 =
+**262/274(95.6%)**,与 04fa43c 的旧基线 **263/274(96.0%)** 差 **−0.4pp / 全绿 38→38 持平**;
+且逐盘**有红有绿、互相抵消**(chitchat-negative −2 · no-over-inference −2 · conflict +1 · emotion-cap +1 ·
+fact-vs-belief +1),是 D-0019/D-0035 判过的**单跑方差特征**。**判据(关键)**:若 A 真在 eval 里生效
+(把被 id 截断丢弃的产出救回来),分数应呈**单向提升**——实际不是 ⇒ **id 截断从未污染过 eval 分数**。
+原因:eval 每个场景只有 **1~3 条证据**,触发不了模型的缩写倾向;而 dogfood 的 **12~20 条证据批次**必触发。
+⇒ 49 个场景、95.6% 通过率,对一个「每次整理有 83% 概率把整批对话静默吞掉」的 P0 **完全视而不见**——
+**真人 dogfood 是它唯一的出口**(这正是 Phase 4 存在的意义)。**推论**:eval 语料需要一个「大批次」家族
+(≥12 条证据/场景)才能覆盖这类**规模触发型**缺陷;现有 49 条**全部**是小批次。已记 ROADMAP 候选。
 
 **方法论教训(记档·本窗差点第五次犯同一个错)**
 - **对非确定性现象,单次重放零证明力**:单次重放 14:39 批「不复现」,差点判成「无从查起」;改用**重复测量**(同输入 8 次)后空转率立刻现形(单 event **37.5%**、三 event **62.5%**),现象从「查不出」变成「可按需复现」,这才够到 CLAUDE.local.md 证据门槛第 5 条,根因随后一击即中。

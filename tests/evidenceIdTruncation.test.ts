@@ -61,6 +61,19 @@ function reply(citeId: string, content = '用户年龄26岁'): string {
   });
 }
 const stubOf = (body: string) => ({ callCount: 0, async chat() { this.callCount++; return body; } });
+/** 同 stubOf，但把收到的 prompt 存下来供断言（测「喂进去的是什么形态的 id」）。 */
+function spyStub(body: string) {
+  return {
+    callCount: 0,
+    seen: '',
+    async chat(...args: unknown[]) {
+      this.callCount++;
+      const msgs = args[0] as Array<{ content: string }>;
+      this.seen = msgs.map((m) => m.content).join('\n');
+      return body;
+    },
+  };
+}
 
 // ── ① 红：模型截断 id → 认知与解析都不该整批蒸发 ──
 
@@ -149,7 +162,68 @@ test('模型写对完整 id 时行为零变化（精确匹配优先）', async (
   } finally { closeAll(s); }
 });
 
-// ── ③ 覆盖率仪表：「模型产了、却一条都没落地」必须留下判别信号 ──
+// ── ③ B 治本（v7·D-0036）：prompt 不再发 UUID，改发短序号 ⇒ 模型结构上写不错 ──
+//
+// A 的前缀容错是**治标**（认得出模型截断的 UUID）；B 是**治本**：prompt 里根本不出现 UUID，
+// 示例形态与真实形态一致 ⇒ 诱因根除。两者协同：A 继续兜住「模型仍写 UUID/前缀」的情况（向后兼容）。
+
+test('B：prompt 里发短序号 [e1]、不再出现 evidence 的真 UUID（根除诱因）', async () => {
+  const s = fresh();
+  try {
+    const eId = said(s, '2026-06-01T08:00:00.000Z', '我今年26岁');
+    const stub = spyStub(reply('e1'));
+    await consolidate('u', deps(s, stub));
+    assert.ok(!stub.seen.includes(eId), `prompt 里不该再出现 evidence 的真 UUID，实际 prompt：\n${stub.seen}`);
+    assert.match(stub.seen, /\[e1\]/, 'prompt 里应发短序号 [e1]');
+  } finally { closeAll(s); }
+});
+
+test('B：模型写短序号 e1 → 解回真 id（认知与解析都落到真 id 上）', async () => {
+  const s = fresh();
+  try {
+    const eId = said(s, '2026-06-01T08:00:00.000Z', '我今年26岁');
+    const r = await consolidate('u', deps(s, stubOf(reply('e1'))));
+    assert.equal(r.created.length, 1, '短序号应能解回真 id');
+    assert.equal(s.cog.sourcesOf(r.created[0]!.id)[0]!.evidenceId, eId, '溯源挂真 id，不是标号');
+    assert.ok(s.sr.ofEvidence(eId), '解析也落到真 id 上（标号进表就是脏数据）');
+  } finally { closeAll(s); }
+});
+
+test('B：多条证据的标号各自对应正确的真 id（不许串号）', async () => {
+  const s = fresh();
+  try {
+    const a = s.ev.put({ subjectId: 'u', sourceKind: 'spoken', hostId: 'h', rawContent: '我今年26岁', occurredAt: '2026-06-01T08:00:00.000Z' });
+    const b = s.ev.put({ subjectId: 'u', sourceKind: 'spoken', hostId: 'h', rawContent: '我有一辆小鹏G6', occurredAt: '2026-06-01T08:01:00.000Z' });
+    s.evt.put({ subjectId: 'u', summary: '自述', occurredAt: '2026-06-01T08:00:00.000Z', evidenceIds: [a.id, b.id] });
+    // 模型只引第二条（e2）→ 必须精确挂到 b、绝不能串到 a
+    const r = await consolidate('u', deps(s, stubOf(reply('e2', '用户车型为小鹏G6'))));
+    assert.equal(r.created.length, 1);
+    assert.equal(s.cog.sourcesOf(r.created[0]!.id)[0]!.evidenceId, b.id, 'e2 必须解到第二条证据');
+    assert.ok(s.sr.ofEvidence(b.id), 'e2 的解析落在 b 上');
+    assert.equal(s.sr.ofEvidence(a.id), null, 'a 没被引用 → 不该有解析');
+  } finally { closeAll(s); }
+});
+
+test('B：标号越界（e99，没这条）→ 丢弃，不猜', async () => {
+  const s = fresh();
+  try {
+    said(s, '2026-06-01T08:00:00.000Z', '我今年26岁');
+    const r = await consolidate('u', deps(s, stubOf(reply('e99'))));
+    assert.equal(r.created.length, 0, '越界标号不该匹配到任何证据');
+  } finally { closeAll(s); }
+});
+
+test('B 向后兼容：模型仍写完整 UUID → A 的精确匹配照常兜住', async () => {
+  const s = fresh();
+  try {
+    const eId = said(s, '2026-06-01T08:00:00.000Z', '我今年26岁');
+    const r = await consolidate('u', deps(s, stubOf(reply(eId))));
+    assert.equal(r.created.length, 1, '写真 UUID 仍须照常工作（A 的精确匹配）');
+    assert.equal(s.cog.sourcesOf(r.created[0]!.id)[0]!.evidenceId, eId);
+  } finally { closeAll(s); }
+});
+
+// ── ④ 覆盖率仪表：「模型产了、却一条都没落地」必须留下判别信号 ──
 //
 // 2026-07-17 那场调查最大的障碍就是**信号蒸发**：weftmate 侧不记 llmCalls、
 // jsonRepair 默认 sink 不记原文、weftmate-console.log 当时还没落盘 ⇒ 历史那 5 次的真凶

@@ -125,10 +125,20 @@ const MIN_ID_PREFIX = 8;
  * 见 tests/evidenceIdTruncation.test.ts（前半钉「真 id 别被误杀」、后半钉「护栏不许松」），
  * 与 confirmedLaundering.test.ts 的 3a 用例互补。
  */
-function resolveEvidenceId(raw: string | undefined, whitelist: Set<string>): string | null {
+function resolveEvidenceId(
+  raw: string | undefined,
+  whitelist: Set<string>,
+  tagToEvidenceId: Map<string, string>,
+): string | null {
   if (!raw) return null;
-  if (whitelist.has(raw)) return raw; // 精确匹配：绝大多数情况，零行为变化
-  const bare = raw.replace(/^ev-/i, ''); // 剥掉照抄示例的 `ev-` 前缀
+  // ① 标号（v7·治本的正路）：prompt 里发的就是 `e1`/`e2`，模型照抄即可。
+  //    仍过 whitelist —— 标号只在本轮 prompt 内有效，且 resolutions 走的是更窄的 spokenEvidence（3d）。
+  const byTag = tagToEvidenceId.get(raw.trim());
+  if (byTag && whitelist.has(byTag)) return byTag;
+  // ② 精确 UUID（向后兼容 + 模型偶尔照抄了别处的真 id）：行为同 v6。
+  if (whitelist.has(raw)) return raw;
+  // ③ 前缀兜底（A·治标）：v6 起模型会截断 UUID；v7 发标号后本路应极少走到，留作防御。
+  const bare = raw.replace(/^ev-/i, ''); // 剥掉照抄旧示例的 `ev-` 前缀
   if (bare.length < MIN_ID_PREFIX) return null;
   let hit: string | null = null;
   for (const id of whitelist) {
@@ -174,25 +184,53 @@ interface EventView {
   utterances: Array<{ id: string; text: string }>;
 }
 
-function buildMessages(existing: Cognition[], events: EventView[], lang: Lang): ChatMessage[] {
+/**
+ * 拼 prompt，并返回【原话标号 → 真 evidence id】的映射（v0.6·D-0036 拍板 B·治本）。
+ *
+ * **原话不再发 36 字符 UUID，改发短标号 `e1`/`e2`…**（`tagToEvidenceId` 记住对应关系，
+ * 落库前翻译回真 id）。根因：模型会**模仿提示词示例的 id 形态**而非照抄输入里的真 id——
+ * v6 的示例是 `["ev-1"]`（4 字符占位）而真实喂的是 UUID，于是 mimo 间歇性把 UUID 截成前 8 位
+ * 回写、白名单精确匹配全落空 ⇒ 整批产出被静默丢弃（D-0036，实测 6 次撞 5 次）。
+ * **发标号 = 示例形态与真实形态一致 ⇒ 模型结构上不可能写错**，诱因根除（A 的前缀容错降为兜底）。
+ *
+ * **认知 id 保持 UUID 原样**（`reinforce/correct/conflict` 的 `cognition_id`）：实测模型对它**从不截断**
+ * （dogfood 报文里 cognition_id 逐字完整）——它出现次数少、不像原话 id 每条一个。改动越小越好；
+ * 且两种 id 形态不同，反而不易混淆。
+ */
+function buildMessages(
+  existing: Cognition[],
+  events: EventView[],
+  lang: Lang,
+): { messages: ChatMessage[]; tagToEvidenceId: Map<string, string> } {
   const zh = lang === 'zh';
   const profile = existing.length
     ? existing.map((c) => `- [${c.id}] (${c.contentType}) ${c.content}`).join('\n')
     : zh ? '（空）' : '(none)';
+  const tagToEvidenceId = new Map<string, string>();
+  let n = 0;
   const material = events
     .map((e) => {
       const head = `· ${zh ? '事件' : 'Event'} (${e.occurredAt.slice(0, 16)}) ${e.summary}`;
-      const lines = e.utterances.map((u) => `    - [${u.id}] ${u.text}`).join('\n');
+      const lines = e.utterances
+        .map((u) => {
+          const tag = `e${++n}`; // 跨事件连续编号：模型看到的是一份扁平的原话清单
+          tagToEvidenceId.set(tag, u.id);
+          return `    - [${tag}] ${u.text}`;
+        })
+        .join('\n');
       return lines ? `${head}\n${lines}` : head;
     })
     .join('\n');
   const body = zh
     ? `【现有画像】：\n${profile}\n\n【新材料】：\n${material}`
     : `[Existing profile]:\n${profile}\n\n[New material]:\n${material}`;
-  return [
-    { role: 'system', content: CONSOLIDATE_PROMPT.text[lang] },
-    { role: 'user', content: body },
-  ];
+  return {
+    messages: [
+      { role: 'system', content: CONSOLIDATE_PROMPT.text[lang] },
+      { role: 'user', content: body },
+    ],
+    tagToEvidenceId,
+  };
 }
 
 export async function consolidate(subjectId: string, deps: ConsolidateDeps): Promise<ConsolidateResult> {
@@ -249,12 +287,12 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
   /** 取候选引的原话 id，只留合法的、去重（无合法引用 → 空，调用方按"跳过"处理）。
    *  经 `resolveEvidenceId` 归一：精确匹配优先，模型截断的短 id 按【唯一前缀】解回真 id（见其文档）。 */
   const pickSupport = (ids: string[]): string[] =>
-    [...new Set(ids.map((id) => resolveEvidenceId(id, validEvidence)).filter((id): id is string => id !== null))];
+    [...new Set(ids.map((id) => resolveEvidenceId(id, validEvidence, tagToEvidenceId)).filter((id): id is string => id !== null))];
 
   // 结构化输出加固（jsonRepair）：去代码块围栏 → 解析对象；失败落日志 + 最多重试一次（提示"只输出 JSON"）。
   // 仍失败 → null（按"本轮无产出"处理，等价旧的返回空对象；下方各 `?? []` 兜住）。重试会多调一次模型，故计数取前后差。
   // 写路径仪表（D4 只观测）：先把 messages 存下来量 prompt 字符数，再原样喂给解析器——行为零变化，只加计量。
-  const messages = buildMessages(existing, events, lang);
+  const { messages, tagToEvidenceId } = buildMessages(existing, events, lang);
   const promptChars = messages.reduce((n, m) => n + m.content.length, 0);
   const before = deps.llm.callCount;
   const out = (await parseJsonObjectWithRepair<LLMOut>({
@@ -286,7 +324,7 @@ export async function consolidate(subjectId: string, deps: ConsolidateDeps): Pro
     // 归一到真 id（同 pickSupport）：白名单仍是 spokenEvidence（3d + 来源收窄，见其声明）——
     // 容错只把模型截断的短 id 解回【集合内】的真 id，解不出 / 歧义一律丢，白名单一寸不放宽。
     // **必须用解出的真 id 做 key**：下方落库直接拿 key 写 evidence_id，短 id 进表就是脏数据。
-    const eid = resolveEvidenceId(r.evidence_id, spokenEvidence);
+    const eid = resolveEvidenceId(r.evidence_id, spokenEvidence, tagToEvidenceId);
     if (!eid) continue;
     const resolved = (r.resolved_content ?? '').trim();
     if (!resolved) continue; // resolved_content 非空

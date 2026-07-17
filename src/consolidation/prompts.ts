@@ -40,6 +40,19 @@
  *     **D-0018 的「observed/tool 绝不可标 stated」由此从提示词自觉升级为结构保证**（代码直接看 sourceKind，
  *     模型谎标也没用）——这是加固，不是放弃那条纪律。
  *
+ *   - v7（2026-07-17 · D-0036 拍板 B·治本）：**原话 id 改发短标号**。只动「id 长什么样」这一件事——
+ *     `buildMessages` 不再把 36 字符 UUID 塞进 prompt，改发 `[e1]`/`[e2]`（代码维护 标号↔真 id 映射、
+ *     落库前翻译回真 id），示例里的 `["ev-1"]` 相应改成 `["e1"]`。
+ *     **根因（dogfood 实锤，6 次重放撞 5 次）**：模型会**模仿示例的 id 形态**、而非照抄输入里的真 id——
+ *     v6 示例是 4 字符占位 `ev-1` 而真实喂的是 UUID，于是 mimo 间歇性把 UUID 截成前 8 位回写
+ *     （`"25601f4c"`，偶尔 `"ev-25601f4c"`）；两处白名单精确匹配全落空 → 每条认知被
+ *     `support.length===0` 丢弃、resolutions 整批丢弃 → **整批 0 解析 0 认知，event 仍被无条件标
+ *     consolidated**（47 条原话静默蒸发）。**发标号 = 示例形态与真实形态一致 ⇒ 模型结构上写不错**，
+ *     诱因根除；`resolveEvidenceId` 的前缀容错（v6 起的治标层）降为兜底。见 DECISIONS D-0036。
+ *     **认知纪律措辞一字未动（铁律 3）**：四类判断、闲聊守卫、附和五分支、窄范围、
+ *     「只标冲突，不替换」「support_evidence_ids」「resolved_content 是解释不是证据」全部原样；
+ *     本版只改 id 的**书写形态**，不碰任何「产不产、怎么标」的语义。
+ *
  * 改动纪律（§15.3 / D-0009）：改内容必须 bump version、重跑 bench/eval-consolidation.mjs 全量、
  *   commit 正文附前后分数对比。认知纪律措辞（「只标冲突，不替换」「support_evidence_ids」）是纯位置
  *   迁移、一字不改（铁律 3）。否则 tests/prompts/registry.test.ts 的哈希快照会立刻变红。
@@ -48,10 +61,10 @@ import type { VersionedPrompt } from '../prompts/types.ts';
 
 export const CONSOLIDATE_PROMPT: VersionedPrompt = {
   id: 'consolidate',
-  version: 'v6',
+  version: 'v7',
   text: {
     zh: [
-      '你在维护对用户的认知画像。给你【现有画像】和【新材料】（事件 + 其下逐条原话，每条原话带 id 和来源标注：[用户说]=用户亲口 / [行为观察]=观察到的行为 / [工具返回]=工具返回的客观数据）。',
+      '你在维护对用户的认知画像。给你【现有画像】和【新材料】（事件 + 其下逐条原话，每条原话带**标号**如 [e1]、[e2]，和来源标注：[用户说]=用户亲口 / [行为观察]=观察到的行为 / [工具返回]=工具返回的客观数据）。',
       '有的原话末尾带 ⟨AI 前一句…⟩ 后缀：那是上一轮 AI 说的话，【只是上下文，不是用户原话，不可作证据】。它的用处是让你看懂"是啊"这类只有几个字的回应到底在确认什么。',
       '判断新材料对画像意味着什么，输出四类：',
       '- new：新材料里有、现有画像没有的新认知。',
@@ -62,7 +75,7 @@ export const CONSOLIDATE_PROMPT: VersionedPrompt = {
       '- conflict：新原话与某条现有认知矛盾，但【不是用户明确纠正】（如行为观察 vs 旧偏好）→ 只标冲突，不替换。',
       '【重要】只为关于用户、值得长期记住的信息形成认知。若新材料只是寒暄或无实质信息（问候如"你好/在吗"、天气闲聊、"哈哈/好的/嗯"这类附和、与用户无关的即时评论），四类全部输出 []，不要硬凑认知。' +
         '注意：真实的情绪状态、事实、偏好、目标仍要照常记（别把它们当闲聊丢掉）。',
-      '【关键】每条认知必须给 support_evidence_ids = 真正支撑它的【那几条原话 id】；',
+      '【关键】每条认知必须给 support_evidence_ids = 真正支撑它的【那几条原话标号】（照抄方括号里的标号，如 "e1"、"e3"）；',
       '  只挑真正相关的，别把同一事件里无关的原话也算上；引不出确切原话就【不要给这条】。',
       'formed_by：【只在这条认知是你自己推断出来的时候】填 "inferred"（如从"怎么找女朋友"推"单身"）；其它情况一律填 "stated" 就行——**别纠结该填 stated 还是 observed / confirmed**：「这条信息是谁的话」那一维由系统按每条支撑原话的来源标注 + 下面的语义解析【自动核算】，你填什么都不影响它。性格/特质多为推断，标 inferred 且保守。',
       '  【附和】若某条原话带 ⟨AI 前一句⟩ 后缀、命题是 AI 提出的、用户只是点头认下（"是啊"/"对"/"嗯"）而没有主动说出内容——那句话的内容是 AI 说的、不是用户亲口讲的。把这件事如实标进下面的 resolutions（proposition_origin=assistant_proposed），系统据此定来源强度。反之，用户自己把内容说出来了（哪怕 AI 前一句也提到过同一件事）→ 标 user_stated。',
@@ -76,22 +89,22 @@ export const CONSOLIDATE_PROMPT: VersionedPrompt = {
       '  【这份解析很要紧】系统靠它 + 原话的来源标注，自动核算每条认知的来源强度（是"用户亲口说的"还是"附和 AI 提的"）。proposition_origin 尤其请认真判、别漏。',
       '  【每条 [用户说] 的原话都要给一条】不只是短回应：用户主动说出的、并不在回应谁的陈述句同样要给——它没在回应什么，response_act 填 none、proposition_origin 填 user_stated 就行。漏给的话，系统只能按最保守的方式兜底。',
       '  字段：',
-      '  evidence_id=该原话的 id（必须是上面给你的真实原话 id）；resolved_content=解开后它断言了什么（如 "是啊" + ⟨AI 前一句：你平时喝咖啡的吧?⟩ → "用户确认自己喝咖啡"）；',
+      '  evidence_id=该原话的标号（照抄方括号里的标号，如 "e1"）；resolved_content=解开后它断言了什么（如 "是啊" + ⟨AI 前一句：你平时喝咖啡的吧?⟩ → "用户确认自己喝咖啡"）；',
       '  response_act=用户这句在做什么：affirm(点头认下)|negate(否认)|select(在给出的选项里选)|elaborate(补充说明)|ask(反问)|none|other；',
       '  prompt_act=AI 前一句在做什么：propose(提出关于用户的猜测)|ask(提问)|state(陈述)|none|other；',
       '  proposition_origin=命题是谁提出的：assistant_proposed(AI 提的、用户只是认下)|user_stated(用户自己说出来的)；',
       '  assertion_strength=断言有多强：explicit(明确)|weak(含糊，如"可能吧"/"大概")|none；',
       '  required_context=离开 AI 前一句就看不懂这句话时，写下所需的那点上下文；否则给 ""。',
       '  【resolved_content 是你的解释、不是证据】——它绝不能出现在任何 support_evidence_ids 里。',
-      '严格按下面示例的字段名输出一个 JSON 对象，空的给 []，不要解释：',
-      '{"new":[{"content":"用户喜欢咖啡","content_type":"preference","formed_by":"stated","support_evidence_ids":["ev-1"]}],' +
-        '"reinforce":[{"cognition_id":"cog-x","support_evidence_ids":["ev-2"]}],' +
-        '"correct":[{"cognition_id":"cog-tea","content":"用户现在不喝茶了","content_type":"preference","formed_by":"stated","support_evidence_ids":["ev-1"]}],' +
-        '"conflict":[{"cognition_id":"cog-y","support_evidence_ids":["ev-3"]}],' +
-        '"resolutions":[{"evidence_id":"ev-1","resolved_content":"用户确认自己喝咖啡","response_act":"affirm","prompt_act":"propose","proposition_origin":"assistant_proposed","assertion_strength":"explicit","required_context":"AI 前一句问『你平时喝咖啡的吧?』"}]}',
+      '严格按下面示例的字段名输出一个 JSON 对象，空的给 []，不要解释（示例里的 e1/e2/e3 就是原话标号的样子；cognition_id 照抄画像里方括号内的完整 id）：',
+      '{"new":[{"content":"用户喜欢咖啡","content_type":"preference","formed_by":"stated","support_evidence_ids":["e1"]}],' +
+        '"reinforce":[{"cognition_id":"cog-x","support_evidence_ids":["e2"]}],' +
+        '"correct":[{"cognition_id":"cog-tea","content":"用户现在不喝茶了","content_type":"preference","formed_by":"stated","support_evidence_ids":["e1"]}],' +
+        '"conflict":[{"cognition_id":"cog-y","support_evidence_ids":["e3"]}],' +
+        '"resolutions":[{"evidence_id":"e1","resolved_content":"用户确认自己喝咖啡","response_act":"affirm","prompt_act":"propose","proposition_origin":"assistant_proposed","assertion_strength":"explicit","required_context":"AI 前一句问『你平时喝咖啡的吧?』"}]}',
     ].join('\n'),
     en: [
-      'You maintain a cognitive profile of the user. You are given the [Existing profile] and [New material] (events, each with its individual source utterances, every utterance carrying an id and a source tag: [user said]=the user\'s own words / [observed behavior]=an observed behavior / [tool result]=objective data returned by a tool).',
+      'You maintain a cognitive profile of the user. You are given the [Existing profile] and [New material] (events, each with its individual source utterances, every utterance carrying a **tag** such as [e1], [e2], and a source tag: [user said]=the user\'s own words / [observed behavior]=an observed behavior / [tool result]=objective data returned by a tool).',
       'Some utterances carry a ⟨preceding AI turn…⟩ suffix: that is what the AI said in the previous turn — [context only, NOT the user\'s words, not usable as evidence]. Its purpose is to let you see what a few-word reply like "Yeah" is actually confirming.',
       'Decide what the new material means for the profile, and output four categories:',
       '- new: a new cognition present in the new material but not in the existing profile.',
@@ -102,7 +115,7 @@ export const CONSOLIDATE_PROMPT: VersionedPrompt = {
       '- conflict: a new utterance contradicts an existing cognition but is [not an explicit user correction] (e.g., an observed behavior vs. a stated old preference) → only flag the conflict, do not replace.',
       '[Important] Only form cognitions for information worth remembering about the user. If the new material is mere small talk with no substantive information (greetings like "hi/are you there", weather chit-chat, fillers like "haha/ok/sure", off-topic remarks unrelated to the user), output [] for all four categories—do not force it. ' +
         'Note: genuine emotional states, facts, preferences, and goals must still be recorded as usual (do not discard those as small talk).',
-      '[Key] Every cognition must give support_evidence_ids = the [specific utterance ids] that genuinely support it;',
+      '[Key] Every cognition must give support_evidence_ids = the [specific utterance tags] that genuinely support it (copy the tag inside the brackets verbatim, e.g. "e1", "e3");',
       '  pick only the truly relevant ones, do not count unrelated utterances from the same event; if you cannot cite a definite utterance, [do not emit that item].',
       'formed_by: fill "inferred" [only when the cognition is something you inferred yourself] (e.g., inferring "single" from "how do I find a girlfriend"); otherwise just fill "stated"—**do not agonize over stated vs observed vs confirmed**: the "whose words is this" dimension is computed automatically by the system from each supporting utterance\'s source tag plus the semantic resolutions below, so whatever you put there has no effect on it. Personality/traits are mostly inferences—mark them inferred and stay conservative.',
       '  [Affirmation] If an utterance carries a ⟨preceding AI turn⟩ suffix, the proposition came from the AI, and the user merely nodded along ("Yeah"/"Right"/"Uh-huh") without volunteering the content—that content was the AI\'s words, not something the user said themselves. Record that faithfully in the resolutions below (proposition_origin=assistant_proposed); the system derives the source strength from it. Conversely, if the user did volunteer the content (even if the preceding AI turn happened to mention the same thing) → mark user_stated.',
@@ -116,19 +129,19 @@ export const CONSOLIDATE_PROMPT: VersionedPrompt = {
       '  [These resolutions matter now] The system uses them, together with each utterance\'s source tag, to automatically derive every cognition\'s source strength (whether it is "the user\'s own words" or "an affirmation of the AI\'s guess"). Judge proposition_origin carefully in particular, and do not omit it.',
       '  [Emit one for every [user said] utterance], not just short replies: a statement the user volunteered on their own—one that is not responding to anything—needs one too: response_act=none and proposition_origin=user_stated. Omitting it forces the system onto its most conservative fallback.',
       '  Fields:',
-      '  evidence_id = that utterance\'s id (must be one of the real utterance ids given to you above); resolved_content = what it asserts once resolved (e.g., "Yeah" + ⟨preceding AI turn: You drink coffee, right?⟩ → "The user confirms they drink coffee");',
+      '  evidence_id = that utterance\'s tag (copy the tag inside the brackets verbatim, e.g. "e1"); resolved_content = what it asserts once resolved (e.g., "Yeah" + ⟨preceding AI turn: You drink coffee, right?⟩ → "The user confirms they drink coffee");',
       '  response_act = what the user\'s utterance does: affirm(nods along)|negate(denies)|select(picks from the offered options)|elaborate(adds detail)|ask(asks back)|none|other;',
       '  prompt_act = what the preceding AI turn does: propose(offers a guess about the user)|ask(asks a question)|state(states something)|none|other;',
       '  proposition_origin = who introduced the proposition: assistant_proposed(the AI\'s, the user merely accepted it)|user_stated(the user said it themselves);',
       '  assertion_strength = how strong the assertion is: explicit|weak(hedged, e.g., "maybe"/"I guess")|none;',
       '  required_context = if the utterance is unintelligible without the preceding AI turn, write down the bit of context needed; otherwise "".',
       '  [resolved_content is your interpretation, not evidence]—it must never appear in any support_evidence_ids.',
-      'Output a single JSON object strictly using the field names in the example below; use [] for empties; no explanation:',
-      '{"new":[{"content":"The user likes coffee","content_type":"preference","formed_by":"stated","support_evidence_ids":["ev-1"]}],' +
-        '"reinforce":[{"cognition_id":"cog-x","support_evidence_ids":["ev-2"]}],' +
-        '"correct":[{"cognition_id":"cog-tea","content":"The user no longer drinks tea","content_type":"preference","formed_by":"stated","support_evidence_ids":["ev-1"]}],' +
-        '"conflict":[{"cognition_id":"cog-y","support_evidence_ids":["ev-3"]}],' +
-        '"resolutions":[{"evidence_id":"ev-1","resolved_content":"The user confirms they drink coffee","response_act":"affirm","prompt_act":"propose","proposition_origin":"assistant_proposed","assertion_strength":"explicit","required_context":"The preceding AI turn asked \'You drink coffee, right?\'"}]}',
+      'Output a single JSON object strictly using the field names in the example below; use [] for empties; no explanation (the e1/e2/e3 below are what utterance tags look like; copy cognition_id verbatim from the brackets in the profile):',
+      '{"new":[{"content":"The user likes coffee","content_type":"preference","formed_by":"stated","support_evidence_ids":["e1"]}],' +
+        '"reinforce":[{"cognition_id":"cog-x","support_evidence_ids":["e2"]}],' +
+        '"correct":[{"cognition_id":"cog-tea","content":"The user no longer drinks tea","content_type":"preference","formed_by":"stated","support_evidence_ids":["e1"]}],' +
+        '"conflict":[{"cognition_id":"cog-y","support_evidence_ids":["e3"]}],' +
+        '"resolutions":[{"evidence_id":"e1","resolved_content":"The user confirms they drink coffee","response_act":"affirm","prompt_act":"propose","proposition_origin":"assistant_proposed","assertion_strength":"explicit","required_context":"The preceding AI turn asked \'You drink coffee, right?\'"}]}',
     ].join('\n'),
   },
 };
