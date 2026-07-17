@@ -37,16 +37,18 @@ test('loadLLMConfig：按 prefix 读 *_TEMPERATURE；空/非法 → undefined；
   }
 });
 
-/** stub globalThis.fetch，捕获请求体、回一个带指定 content 的假响应。 */
+/** stub globalThis.fetch，捕获请求体、回一个带指定 content（可选 reasoning_content）的假响应。 */
 async function captureBody(
   temperature: number | undefined,
   content = '{}',
+  reasoningContent?: string,
 ): Promise<{ body: { temperature?: number }; out: string }> {
   const orig = globalThis.fetch;
   let body: { temperature?: number } = {};
   const stub = async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     body = JSON.parse(init!.body as string) as { temperature?: number };
-    return { ok: true, json: async () => ({ choices: [{ message: { content } }] }) } as unknown as Response;
+    const message = reasoningContent === undefined ? { content } : { content, reasoning_content: reasoningContent };
+    return { ok: true, json: async () => ({ choices: [{ message }] }) } as unknown as Response;
   };
   globalThis.fetch = stub as unknown as typeof fetch;
   try {
@@ -69,6 +71,34 @@ test('chat：剥掉成对 <think>…</think>（含花括号），无闭合不误
   assert.equal(closed.out, '{"ok":1}', '闭合 think 被剥、真 JSON 留下');
   const unclosed = await captureBody(undefined, '<think>没闭合就别乱剥 {"ok":1}');
   assert.ok(unclosed.out.includes('{"ok":1}'), '无闭合 </think> → 不剥，真答案保住');
+});
+
+/**
+ * 推理模型的另一半兼容：答案整个跑进 reasoning_content、content 留空。
+ *
+ * dogfood 实测（mimo-v2.5-pro，2026-07-17）：同一模型【间歇性】这么干，且 finish_reason=stop、
+ * completion_tokens 正常——模型自认为答完了。旧代码 `typeof '' === 'string'` 通过校验 →
+ * chat() 静默返回空串 → 上游 JSON 解析失败 → consolidate 四类全空（`?? {}`）→
+ * 整批证据 0 解析 0 认知、event 却被标 consolidated。真实 dogfood 7 轮固化撞掉 3 轮。
+ */
+test('chat：答案在 reasoning_content、content 空 → 回落读它（不再静默返回空串）', async () => {
+  // 真实响应体（节选自 weftmate 的 [空回复诊断] 日志，mimo-v2.5-pro）
+  const 真实协议JSON = '{"thought":"用户又给了几个新信息：内向、喜欢电子产品。","done":{"summary":"当然算啊！"}}';
+  const empty = await captureBody(undefined, '', 真实协议JSON);
+  assert.equal(empty.out, 真实协议JSON, 'content 为空串时回落 reasoning_content');
+
+  const blank = await captureBody(undefined, '   \n ', 真实协议JSON);
+  assert.equal(blank.out, 真实协议JSON, 'content 只有空白也算空');
+});
+
+test('chat：content 有内容时绝不掺进 reasoning_content（标准模型零行为变更）', async () => {
+  const r = await captureBody(undefined, '{"ok":1}', '我先想想该怎么答');
+  assert.equal(r.out, '{"ok":1}', 'content 有实质内容 → 用它，思考段不许掺进来');
+});
+
+test('chat：content 与 reasoning_content 皆空 → 保持空串（不改判、交上游）', async () => {
+  const r = await captureBody(undefined, '', '   ');
+  assert.equal(r.out, '', '两者皆空时保持既有行为，不在 client 层改判');
 });
 
 test('extractJsonObject：括号配平取第一个平衡对象，抗尾随文本/思考残留', () => {

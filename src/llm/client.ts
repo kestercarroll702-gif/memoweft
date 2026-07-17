@@ -71,6 +71,30 @@ function stripReasoning(s: string): string {
   return s.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 }
 
+/**
+ * 从响应消息里取模型的话。**推理模型要兜底读 `reasoning_content`**——这是与 stripReasoning 互补的另一半：
+ * 那个管「思考段混在 content 里」，这个管「答案整个跑到 reasoning_content 里、content 留空」。
+ *
+ * dogfood 实测（mimo-v2.5-pro，2026-07-17）：同一模型【间歇性】把整个回答（含要求的 JSON）放进
+ * `reasoning_content` 而 `content` 留空，且 `finish_reason=stop`、completion_tokens 正常——
+ * 模型自认为答完了，不是截断也不是限流。原样一例（节选）：
+ *   {"content":"", "reasoning_content":"{\"thought\":\"…\",\"done\":{\"summary\":\"…\"}}"}
+ * 只读 content 时 `typeof '' === 'string'` 通过校验 → chat() 静默返回空串 → 上游 JSON 解析失败 →
+ * consolidate 的四类全空（`?? {}`）→ **整批证据 0 解析 0 认知，event 仍被标 consolidated**。
+ * 真实 dogfood 里 7 轮固化撞掉 3 轮，全靠这个。
+ *
+ * 取值顺序：content 有实质内容就用它（标准模型、绝大多数情况）；只有 content 空/缺才回落
+ * reasoning_content —— 免得给正常模型平白掺进思考段（那是 stripReasoning 的活）。
+ */
+function readReplyText(message?: { content?: string; reasoning_content?: string }): string | undefined {
+  const content = message?.content;
+  if (typeof content === 'string' && content.trim()) return content;
+  const reasoning = message?.reasoning_content;
+  if (typeof reasoning === 'string' && reasoning.trim()) return reasoning;
+  // 两者皆空：保持 content 原形，交由既有的格式校验/上游处理，不在这里改判。
+  return typeof content === 'string' ? content : undefined;
+}
+
 function tryLoadEnv(): void {
   try {
     process.loadEnvFile();
@@ -179,7 +203,7 @@ export class OpenAICompatClient implements LLMClient {
       );
     }
     const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{ message?: { content?: string; reasoning_content?: string } }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
     // token 用量（档8·观测/计费）：读到才加、读不到静默跳过（本地 / 兼容端点常不回 usage，绝不因此崩）。
@@ -196,7 +220,8 @@ export class OpenAICompatClient implements LLMClient {
         callsWithUsage: this._usage.callsWithUsage + 1,
       };
     }
-    const content = data.choices?.[0]?.message?.content;
+    // reasoning 兼容·其一：答案整个跑进 reasoning_content、content 留空时回落读它（见 readReplyText）。
+    const content = readReplyText(data.choices?.[0]?.message);
     if (typeof content !== 'string') {
       throw new Error(
         resolveLang() === 'zh'
@@ -204,7 +229,7 @@ export class OpenAICompatClient implements LLMClient {
           : `Unexpected LLM response format: ${JSON.stringify(data).slice(0, 500)}`,
       );
     }
-    // reasoning 兼容：剥掉混在 content 里的 <think>…</think> 思考段（只剥闭合对）。
+    // reasoning 兼容·其二：剥掉混在 content 里的 <think>…</think> 思考段（只剥闭合对）。
     return stripReasoning(content);
   }
 }
