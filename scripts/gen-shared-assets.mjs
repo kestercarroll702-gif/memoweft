@@ -39,6 +39,7 @@ import { attribute } from '../src/attribution/attribute.ts';
 import { aggregateTrends } from '../src/background/trends.ts';
 import { proposeAsk } from '../src/asking/proposeAsk.ts';
 import { revisitConflicts } from '../src/asking/revisitConflicts.ts';
+import { updateProfile } from '../src/consolidation/updateProfile.ts';
 import { validateBundle } from '../src/portable/validateBundle.ts';
 import { BUNDLE_FORMAT, BUNDLE_SCHEMA_VERSION } from '../src/portable/model.ts';
 
@@ -793,6 +794,77 @@ async function parityAsking() {
   };
 }
 
+// ── parity 夹具:updateProfile 编排(distill→consolidate→attribute→重索引)——P2-9 ──
+async function parityUpdateProfile() {
+  const T = '2026-01-01T00:00:00.000Z';
+  const build = async (lang) => {
+    const cfg = { ...config, language: lang };
+    const stores = openStores(':memory:', cfg, () => new Date(T));
+    const put = (rawContent) =>
+      stores.evidenceStore.put({ subjectId: 'owner', sourceKind: 'spoken', hostId: 'local', occurredAt: T, rawContent });
+    put('我每天都喝咖啡');
+    put('尤其是早上那杯');
+    // stub llm 按调用序返回:① distill 摘要 ② consolidate JSON;attribute 无 state 现象 → 不调。
+    const replies = [
+      '用户聊到每天喝咖啡的习惯',
+      JSON.stringify({ new: [{ content: '喜欢喝咖啡', content_type: 'preference', formed_by: 'stated', support_evidence_ids: ['e1'] }] }),
+    ];
+    let n = 0;
+    const stubLlm = {
+      get callCount() {
+        return n;
+      },
+      tier: 'cloud',
+      async chat() {
+        const r = replies[n] ?? '{}';
+        n++;
+        return r;
+      },
+    };
+    let indexedItems = [];
+    const stubRetriever = {
+      async indexAll(items) {
+        indexedItems = items;
+      },
+      async search() {
+        return [];
+      },
+    };
+    const result = await updateProfile('owner', {
+      evidenceStore: stores.evidenceStore, eventStore: stores.eventStore, cognitionStore: stores.cognitionStore,
+      semanticResolutionStore: stores.semanticResolutionStore, retriever: stubRetriever, llm: stubLlm,
+      transaction: stores.transaction, config: cfg, clock: () => new Date(T),
+    });
+    const out = {
+      distilled: {
+        eventSummary: result.distilled.event ? result.distilled.event.summary : null,
+        pendingCount: result.distilled.pendingCount,
+        tierBlockedCount: result.distilled.tierBlockedCount,
+        llmCalls: result.distilled.llmCalls,
+      },
+      consolidated: {
+        created: result.consolidated.created.map((c) => ({ content: c.content, contentType: c.contentType, formedBy: c.formedBy, confidence: c.confidence, credStatus: c.credStatus })),
+        reinforced: result.consolidated.reinforced, corrected: result.consolidated.corrected, conflicted: result.consolidated.conflicted,
+        processedEvents: result.consolidated.processedEvents, llmCalls: result.consolidated.llmCalls,
+        profileSize: result.consolidated.profileSize, promptChars: result.consolidated.promptChars,
+      },
+      attributed: { hypothesesCount: result.attributed.hypotheses.length, consideredPhenomena: result.attributed.consideredPhenomena, llmCalls: result.attributed.llmCalls },
+      indexed: result.indexed,
+      indexError: result.indexError,
+      indexedTexts: indexedItems.map((i) => i.text),
+      metrics: result.metrics,
+      totalLlmCalls: n,
+    };
+    stores.close();
+    return out;
+  };
+  return {
+    note: 'updateProfile 编排:distill→consolidate→attribute→重索引(active 且未 muted);索引失败不回滚画像;metrics 透传',
+    zh: await build('zh'),
+    en: await build('en'),
+  };
+}
+
 // ── parity 夹具:SQLite schema(从 openStores 真建库 dump 权威结构;供 Python 建同构表对拍) ──
 //   dump 逐表列结构(pragma_table_info,驱动无关 → node:sqlite/better-sqlite3 一致)+ user_version。
 function buildSchema() {
@@ -926,6 +998,7 @@ export async function buildSharedAssets() {
   const attributeFx = await parityAttribute();
   const trendsFx = await parityTrends();
   const askingFx = await parityAsking();
+  const updateProfileFx = await parityUpdateProfile();
 
   return {
     'config-constants.json': buildConfigConstants(),
@@ -952,6 +1025,7 @@ export async function buildSharedAssets() {
     'parity/attribute.json': attributeFx,
     'parity/trends.json': trendsFx,
     'parity/asking.json': askingFx,
+    'parity/update-profile.json': updateProfileFx,
     'parity/schema.json': buildSchema(),
     'parity/fts.json': buildFtsGolden(),
     ...(() => { const bf = buildBundleFixtures(); return { 'parity/bundle.json': bf.bundle, 'parity/bundle-validate.json': bf.validate }; })(),
