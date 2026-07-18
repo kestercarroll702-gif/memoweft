@@ -467,3 +467,41 @@ test('resetSubject：只清指定 subject，不误伤别的 subject', () => {
     bundle.close();
   }
 });
+
+test('resetSubject：连 interaction_context 一起清（用户原话不该在「清空全部记忆」之后留在库里）', () => {
+  const bundle = openStores(':memory:');
+  const api = createMemoryManagementAPI(bundle);
+  try {
+    // 宿主传 conversationId 时，日常聊天主路径会往这张表明文落「上一轮 AI 原话 + 本轮用户原话」
+    // （createCore.ingestUserMessage → interactionContextStore.record）。它是【用户原话的另一份副本】。
+    bundle.interactionContextStore.record({
+      subjectId: 'owner',
+      conversationId: 'conv-1',
+      episodeId: 'ep-1',
+      context: [
+        { role: 'assistant', content: '你下周三是不是要去复查？' },
+        { role: 'user', content: '是啊。' },
+      ],
+    });
+    bundle.interactionContextStore.record({
+      subjectId: 'keep',
+      conversationId: 'conv-2',
+      episodeId: 'ep-2',
+      context: [{ role: 'user', content: 'keep 的原话' }],
+    });
+    assert.equal(bundle.interactionContextStore.all('owner').length, 1, '前置：owner 有一条上下文快照');
+
+    api.resetSubject({ subjectId: 'owner', reason: '恢复出厂' });
+
+    // 出厂 = 无历史。这张表既不在 resetSubject 的清除范围内，又没有 evidence 关联列
+    // （单条删除按 evidenceId 也定位不到它），漏掉就等于用户原话【任何入口都删不掉】。
+    assert.deepEqual(
+      bundle.interactionContextStore.all('owner'),
+      [],
+      '「清空全部记忆」必须连 interaction_context 一起清',
+    );
+    assert.equal(bundle.interactionContextStore.all('keep').length, 1, 'keep 的快照没被误伤');
+  } finally {
+    bundle.close();
+  }
+});

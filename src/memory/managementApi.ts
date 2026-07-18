@@ -206,7 +206,7 @@ export function createMemoryManagementAPI(
   cfg: MemoWeftConfig = config,
   deps: MemoryManagementDeps = {},
 ): MemoryManagementAPI {
-  const { db, evidenceStore, eventStore, cognitionStore, managementLog, transaction } = bundle;
+  const { db, evidenceStore, eventStore, cognitionStore, interactionContextStore, managementLog, transaction } = bundle;
   const retriever = deps.retriever;
   const clock = deps.clock ?? systemClock; // 可注入时钟（Phase 4）：失效/归档/自检/读时衰减的"现在"
   const subjectOf = (explicit?: string) => explicit ?? cfg.identity.subjectId;
@@ -478,6 +478,11 @@ export function createMemoryManagementAPI(
         }
         const eventRemoved = eventStore.removeBySubject(subjectId); // 连带清 event_evidence
         const cognitionRemoved = cognitionStore.removeBySubject(subjectId); // 连带清 cognition_evidence
+        // 交互上下文快照（含【用户原话】+ AI 上一轮原话，明文 JSON）：出厂必须一起清。
+        //   它没有 evidence 关联列，removeEvidenceSafely 按 evidenceId 定位不到它——这里漏掉，
+        //   就等于这份用户原话副本【任何入口都删不掉】，而「清空全部记忆」是本库最强的删除承诺。
+        //   计数不进返回值：ResetSubjectResult 是公开 API 形状，加字段属破坏性变更，另议。
+        interactionContextStore.removeBySubject(subjectId);
         // 出厂=无历史（批次3 用户拍板）：整表清审计。本次操作不额外 append——留了也被这句冲掉。
         const auditRemoved = managementLog.clear();
         return { evidenceRemoved, eventRemoved, cognitionRemoved, auditRemoved };
