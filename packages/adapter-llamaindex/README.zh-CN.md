@@ -2,11 +2,17 @@
 
 > English · [README.md](./README.md)
 
+> ## ⚠️ Legacy —— 已冻结（上游归档）
+>
+> **LlamaIndex.TS（[run-llama/LlamaIndexTS](https://github.com/run-llama/LlamaIndexTS)）已于 2026-04-30 归档为只读、官方弃维护**（团队转向 Python 线与 LlamaCloud）。因此本适配器**冻结在当前功能面**:它仍能用,但**不会**再获得 MemoWeft 的新面——尤其**不实现** MemoWeft 0.6 的会话上下文线（`recordAssistantReply`,活跃维护的适配器本轮都补了）。其上游依赖（`llamaindex` / `@llamaindex/workflow`）会随生态前进逐渐腐化。
+>
+> **若你在起新项目,请选维护中的框架**——见 [`@memoweft/adapter-mastra`](../adapter-mastra) 或 [`@memoweft/adapter-langchain`](../adapter-langchain)。本包仅为存量用户保留。见 `DECISIONS.md` D-0041。
+
 **[MemoWeft](https://github.com/memoweft/memoweft) 的 LlamaIndex 适配器。** 通过三条缝给你的 LlamaIndex agent（`llamaindex` + `@llamaindex/workflow`）接上长期记忆：**读** = 一个 `BaseMemoryBlock`，每次模型调用前召回相关记忆、作为一条中性的 `role:'memory'` 消息注入；**写** = 一个包住 `agent.runStream(...)` 的透传式包装器，原样 re-yield 每个事件、顺路沉淀用户原话与每条工具结果。
 
 这是一个**外部集成包**。它封装 MemoWeft 的公开 Core facade（`createMemoWeftCore`），不碰 Core 内部。`llamaindex` 与 `@llamaindex/workflow` 是 peer 依赖（自带）。
 
-> **上游说明。** LlamaIndex.TS 正在重构:其细分的 `@llamaindex/*` 包在 npm 上被标 *deprecated*,而维护中的伞包 `llamaindex@^0.12` 仍依赖它们。本适配器 peer 依赖伞包 `llamaindex`(故不直接依赖弃维的 `@llamaindex/core`),但它需要的事件驱动 agent API(`agent` / `runStream` / `agentToolCallResultEvent`)只住在 `@llamaindex/workflow`——它也被标弃维、且本身是 `llamaindex@0.12` 的依赖。安装时可能从这些传递依赖打印弃维警告;适配器当前功能完好。见 `DECISIONS.md` D-0029。
+> **上游说明（2026-07-18 更新）。** LlamaIndex.TS 已不再是「正在重构」——**整个 `run-llama/LlamaIndexTS` 仓库已于 2026-04-30 归档为只读**（最后发布 2025-12）。本适配器 peer 依赖的细分 `@llamaindex/*` 包与伞包 `llamaindex@^0.12` 上游全部冻结:不再发版、不再修 bug。它用的事件驱动 agent API(`agent` / `runStream` / `agentToolCallResultEvent`)住在 `@llamaindex/workflow`。适配器仍能对着最后发布的版本工作,但随框架一起冻结。最初记于 `DECISIONS.md` D-0029;冻结决定见 D-0041。
 
 ## 安装
 

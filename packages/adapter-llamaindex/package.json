@@ -1,7 +1,7 @@
 {
   "name": "@memoweft/adapter-llamaindex",
   "version": "0.1.0",
-  "description": "LlamaIndex adapter for MemoWeft — inject long-term memory via a BaseMemoryBlock (recall) and persist the user's turn + tool results by tapping agent.runStream (write).",
+  "description": "[LEGACY — upstream LlamaIndex.TS archived 2026-04-30, frozen] LlamaIndex adapter for MemoWeft — inject long-term memory via a BaseMemoryBlock (recall) and persist the user's turn + tool results by tapping agent.runStream (write).",
   "keywords": ["llamaindex", "memory-block", "agent-workflow", "memoweft", "memory", "llm"],
   "license": "MIT",
   "type": "module",
@@ -27,7 +27,7 @@
   "peerDependencies": {
     "llamaindex": "^0.12",
     "@llamaindex/workflow": "^1.1.24",
-    "memoweft": "^0.5.0"
+    "memoweft": "^0.5.0 || ^0.6.0"
   },
   "devDependencies": {
     "llamaindex": "^0.12",

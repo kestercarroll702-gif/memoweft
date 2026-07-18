@@ -177,9 +177,10 @@ jobs:
       - name: LangChain Adapter Build
         run: npm run build -w @memoweft/adapter-langchain
 
-      # LlamaIndex 适配器（0.1.0·memory-block + stream-tap 型进程内适配器，D-0029）：同上靠 Core dist、自带 build。
-      #   SDK 是 peer + dev：llamaindex（维护中的伞包，供 BaseMemoryBlock 等）+ @llamaindex/workflow（事件驱动
-      #   agent API；上游标弃维但为伞包自身依赖，见 D-0029 取舍）；typecheck/test 只需类型 + 不跑真实 agent。
+      # LlamaIndex 适配器（0.1.0·memory-block + stream-tap 型进程内适配器，D-0029 / **D-0041 已冻结**）：靠 Core dist、自带 build。
+      #   ⚠ 上游 LlamaIndex.TS 2026-04-30 归档、官方弃维护 → 本适配器冻结在当前功能面（README 标 legacy），
+      #   不随 0.6 新面继续投入（未加 recordAssistantReply）；CI 仍跑 typecheck/test/build 守存量用户不回归。
+      #   SDK 是 peer + dev：llamaindex（伞包）+ @llamaindex/workflow（事件驱动 agent API）；不跑真实 agent。
       - name: LlamaIndex Adapter Typecheck
         run: npm run typecheck -w @memoweft/adapter-llamaindex
 

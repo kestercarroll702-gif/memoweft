@@ -783,3 +783,19 @@ gate(2026-07-18 实跑):**adapter typecheck 干净 · lint 0 · 契约 22/22 绿
 影响面:runner.ts(+recordFinalReply/finalAssistantText/conversationId 线)+ index 导出 + package.json(peer 扩 0.6)+ 新单测 `tests/recordReply.test.ts`(8 例:finalAssistantText 三形 + recordFinalReply 五门控含抛错静默)+ README en/zh 加 0.6 会话上下文节 + ci.yml 注释 + CHANGELOG。**无新依赖 → 无 root install**。
 gate(2026-07-18 实跑):**adapter typecheck 干净 · lint 0 · test 19/19 绿(契约 11 + recordReply 8)· build 出 dist · 核心 api:check 一致**。
 分级(诚实):recordFinalReply/finalAssistantText 离线单测充分;真实 `run()` 里的 recordAssistantReply 时机(动态 import 真 SDK)未端到端跑,待打磨阶段 dogfood 或宿主接入坐实。**完整 Session 形态明确 defer**(见上裁剪理由)。
+
+## D-0041 adapter-llamaindex 标 legacy 冻结(上游 LlamaIndex.TS 归档·1.2 第④个)
+
+日期:2026-07-18 / 状态:已采纳(在 D-0037 批准的 1.2 方向内;纯文档 + peer 兼容,无功能改动)
+背景(动机):生态侦察(2026-07-18·联网实测)确认 **`run-llama/LlamaIndexTS` 已于 2026-04-30 归档为只读、官方声明 deprecated / no longer maintained**(团队转向 Python 与 LlamaCloud,最后发布 2025-12)。本适配器(D-0029)peer 依赖的 `llamaindex@^0.12` 伞包 + `@llamaindex/workflow` 上游全部冻结。若不标注,会给用户「官方支持活框架」的错误预期,且其依赖面随生态前进逐渐腐化。侦察建议:标 legacy、冻结当前功能面、把额度让给 Mastra/LangChain。**核实纠错**:侦察 eco 笔记称「adapter-llamaindex 已接入 recordAssistantReply」——grep 实测**不成立**(src 无此调用),本适配器从未有 0.6 面。
+
+决定(纯文档 + install 兼容,**零功能改动**):
+- README en/zh **顶部加醒目 legacy 冻结横幅**:上游 2026-04-30 归档、本适配器冻结在当前功能面、**不实现 0.6 的 recordAssistantReply**(活跃维护的 mastra/langchain/openai-agents 本轮都补了)、起新项目请选维护中框架。并把 D-0029 的「上游 granular 包 deprecated」旧上游说明**升级**为「整仓归档」。
+- package.json:description 前缀标 `[LEGACY — upstream ... archived 2026-04-30, frozen]`;memoweft peer `^0.5.0` → **`^0.5.0 || ^0.6.0`**——**纯 install 兼容**(适配器只用 recall/ingestUserMessage/ingestToolResult,全在 0.6 有,widen 让存量用户在 memoweft 0.6 下不报 peer 警告),**明确不是加 0.6 特性**(recordAssistantReply 仍不实现)。
+- ci.yml:guardrail 注释标冻结;**CI 仍跑 typecheck/test/build**——冻结 ≠ 不守回归,存量用户仍受保护。
+
+破坏性:**无——纯文档 + peer widen + description**。src / 功能面一字未动;不碰 core、不触 api-freeze。
+影响面:README en/zh + package.json(description + memoweft peer)+ ci.yml 注释 + 本条 + CHANGELOG。
+gate(2026-07-18 实跑):typecheck / test / build 仍绿(仅文档/元数据改动,功能未动);核心 api:check 一致。
+**发布跟进(记档)**:真正的 npm `deprecate` 标记须在发布时由发布者执行(`npm deprecate @memoweft/adapter-llamaindex@... "..."`),本仓改动不含发布动作(发布是受控门槛)。
+**重启条件**:若 LlamaIndex.TS 复活维护 / 出等价活跃继任框架、且有真实用户需求,再评估解冻或迁移。

@@ -2,11 +2,17 @@
 
 > 中文版 · [README.zh-CN.md](./README.zh-CN.md)
 
+> ## ⚠️ Legacy — frozen (upstream archived)
+>
+> **LlamaIndex.TS ([run-llama/LlamaIndexTS](https://github.com/run-llama/LlamaIndexTS)) was archived read-only on 2026-04-30 and is officially deprecated / no longer maintained** (its team moved to the Python line and LlamaCloud). This adapter is therefore **frozen at its current functionality**: it still works, but it will **not** gain new MemoWeft faces — in particular it does **not** implement MemoWeft 0.6's conversation-context line (`recordAssistantReply`) that the actively-maintained adapters received. Its upstream dependencies (`llamaindex` / `@llamaindex/workflow`) will drift as the ecosystem moves.
+>
+> **If you are starting new work, prefer a maintained framework** — see [`@memoweft/adapter-mastra`](../adapter-mastra) or [`@memoweft/adapter-langchain`](../adapter-langchain). This package is kept for existing users only. See `DECISIONS.md` D-0041.
+
 **LlamaIndex adapter for [MemoWeft](https://github.com/memoweft/memoweft).** Give your LlamaIndex agent (`llamaindex` + `@llamaindex/workflow`) long-term memory across three seams: **read** = a `BaseMemoryBlock` that recalls relevant memory and injects it as a neutral `role:'memory'` message every model call; **write** = a pass-through wrapper around `agent.runStream(...)` that persists the user's own words and each tool result while re-yielding every event untouched.
 
 This is an **external integration package**. It wraps MemoWeft's public Core facade (`createMemoWeftCore`) — it does not touch Core internals. `llamaindex` and `@llamaindex/workflow` are peer dependencies (bring your own).
 
-> **Upstream note.** LlamaIndex.TS is mid-restructuring: its granular `@llamaindex/*` packages are marked *deprecated* on npm, yet the maintained umbrella `llamaindex@^0.12` still depends on them. This adapter peers on the umbrella `llamaindex` (so it doesn't directly depend on the deprecated `@llamaindex/core`), but the event-driven agent API it needs (`agent` / `runStream` / `agentToolCallResultEvent`) lives only in `@llamaindex/workflow` — also marked deprecated, and itself a dependency of `llamaindex@0.12`. Installing may print a deprecation warning from these transitive packages; the adapter is fully functional today. See `DECISIONS.md` D-0029.
+> **Upstream note (updated 2026-07-18).** LlamaIndex.TS is no longer mid-restructuring — the **entire `run-llama/LlamaIndexTS` repository was archived read-only on 2026-04-30** (last publish 2025-12). The granular `@llamaindex/*` packages and the umbrella `llamaindex@^0.12` this adapter peers on are all frozen upstream: no further releases, no bug fixes. The event-driven agent API it uses (`agent` / `runStream` / `agentToolCallResultEvent`) lives in `@llamaindex/workflow`. The adapter still works against the last-published versions, but is frozen with the framework. Originally recorded in `DECISIONS.md` D-0029; freeze decision in D-0041.
 
 ## Install
 
