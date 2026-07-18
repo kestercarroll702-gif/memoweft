@@ -35,6 +35,7 @@ import { loadLLMConfig } from '../src/llm/client.ts';
 import { Conversation } from '../src/pipeline/conversation.ts';
 import { config } from '../src/config.ts';
 import { exportBundle, importBundle } from '../src/portable/index.ts';
+import { portableDeps } from './portableDeps.mjs';
 import {
   ClientInputError,
   clientInputRejection,
@@ -832,15 +833,11 @@ const server = createServer(async (req, res) => {
     }
 
     // ── 导出便携记忆包（备份/迁移）──
-    // 只读三层数据组包（portable/exportBundle 已做好，这里纯接线）；向量索引不入包（派生物，导入后重建）。
+    // 只读完整可移植记忆层组包（portableDeps 集中保活 v0.6 interaction stores）；向量索引不入包（派生物，导入后重建）。
     // 不需要 LLM / .env。前端拿 { bundle } 后用 Blob 下载成文件。
     if (req.method === 'GET' && url.pathname === '/api/export-bundle') {
       const subjectId = url.searchParams.get('subjectId') || config.identity.subjectId;
-      const bundle = exportBundle(subjectId, {
-        evidenceStore: store,
-        eventStore,
-        cognitionStore: cogStore,
-      });
+      const bundle = exportBundle(subjectId, portableDeps(stores));
       sendJson(res, 200, { bundle });
       return;
     }
@@ -851,11 +848,7 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/import-bundle') {
       const mode = url.searchParams.get('mode') === 'merge' ? 'merge' : 'dryRun';
       const bundle = await readJson(req);
-      const plan = importBundle(
-        bundle,
-        { evidenceStore: store, eventStore, cognitionStore: cogStore, transaction },
-        { mode },
-      );
+      const plan = importBundle(bundle, portableDeps(stores), { mode });
       const body = { plan };
       if (mode === 'merge' && plan.valid) body.needsReindex = true; // 向量索引不入包 → 建议重建召回
       sendJson(res, 200, body);
