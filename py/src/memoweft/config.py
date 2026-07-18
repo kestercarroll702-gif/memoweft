@@ -5,11 +5,12 @@
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Mapping
 
 from ._shared import load_shared
-from .types import ContentType, FormedBy
+from .types import ContentType, FormedBy, Lang
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,3 +123,12 @@ CONFIG: Config = _load()
 def cloud_read_default(c: Config = CONFIG) -> bool:
     """allow_cloud_read 的默认:跟随配置——隐私模式下默认不上云。对齐 config.ts:146。"""
     return not c.privacy_mode
+
+
+def resolve_lang() -> Lang:
+    """取库语言:env MEMOWEFT_LANG=zh → zh,否则 en(含未设/其它值)。对齐 config.ts:102,152。
+
+    只影响文本产出(提示词/兜底文案),绝不流入置信度自算。
+    """
+    return "zh" if os.environ.get("MEMOWEFT_LANG") == "zh" else "en"
+

@@ -31,6 +31,8 @@ import { SqliteCognitionStore } from '../src/cognition/store.ts';
 import { sourceLabel, aiContextSuffix } from '../src/evidence/sourceLabel.ts';
 import { hashContext } from '../src/interaction/interactionContextStore.ts';
 import { expire } from '../src/background/expire.ts';
+import { stripReasoning, readReplyText } from '../src/llm/client.ts';
+import { extractJsonObject, parseJsonObject } from '../src/llm/jsonRepair.ts';
 import { validateBundle } from '../src/portable/validateBundle.ts';
 import { BUNDLE_FORMAT, BUNDLE_SCHEMA_VERSION } from '../src/portable/model.ts';
 
@@ -374,6 +376,85 @@ function parityExpire() {
   };
 }
 
+// ── parity 夹具:LLM 文本处理(stripReasoning 剥 think + readReplyText reasoning 兜底;用真 TS)——P2-3 ──
+function parityLlmText() {
+  const stripCases = [
+    'no think here',
+    '<think>思考过程</think>答案',
+    '答案前<think>x</think>答案后',
+    '<think>a</think><think>b</think>结果',
+    '无闭合<think>思考没结束了',
+    '<THINK>大写标签</THINK>正文',
+    '<think>含{花括号}和"引号"</think>{"a":1}',
+    '  <think>x</think>  收尾空白  ',
+    '',
+  ];
+  const readCases = [
+    { content: '答案' },
+    { content: '', reasoning_content: '回落到 reasoning' },
+    { content: '   ', reasoning_content: '空白回落' },
+    { content: '答案', reasoning_content: '思考' },
+    { content: '', reasoning_content: '' },
+    { reasoning_content: 'only reasoning' },
+    {},
+    undefined,
+  ];
+  return {
+    stripReasoning: {
+      fn: 'stripReasoning',
+      note: '剥成对 <think>…</think>(大小写不敏感/跨行)+ trim;无闭合不剥',
+      cases: stripCases.map((s) => ({ input: s, expected: stripReasoning(s) })),
+    },
+    readReplyText: {
+      fn: 'readReplyText',
+      note: 'content 非空优先;否则 reasoning_content 回落;都空→content("")或 undefined(→null)',
+      cases: readCases.map((m) => ({ input: m ?? null, expected: readReplyText(m) ?? null })),
+    },
+  };
+}
+
+// ── parity 夹具:JSON 抽取/解析(extractJsonObject 括号配平 + parseJsonObject 只认对象/拒 NaN;用真 TS)——P2-3 ──
+function parityJsonExtract() {
+  const extractRaws = [
+    '{"a":1}',
+    '```json\n{"a":1}\n```',
+    '前缀说明 {"a":1} 后缀',
+    '{"a":{"b":2},"c":[1,2]}',
+    '{"a":"内含 } 花括号"}',
+    '{"a":"转义 \\" 引号 } 内"}',
+    '没有花括号',
+    '{ 没闭合',
+    '{"first":1} {"second":2}',
+    '```\n{"x":true}\n```',
+    '  {"trimmed":1}  ',
+  ];
+  const parseRaws = [
+    '{"a":1}',
+    '[1,2,3]',
+    '42',
+    'null',
+    '"string"',
+    '{"a":NaN}',
+    '{"a":Infinity}',
+    '{"a":-Infinity}',
+    '```json {"ok":1} ```',
+    'garbage no json',
+    '{"nested":{"x":1},"arr":[1,2]}',
+  ];
+  return {
+    extractJsonObject: {
+      fn: 'extractJsonObject',
+      note: '去围栏 + 括号配平取第一个平衡对象(跳字符串内花括号/转义);抠不到→null',
+      cases: extractRaws.map((raw) => ({ input: raw, expected: extractJsonObject(raw) })),
+    },
+    parseJsonObject: {
+      fn: 'parseJsonObject',
+      note: '只认对象(数组/标量/null 不合法→null);JSON.parse 拒 NaN/Infinity(py 须 parse_constant 拒)',
+      cases: parseRaws.map((raw) => ({ input: raw, expected: parseJsonObject(raw) })),
+    },
+  };
+}
+
 // ── parity 夹具:SQLite schema(从 openStores 真建库 dump 权威结构;供 Python 建同构表对拍) ──
 //   dump 逐表列结构(pragma_table_info,驱动无关 → node:sqlite/better-sqlite3 一致)+ user_version。
 function buildSchema() {
@@ -521,6 +602,8 @@ export async function buildSharedAssets() {
     'parity/source-label.json': paritySourceLabel(),
     'parity/context-hash.json': parityContextHash(),
     'parity/expire.json': parityExpire(),
+    'parity/llm-text.json': parityLlmText(),
+    'parity/json-extract.json': parityJsonExtract(),
     'parity/schema.json': buildSchema(),
     'parity/fts.json': buildFtsGolden(),
     ...(() => { const bf = buildBundleFixtures(); return { 'parity/bundle.json': bf.bundle, 'parity/bundle-validate.json': bf.validate }; })(),

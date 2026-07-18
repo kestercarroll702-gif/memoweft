@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
     "regex>=2024.0.0", # \p{L}/\p{N}/\p{Han} Unicode property classes for tokenize (stdlib re lacks \p{Script=...})
+    "httpx>=0.27", # OpenAI 兼容端点 HTTP 客户端(同步 httpx.Client;不引 SDK,同 TS 精神)
 ]
 
 [project.optional-dependencies]

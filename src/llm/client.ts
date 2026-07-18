@@ -67,7 +67,7 @@ export interface LLMConfig {
  * 无闭合 `</think>` 的一概不动——防把真答案误剥（写路径靠这段之后的 JSON 解析出结构）。
  * 主守在此（chat 层剥一次，chat/write 全用途受益）；jsonRepair 的括号配平是兜底。
  */
-function stripReasoning(s: string): string {
+export function stripReasoning(s: string): string {
   return s.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 }
 
@@ -86,7 +86,7 @@ function stripReasoning(s: string): string {
  * 取值顺序：content 有实质内容就用它（标准模型、绝大多数情况）；只有 content 空/缺才回落
  * reasoning_content —— 免得给正常模型平白掺进思考段（那是 stripReasoning 的活）。
  */
-function readReplyText(message?: { content?: string; reasoning_content?: string }): string | undefined {
+export function readReplyText(message?: { content?: string; reasoning_content?: string }): string | undefined {
   const content = message?.content;
   if (typeof content === 'string' && content.trim()) return content;
   const reasoning = message?.reasoning_content;
