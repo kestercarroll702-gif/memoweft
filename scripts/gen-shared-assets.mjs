@@ -34,6 +34,7 @@ import { expire } from '../src/background/expire.ts';
 import { stripReasoning, readReplyText } from '../src/llm/client.ts';
 import { extractJsonObject, parseJsonObject } from '../src/llm/jsonRepair.ts';
 import { distill } from '../src/distillation/distill.ts';
+import { consolidate } from '../src/consolidation/consolidate.ts';
 import { validateBundle } from '../src/portable/validateBundle.ts';
 import { BUNDLE_FORMAT, BUNDLE_SCHEMA_VERSION } from '../src/portable/model.ts';
 
@@ -506,6 +507,81 @@ async function parityDistill() {
   };
 }
 
+// ── parity 夹具:consolidate 四分支(真 TS consolidate + stub llm 喂固定 LLMOut)——P2-5 ──
+async function parityConsolidate() {
+  const T = '2026-01-01T00:00:00.000Z';
+  const build = async (lang) => {
+    const cfg = { ...config, language: lang };
+    const stores = openStores(':memory:', cfg, () => new Date(T));
+    const mkCog = (id, content, contentType, formedBy, confidence, credStatus) => ({
+      id, subjectId: 'owner', content, contentType, formedBy, confidence, credStatus,
+      scope: null, validAt: null, invalidAt: null, askedAt: null, archivedAt: null, mutedAt: null, createdAt: T, updatedAt: T,
+    });
+    // existing 认知(insert 固定 id;各挂一条旧证据):reinforce/correct/conflict 各引一个。
+    stores.cognitionStore.insert(mkCog('cog-reinf', '喜欢喝咖啡', 'preference', 'confirmed', 280, 'candidate'), [{ evidenceId: 'ev-old-reinf', relation: 'support' }]);
+    stores.cognitionStore.insert(mkCog('cog-corr', '在北京工作', 'fact', 'stated', 600, 'limited'), [{ evidenceId: 'ev-old-corr', relation: 'support' }]);
+    stores.cognitionStore.insert(mkCog('cog-conf', '喜欢早睡', 'preference', 'stated', 600, 'limited'), [{ evidenceId: 'ev-old-conf', relation: 'support' }]);
+    // 事件覆盖的证据(spoken/cloud=true/infer=true → 全过隐私门)。
+    const put = (content) => stores.evidenceStore.put({ subjectId: 'owner', sourceKind: 'spoken', hostId: 'local', occurredAt: T, rawContent: content });
+    const ev1 = put('我最近在学 Rust');
+    const ev2 = put('对，我每天都喝咖啡');
+    const ev3 = put('其实我在上海工作了');
+    const ev4 = put('我昨晚熬夜了');
+    // 未消化事件,覆盖 ev1-4。
+    stores.eventStore.insert({ id: 'evt1', subjectId: 'owner', summary: '用户聊了近况', occurredAt: T, createdAt: T }, [ev1.id, ev2.id, ev3.id, ev4.id], { consolidated: false });
+    // stub LLMOut:四分支 + 短标号 e1-e4 + cognition_id + resolutions。
+    const llmOut = {
+      new: [{ content: '在学 Rust', content_type: 'project', formed_by: 'stated', support_evidence_ids: ['e1'] }],
+      reinforce: [{ cognition_id: 'cog-reinf', support_evidence_ids: ['e2'] }], // 主动说→载体维 stated→触发并存
+      correct: [{ cognition_id: 'cog-corr', content: '在上海工作', content_type: 'fact', formed_by: 'stated', support_evidence_ids: ['e3'] }],
+      conflict: [{ cognition_id: 'cog-conf', support_evidence_ids: ['e4'] }],
+      resolutions: [{ evidence_id: 'e2', resolved_content: '用户确认每天喝咖啡', response_act: 'elaborate', proposition_origin: 'user_stated' }],
+    };
+    let n = 0;
+    const seen = [];
+    const stubLlm = {
+      get callCount() {
+        return n;
+      },
+      tier: 'cloud',
+      async chat(messages) {
+        seen.push(messages);
+        n++;
+        return JSON.stringify(llmOut);
+      },
+    };
+    const result = await consolidate('owner', {
+      eventStore: stores.eventStore, evidenceStore: stores.evidenceStore, cognitionStore: stores.cognitionStore,
+      semanticResolutionStore: stores.semanticResolutionStore, llm: stubLlm, config: cfg,
+    });
+    const created = result.created.map((c) => ({
+      content: c.content, contentType: c.contentType, formedBy: c.formedBy, confidence: c.confidence, credStatus: c.credStatus,
+      supportCount: stores.cognitionStore.sourcesOf(c.id).filter((s) => s.relation === 'support').length,
+    }));
+    const cogReinf = stores.cognitionStore.get('cog-reinf');
+    const cogCorr = stores.cognitionStore.get('cog-corr');
+    const cogConf = stores.cognitionStore.get('cog-conf');
+    const res = stores.semanticResolutionStore.ofEvidence(ev2.id);
+    const out = {
+      messages: seen[0],
+      created,
+      reinforced: result.reinforced, corrected: result.corrected, conflicted: result.conflicted, processedEvents: result.processedEvents,
+      cogReinfConfidence: cogReinf.confidence, cogReinfFormedBy: cogReinf.formedBy,
+      cogCorrInvalidated: cogCorr.invalidAt !== null,
+      cogConfCredStatus: cogConf.credStatus,
+      resolution: res ? { resolvedContent: res.resolvedContent, responseAct: res.responseAct, propositionOrigin: res.propositionOrigin, resolverVersion: res.resolverVersion } : null,
+      allEventsConsolidated: stores.eventStore.unconsolidated('owner').length === 0,
+    };
+    stores.close();
+    return out;
+  };
+  return {
+    note: 'consolidate 四分支(new/reinforce 含并存 stated/correct/conflict)+ resolution 落库;messages 字节 + created 结构 + 计数 + 落库状态',
+    zh: await build('zh'),
+    en: await build('en'),
+  };
+}
+
 // ── parity 夹具:SQLite schema(从 openStores 真建库 dump 权威结构;供 Python 建同构表对拍) ──
 //   dump 逐表列结构(pragma_table_info,驱动无关 → node:sqlite/better-sqlite3 一致)+ user_version。
 function buildSchema() {
@@ -635,6 +711,7 @@ export async function buildSharedAssets() {
   const vecs = await emb.embed(he.embedTexts);
   const embedCases = he.embedTexts.map((text, i) => ({ input: { text, dim: he.DIM }, expected: vecs[i] }));
   const distillFx = await parityDistill();
+  const consolidateFx = await parityConsolidate();
 
   return {
     'config-constants.json': buildConfigConstants(),
@@ -657,6 +734,7 @@ export async function buildSharedAssets() {
     'parity/llm-text.json': parityLlmText(),
     'parity/json-extract.json': parityJsonExtract(),
     'parity/distill.json': distillFx,
+    'parity/consolidate.json': consolidateFx,
     'parity/schema.json': buildSchema(),
     'parity/fts.json': buildFtsGolden(),
     ...(() => { const bf = buildBundleFixtures(); return { 'parity/bundle.json': bf.bundle, 'parity/bundle-validate.json': bf.validate }; })(),
