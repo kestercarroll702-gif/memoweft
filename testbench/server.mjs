@@ -35,6 +35,7 @@ import { loadLLMConfig } from '../src/llm/client.ts';
 import { Conversation } from '../src/pipeline/conversation.ts';
 import { config } from '../src/config.ts';
 import { exportBundle, importBundle } from '../src/portable/index.ts';
+import { resetTestbenchSubject } from './factoryReset.mjs';
 import { portableDeps } from './portableDeps.mjs';
 import {
   ClientInputError,
@@ -856,25 +857,13 @@ const server = createServer(async (req, res) => {
     }
 
     // ── 恢复出厂 · 清空全部数据（不可逆）──
-    // 批量清空【保留 store 直调】——恢复出厂是整库擦除、
-    //   不是逐条管理行为；逐条走受控 API 反而会往正要清掉的审计表里再写一堆行。只用公开方法清数据 + 索引：
-    //   证据 evidence：EvidenceStore 无 removeBySubject，用 all() 逐条 remove(id)（测试台单 subject，全清）。
-    //   事件 event   ：eventStore.removeBySubject(subjectId) → 连带清 event_evidence 关联表。
-    //   画像 cognition：cogStore.removeBySubject(subjectId) → 连带清 cognition_evidence 溯源链。
-    //   检索索引     ：retriever.indexAll([]) → VectorRetriever 会 DELETE FROM vectors（空数组即清空）；
-    //                  NullRetriever 为 no-op（本就无索引）。两种都安全。
-    //   审计 management_log：出厂=无历史 → 连审计表一起清（managementLog.clear()）。
+    // 通过受控管理 API 在一个事务中清证据、事件、画像、审计和 v0.6 的交互/语义层。
+    // 索引是派生数据，在事务成功后再清空；这样「恢复出厂」不会遗漏含用户原话的副本。
     // 清理完成后调用 newSession()，同步清空当前会话窗口，避免旧上下文残留。
     if (req.method === 'POST' && url.pathname === '/api/factory-reset') {
       const subjectId = config.identity.subjectId;
-      let evidenceRemoved = 0;
-      for (const e of store.all()) {
-        if (store.remove(e.id)) evidenceRemoved++;
-      }
-      const eventRemoved = eventStore.removeBySubject(subjectId);
-      const cognitionRemoved = cogStore.removeBySubject(subjectId);
-      const auditRemoved = stores.managementLog.clear(); // 出厂=无历史
-      await retriever.indexAll([]); // 清空向量索引（空召回时无副作用）
+      const { evidenceRemoved, eventRemoved, cognitionRemoved, auditRemoved } =
+        await resetTestbenchSubject({ memoryApi, retriever, subjectId });
       newSession(); // 同步清空当前会话窗口，不保留旧上下文
       sendJson(res, 200, {
         ok: true,
