@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, cast
+from typing import Any, Optional, cast
 
 from ._jsstr import js_trim, utf16_length
 from .config import CONFIG, Config, resolve_lang
@@ -28,6 +28,7 @@ from .store.cognition import SqliteCognitionStore
 from .store.event import SqliteEventStore
 from .store.evidence import SqliteEvidenceStore
 from .store.semantic_resolution import SqliteSemanticResolutionStore
+from .store.transaction import Transaction, noop_transaction
 from .types import (
     AssertionStrength,
     CarrierInput,
@@ -47,9 +48,6 @@ from .types import (
 )
 
 _logger = logging.getLogger("memoweft.consolidate")
-
-#: 事务器:把一段同步写包成原子事务。P2-5 缺省 noop(直接跑);P2-6 提供可重入 BEGIN/COMMIT/ROLLBACK。
-Transaction = Callable[[Callable[[], Any]], Any]
 
 _VALID_TYPES = ("fact", "preference", "goal", "project", "state", "trait")
 _VALID_FORMED = ("stated", "observed", "ruled", "confirmed", "inferred")
@@ -431,7 +429,7 @@ def consolidate(
         event_store.mark_consolidated([e.id for e in new_events])
         return _Mutation(created=created, reinforced=reinforced, corrected=corrected, conflicted=conflicted)
 
-    run_tx: Transaction = transaction if transaction is not None else (lambda fn: fn())
+    run_tx: Transaction = transaction if transaction is not None else noop_transaction
     mutation = cast(_Mutation, run_tx(mutate))
 
     return ConsolidateResult(

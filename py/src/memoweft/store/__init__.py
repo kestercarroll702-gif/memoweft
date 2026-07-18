@@ -13,6 +13,7 @@ from .interaction_context import SqliteInteractionContextStore, hash_context
 from .keyword import Hit, KeywordRetriever, to_match_query
 from .schema import SCHEMA_SQL, SCHEMA_VERSION
 from .semantic_resolution import SqliteSemanticResolutionStore
+from .transaction import Transaction, make_transaction, noop_transaction
 
 __all__ = [
     "BUSY_TIMEOUT_MS",
@@ -31,4 +32,7 @@ __all__ = [
     "SqliteInteractionContextStore",
     "hash_context",
     "SqliteSemanticResolutionStore",
+    "Transaction",
+    "make_transaction",
+    "noop_transaction",
 ]
