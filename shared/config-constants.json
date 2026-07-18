@@ -1,5 +1,5 @@
 {
-  "_note": "Language-neutral numeric constants read by the pure-logic layer. Source of truth = src/config.ts (+ CARRIER_RANK/hard cap noted). Regenerate via `npm run shared:update`.",
+  "_note": "Language-neutral constants read by the pure-logic and storage layers. Source of truth = src/config.ts (+ CARRIER_RANK/hard cap noted). Regenerate via `npm run shared:update`.",
   "asking": {
     "askableStatuses": [
       "candidate",
@@ -59,10 +59,25 @@
     ]
   },
   "dayMs": 86400000,
+  "evidenceDefaults": {
+    "allowInference": true,
+    "allowLocalRead": true
+  },
   "minIdPrefix": 8,
+  "observedDefaults": {
+    "allowCloudRead": false,
+    "allowInference": true,
+    "allowLocalRead": true
+  },
+  "privacyMode": false,
   "retrieval": {
     "minEffectiveConfidence": 80,
     "minSimilarity": 0,
     "topK": 5
+  },
+  "toolDefaults": {
+    "allowCloudRead": false,
+    "allowInference": true,
+    "allowLocalRead": true
   }
 }

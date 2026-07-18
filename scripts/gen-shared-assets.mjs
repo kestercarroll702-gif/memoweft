@@ -26,6 +26,8 @@ import { resolveEchoedId, MIN_ID_PREFIX } from '../src/llm/echoedId.ts';
 import { fnv1a32, tokenize, HashEmbedder } from '../tests/retrieval/hashEmbedder.ts';
 import { PROMPT_REGISTRY } from '../src/prompts/registry.ts';
 import { openStores } from '../src/store/openStores.ts';
+import { SqliteEvidenceStore } from '../src/evidence/store.ts';
+import { SqliteCognitionStore } from '../src/cognition/store.ts';
 import { validateBundle } from '../src/portable/validateBundle.ts';
 import { BUNDLE_FORMAT, BUNDLE_SCHEMA_VERSION } from '../src/portable/model.ts';
 
@@ -62,7 +64,7 @@ export function stableStringify(value) {
 function buildConfigConstants() {
   const c = config;
   return {
-    _note: 'Language-neutral numeric constants read by the pure-logic layer. Source of truth = src/config.ts (+ CARRIER_RANK/hard cap noted). Regenerate via `npm run shared:update`.',
+    _note: 'Language-neutral constants read by the pure-logic and storage layers. Source of truth = src/config.ts (+ CARRIER_RANK/hard cap noted). Regenerate via `npm run shared:update`.',
     consolidation: {
       baseByFormedBy: c.consolidation.baseByFormedBy,
       supportStep: c.consolidation.supportStep,
@@ -91,6 +93,11 @@ function buildConfigConstants() {
     carrierRank: { confirmed: 0, observed: 1, stated: 2 }, // deriveFormedBy.ts:62
     minIdPrefix: MIN_ID_PREFIX, // echoedId.ts:17
     dayMs: 86400000, // decay.ts:13
+    // ── 证据授权默认(evidence.put 按 sourceKind 分流补默认;跨语言【授权红线】常量,storage 层读)——P2-1a 纳入 ──
+    privacyMode: c.privacyMode, // config.ts:103(cloudReadDefault = !privacyMode)
+    evidenceDefaults: c.evidenceDefaults, // config.ts:104(spoken/inferred 通用默认;无 allowCloudRead → 走 cloudReadDefault)
+    observedDefaults: c.observedDefaults, // config.ts:105(行为观察保守:local✓/cloud✗/infer✓)
+    toolDefaults: c.toolDefaults, // config.ts:106(工具返回同 observed 保守 AD-3/D-0013)
   };
 }
 
@@ -220,6 +227,65 @@ function parityEchoedId() {
   const wl2 = ['abcd1234ef', 'abcd1234gh'];
   cases.push({ input: { raw: 'abcd1234', whitelist: wl2, tagMap: [] }, expected: resolveEchoedId('abcd1234', new Set(wl2), new Map()) });
   return { fn: 'resolveEchoedId', note: '标号→精确→唯一前缀三级 + 护栏(过短/捏造/歧义→null)', cases };
+}
+
+// ── parity 夹具:evidence.put 授权分流(用真 TS SqliteEvidenceStore.put;golden 只取最终三位授权,不取随机 id/时间) ──
+//   钉死「按 sourceKind 补保守默认 + 显式优先 + cloudReadDefault 跟随 privacyMode」的跨语言一致(P2-1a)。
+function parityEvidenceAuth() {
+  const FIXED = () => new Date('2026-01-01T00:00:00.000Z'); // 只为确定,授权不吃时间
+  const explicits = [
+    {},
+    { allowLocalRead: true }, { allowLocalRead: false },
+    { allowCloudRead: true }, { allowCloudRead: false },
+    { allowInference: true }, { allowInference: false },
+    { allowLocalRead: false, allowCloudRead: true, allowInference: false },
+  ];
+  const cases = [];
+  for (const cfg of [config, { ...config, privacyMode: true }]) {
+    const store = new SqliteEvidenceStore(':memory:', cfg, FIXED);
+    let n = 0;
+    for (const sourceKind of SOURCE_KINDS)
+      for (const explicit of explicits) {
+        const e = store.put({ subjectId: 'owner', sourceKind, hostId: 'local', rawContent: `x${n++}`, ...explicit });
+        cases.push({
+          input: { privacyMode: cfg.privacyMode, sourceKind, explicit },
+          expected: { allowLocalRead: e.allowLocalRead, allowCloudRead: e.allowCloudRead, allowInference: e.allowInference },
+        });
+      }
+    store.close();
+  }
+  return {
+    fn: 'EvidenceStore.put 授权分流',
+    note: 'sourceKind × 显式授权 × privacyMode → 最终三位授权(observed/tool 保守 local✓/cloud✗/infer✓;spoken/inferred 走 evidenceDefaults + cloudReadDefault=!privacyMode;显式永远优先)',
+    cases,
+  };
+}
+
+// ── parity 夹具:cognition all/active 排序(用真 TS SqliteCognitionStore.insert 固定认知集 → id 序 golden) ──
+//   钉 ORDER BY confidence DESC, created_at ASC + active 排除 invalid/archived(侦察点名 Phase 1b 未覆盖此序)。
+function parityCognitionOrder() {
+  const mk = (id, confidence, createdAt, extra = {}) => ({
+    id, subjectId: 'owner', content: `内容 ${id}`, contentType: 'preference', formedBy: 'stated',
+    confidence, credStatus: 'limited', scope: null, validAt: null, invalidAt: null,
+    askedAt: null, archivedAt: null, mutedAt: null, createdAt, updatedAt: createdAt, ...extra,
+  });
+  const store = new SqliteCognitionStore(':memory:');
+  const cogs = [
+    mk('c1', 600, '2026-01-01T00:00:01.000Z'),
+    mk('c2', 600, '2026-01-01T00:00:00.000Z'), // 同分、created_at 更早 → 排 c1 之前
+    mk('c3', 800, '2026-01-01T00:00:05.000Z'), // 最高分 → 最前
+    mk('c4', 300, '2026-01-01T00:00:00.000Z', { invalidAt: '2026-01-02T00:00:00.000Z' }), // 失效 → active 排除
+    mk('c5', 500, '2026-01-01T00:00:00.000Z', { archivedAt: '2026-01-02T00:00:00.000Z' }), // 归档 → active 排除
+  ];
+  for (const c of cogs) store.insert(c, []);
+  const all = store.all('owner').map((c) => c.id);
+  const active = store.active('owner').map((c) => c.id);
+  store.close();
+  return {
+    note: 'insert 固定认知集 → all(全含)/ active(排除 invalid/archived)的 id 序 golden;排序 ORDER BY confidence DESC, created_at ASC',
+    all,
+    active,
+  };
 }
 
 // ── parity 夹具:SQLite schema(从 openStores 真建库 dump 权威结构;供 Python 建同构表对拍) ──
@@ -364,6 +430,8 @@ export async function buildSharedAssets() {
       embed: { fn: 'HashEmbedder.embed', dim: he.DIM, note: 'L2 归一化词袋向量(空文本→全零);expected 为 dim 维 double 数组', cases: embedCases },
     },
     'parity/echoed-id.json': parityEchoedId(),
+    'parity/evidence-auth.json': parityEvidenceAuth(),
+    'parity/cognition-order.json': parityCognitionOrder(),
     'parity/schema.json': buildSchema(),
     'parity/fts.json': buildFtsGolden(),
     ...(() => { const bf = buildBundleFixtures(); return { 'parity/bundle.json': bf.bundle, 'parity/bundle-validate.json': bf.validate }; })(),

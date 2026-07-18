@@ -33,6 +33,9 @@ def open_db(path: str = ":memory:") -> sqlite3.Connection:
     只处理 fresh 库(新文件 / :memory:);老库升级(runMigrations 从旧 user_version 升)属后续阶段。
     """
     db = sqlite3.connect(path)
+    # autocommit(isolation_level=None):每条 DML 立即提交、无隐式 BEGIN,对齐 TS node:sqlite 的
+    #   autocommit 语义;跨表事务由写路径显式 BEGIN/COMMIT/ROLLBACK 控制(P2-6 transaction,同 openStores)。
+    db.isolation_level = None
     db.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
     for stmt in SCHEMA_SQL:
         db.execute(stmt)
