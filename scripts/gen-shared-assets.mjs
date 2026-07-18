@@ -25,6 +25,7 @@ import { decayFactor, halfLifeOf, effectiveConfidence } from '../src/background/
 import { resolveEchoedId, MIN_ID_PREFIX } from '../src/llm/echoedId.ts';
 import { fnv1a32, tokenize, HashEmbedder } from '../tests/retrieval/hashEmbedder.ts';
 import { PROMPT_REGISTRY } from '../src/prompts/registry.ts';
+import { openStores } from '../src/store/openStores.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const SHARED = join(ROOT, 'shared');
@@ -219,6 +220,64 @@ function parityEchoedId() {
   return { fn: 'resolveEchoedId', note: '标号→精确→唯一前缀三级 + 护栏(过短/捏造/歧义→null)', cases };
 }
 
+// ── parity 夹具:SQLite schema(从 openStores 真建库 dump 权威结构;供 Python 建同构表对拍) ──
+//   dump 逐表列结构(pragma_table_info,驱动无关 → node:sqlite/better-sqlite3 一致)+ user_version。
+function buildSchema() {
+  const stores = openStores(':memory:');
+  const db = stores.db;
+  try {
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+      .all()
+      .map((r) => r.name);
+    const uv = db.prepare('PRAGMA user_version').get();
+    const out = { note: '从 openStores(:memory:) dump 的权威持久化 schema;Python 建同构表后逐表对拍。', userVersion: Number(uv.user_version), tables: {} };
+    for (const t of tables) {
+      // pragma_table_info 表值函数;t 来自 sqlite_master(非用户输入),内插安全。
+      const cols = db.prepare(`SELECT name, type, "notnull" AS nn, dflt_value AS dflt, pk FROM pragma_table_info('${t}')`).all();
+      out.tables[t] = cols.map((c) => ({ name: c.name, type: c.type, notnull: Number(c.nn), dflt: c.dflt ?? null, pk: Number(c.pk) }));
+    }
+    return out;
+  } finally {
+    stores.close();
+  }
+}
+
+// ── parity 夹具:FTS5 trigram bm25 排序(golden 只锁【id 排序】,不锁 bm25 分数——分数随 SQLite 小版本微动,
+//   排序在清晰分隔的数据上稳定;已实测 node:sqlite 3.51 与 CPython 3.50 逐位一致,见 fts5-trigram-cross-lang-parity)。
+function buildFtsGolden() {
+  const stores = openStores(':memory:');
+  const db = stores.db;
+  try {
+    db.exec("CREATE VIRTUAL TABLE cognition_fts USING fts5(cognition_id UNINDEXED, text, tokenize='trigram')");
+    const data = [
+      ['c1', '我喜欢爬山和户外运动'],
+      ['c2', '爬山是很好的运动'],
+      ['c3', 'I like hiking and coffee'],
+      ['c4', '喝咖啡 coffee 每天喝'],
+      ['c5', '周末去爬山爬山爬山'],
+      ['c6', '不喜欢任何运动'],
+    ];
+    const ins = db.prepare('INSERT INTO cognition_fts (cognition_id, text) VALUES (?, ?)');
+    for (const [id, t] of data) ins.run(id, t);
+    const ids = (match) =>
+      db
+        .prepare('SELECT cognition_id FROM cognition_fts WHERE cognition_fts MATCH ? ORDER BY bm25(cognition_fts) LIMIT 10')
+        .all(match)
+        .map((r) => r.cognition_id);
+    // MATCH 串照 toMatchQuery 的短语形态(双引号包);≤2 字 CJK 命中空(trigram 需 ≥3 字)也是 parity 的一部分。
+    const matches = ['"coffee"', '"hiking"', '"户外运动"', '"爬山爬山"', '"运动"', '"爬山"'];
+    return {
+      note: 'FTS5 trigram + bm25 排序 golden;只锁 id 排序(见函数注释)。Python 建同款表+同数据,断言排序一致。',
+      ddl: "CREATE VIRTUAL TABLE cognition_fts USING fts5(cognition_id UNINDEXED, text, tokenize='trigram')",
+      data,
+      cases: matches.map((match) => ({ match, ids: ids(match) })),
+    };
+  } finally {
+    stores.close();
+  }
+}
+
 /** 生成全部共享资产(纯计算,async 仅因 embed)。返回 { path → object }。 */
 export async function buildSharedAssets() {
   const he = parityHashEmbedder();
@@ -239,6 +298,8 @@ export async function buildSharedAssets() {
       embed: { fn: 'HashEmbedder.embed', dim: he.DIM, note: 'L2 归一化词袋向量(空文本→全零);expected 为 dim 维 double 数组', cases: embedCases },
     },
     'parity/echoed-id.json': parityEchoedId(),
+    'parity/schema.json': buildSchema(),
+    'parity/fts.json': buildFtsGolden(),
   };
 }
 
@@ -272,6 +333,6 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
     console.log('shared/ 资产与 TS 源一致。');
   } else {
     writeAll(assets);
-    console.log('shared/ 资产已刷新(config-constants + prompts + 6 份 parity 夹具)。');
+    console.log('shared/ 资产已刷新(config-constants + prompts + 8 份 parity 夹具:含 schema/fts)。');
   }
 }
