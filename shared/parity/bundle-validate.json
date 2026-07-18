@@ -1,0 +1,1821 @@
+{
+  "cases": [
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [],
+        "valid": true,
+        "warnings": []
+      },
+      "label": "valid"
+    },
+    {
+      "bundle": 42,
+      "expected": {
+        "errors": [
+          "bundle is not an object"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "not-object"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "nope",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [
+          "format should be \"memoweft-bundle\", but got \"nope\""
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "wrong-format"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [
+          "schemaVersion is missing or not a number"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "schemaVersion-missing"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 99,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [
+          "schemaVersion=99 is higher than the 2 supported by this version (upgrade MemoWeft before importing)"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "schemaVersion-too-high"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 1,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [],
+        "valid": true,
+        "warnings": [
+          "schemaVersion=1 is lower than the current 2 (importing with the old structure)"
+        ]
+      },
+      "label": "schemaVersion-lower"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        }
+      },
+      "expected": {
+        "errors": [
+          "subjectId is missing"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "subjectId-missing"
+    },
+    {
+      "bundle": {
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [
+          "data is missing"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "data-missing"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": {},
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [
+          "data.evidence should be an array"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "evidence-not-array"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [
+          "data.evidence has an element with a missing id"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "evidence-missing-id"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [
+          "data.evidence has duplicate ids",
+          "eventEvidence references a non-existent evidence: ev-2"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "duplicate-evidence-id"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ghost"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [
+          "eventEvidence references a non-existent evidence: ghost"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "dangling-eventEvidence"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "ghost",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [
+          "cognitionEvidence references a non-existent cognition: ghost"
+        ],
+        "valid": false,
+        "warnings": []
+      },
+      "label": "dangling-cognitionEvidence"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "other",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [],
+        "valid": true,
+        "warnings": [
+          "evidence ev-1 subjectId(other) does not match the bundle(owner)"
+        ]
+      },
+      "label": "subject-mismatch-warning"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": "ghost",
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": []
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [],
+        "valid": true,
+        "warnings": [
+          "evidence ev-1 correctsEvidenceId(ghost) is not in the bundle"
+        ]
+      },
+      "label": "corrects-out-of-bundle-warning"
+    },
+    {
+      "bundle": {
+        "data": {
+          "cognitionEvidence": [
+            {
+              "cognitionId": "cog-1",
+              "evidenceId": "ev-1",
+              "relation": "support"
+            }
+          ],
+          "cognitions": [
+            {
+              "archivedAt": null,
+              "askedAt": null,
+              "confidence": 600,
+              "content": "用户喜欢 X",
+              "contentType": "preference",
+              "createdAt": "2026-01-01T00:00:03.000Z",
+              "credStatus": "limited",
+              "formedBy": "stated",
+              "id": "cog-1",
+              "invalidAt": null,
+              "mutedAt": null,
+              "scope": null,
+              "subjectId": "owner",
+              "updatedAt": "2026-01-01T00:00:03.000Z",
+              "validAt": null
+            }
+          ],
+          "eventEvidence": [
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-1"
+            },
+            {
+              "eventId": "evt-1",
+              "evidenceId": "ev-2"
+            }
+          ],
+          "events": [
+            {
+              "consolidated": true,
+              "createdAt": "2026-01-01T00:00:02.000Z",
+              "id": "evt-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "subjectId": "owner",
+              "summary": "一个事件"
+            }
+          ],
+          "evidence": [
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-1",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-1",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "spoken",
+              "subjectId": "owner",
+              "summary": "摘要 ev-1"
+            },
+            {
+              "allowCloudRead": false,
+              "allowInference": true,
+              "allowLocalRead": true,
+              "correctsEvidenceId": null,
+              "hostId": "local",
+              "id": "ev-2",
+              "occurredAt": "2026-01-01T00:00:00.000Z",
+              "originId": null,
+              "rawContent": "原话 ev-2",
+              "recordedAt": "2026-01-01T00:00:01.000Z",
+              "sourceKind": "tool",
+              "subjectId": "owner",
+              "summary": "摘要 ev-2"
+            }
+          ],
+          "interactionContexts": [
+            {
+              "context": [
+                {
+                  "content": "hi",
+                  "role": "user"
+                }
+              ],
+              "contextHash": "abc123",
+              "conversationId": "conv-1",
+              "createdAt": "2026-01-01T00:00:00.500Z",
+              "episodeId": "ep-1",
+              "id": "ic-1",
+              "subjectId": "owner"
+            }
+          ],
+          "semanticResolutions": [],
+          "unconsolidatedEventIds": [
+            "ghost"
+          ]
+        },
+        "exportedAt": "2026-01-02T00:00:00.000Z",
+        "format": "memoweft-bundle",
+        "memoWeftVersion": "0.6.0-dev",
+        "metadata": {
+          "counts": {
+            "cognitions": 1,
+            "events": 1,
+            "evidence": 2
+          },
+          "notes": [
+            "fixture"
+          ]
+        },
+        "schemaVersion": 2,
+        "source": {
+          "exportMode": "full",
+          "hostId": "local"
+        },
+        "subjectId": "owner"
+      },
+      "expected": {
+        "errors": [],
+        "valid": true,
+        "warnings": [
+          "unconsolidatedEventIds contains an unknown event: ghost"
+        ]
+      },
+      "label": "unconsolidated-unknown-warning"
+    }
+  ],
+  "note": "expected 由 TS validateBundle 现算(en);Python validate 逐字对拍。"
+}

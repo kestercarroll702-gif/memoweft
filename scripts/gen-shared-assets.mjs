@@ -26,6 +26,8 @@ import { resolveEchoedId, MIN_ID_PREFIX } from '../src/llm/echoedId.ts';
 import { fnv1a32, tokenize, HashEmbedder } from '../tests/retrieval/hashEmbedder.ts';
 import { PROMPT_REGISTRY } from '../src/prompts/registry.ts';
 import { openStores } from '../src/store/openStores.ts';
+import { validateBundle } from '../src/portable/validateBundle.ts';
+import { BUNDLE_FORMAT, BUNDLE_SCHEMA_VERSION } from '../src/portable/model.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const SHARED = join(ROOT, 'shared');
@@ -278,6 +280,70 @@ function buildFtsGolden() {
   }
 }
 
+// ── parity 夹具:便携包(interop 用一个完整 valid bundle + validate 用好/坏例) ──
+//   bundle 由手工构造【固定 id/时间戳】(store.put 会生随机 UUID,不可作确定性 golden),
+//   但用 TS validateBundle 断言它确实 valid → 是「真·合法 MemoWeft 包」;Python 导入它验往返保真。
+function seedBundle() {
+  const ev = (id, extra = {}) => ({
+    id, subjectId: 'owner', sourceKind: 'spoken', hostId: 'local', originId: null,
+    occurredAt: '2026-01-01T00:00:00.000Z', recordedAt: '2026-01-01T00:00:01.000Z',
+    rawContent: `原话 ${id}`, summary: `摘要 ${id}`,
+    allowLocalRead: true, allowCloudRead: false, allowInference: true, correctsEvidenceId: null, ...extra,
+  });
+  return {
+    format: BUNDLE_FORMAT,
+    schemaVersion: BUNDLE_SCHEMA_VERSION,
+    exportedAt: '2026-01-02T00:00:00.000Z',
+    memoWeftVersion: '0.6.0-dev',
+    subjectId: 'owner',
+    source: { hostId: 'local', exportMode: 'full' },
+    data: {
+      evidence: [ev('ev-1'), ev('ev-2', { sourceKind: 'tool', allowCloudRead: false })],
+      events: [{ id: 'evt-1', subjectId: 'owner', summary: '一个事件', occurredAt: '2026-01-01T00:00:00.000Z', createdAt: '2026-01-01T00:00:02.000Z', consolidated: true }],
+      eventEvidence: [{ eventId: 'evt-1', evidenceId: 'ev-1' }, { eventId: 'evt-1', evidenceId: 'ev-2' }],
+      cognitions: [{
+        id: 'cog-1', subjectId: 'owner', content: '用户喜欢 X', contentType: 'preference', formedBy: 'stated',
+        confidence: 600, credStatus: 'limited', scope: null, validAt: null, invalidAt: null,
+        askedAt: null, archivedAt: null, mutedAt: null, createdAt: '2026-01-01T00:00:03.000Z', updatedAt: '2026-01-01T00:00:03.000Z',
+      }],
+      cognitionEvidence: [{ cognitionId: 'cog-1', evidenceId: 'ev-1', relation: 'support' }],
+      unconsolidatedEventIds: [],
+      interactionContexts: [{ id: 'ic-1', subjectId: 'owner', conversationId: 'conv-1', episodeId: 'ep-1', context: [{ role: 'user', content: 'hi' }], contextHash: 'abc123', createdAt: '2026-01-01T00:00:00.500Z' }],
+      semanticResolutions: [],
+    },
+    metadata: { counts: { evidence: 2, events: 1, cognitions: 1 }, notes: ['fixture'] },
+  };
+}
+
+function buildBundleFixtures() {
+  const good = seedBundle();
+  const vr = validateBundle(good);
+  if (!vr.valid) throw new Error('seedBundle 不合法(生成器自检失败):' + JSON.stringify(vr.errors));
+
+  // validate parity 好/坏例:每例的 expected 由 TS validateBundle 现算(en·默认 lang)。
+  const clone = (mut) => { const b = structuredClone(good); mut(b); return b; };
+  const cases = [
+    { label: 'valid', bundle: good },
+    { label: 'not-object', bundle: 42 },
+    { label: 'wrong-format', bundle: clone((b) => { b.format = 'nope'; }) },
+    { label: 'schemaVersion-missing', bundle: clone((b) => { delete b.schemaVersion; }) },
+    { label: 'schemaVersion-too-high', bundle: clone((b) => { b.schemaVersion = 99; }) },
+    { label: 'schemaVersion-lower', bundle: clone((b) => { b.schemaVersion = 1; }) },
+    { label: 'subjectId-missing', bundle: clone((b) => { delete b.subjectId; }) },
+    { label: 'data-missing', bundle: clone((b) => { delete b.data; }) },
+    { label: 'evidence-not-array', bundle: clone((b) => { b.data.evidence = {}; }) },
+    { label: 'evidence-missing-id', bundle: clone((b) => { b.data.evidence[0].id = ''; }) },
+    { label: 'duplicate-evidence-id', bundle: clone((b) => { b.data.evidence[1].id = 'ev-1'; }) },
+    { label: 'dangling-eventEvidence', bundle: clone((b) => { b.data.eventEvidence[0].evidenceId = 'ghost'; }) },
+    { label: 'dangling-cognitionEvidence', bundle: clone((b) => { b.data.cognitionEvidence[0].cognitionId = 'ghost'; }) },
+    { label: 'subject-mismatch-warning', bundle: clone((b) => { b.data.evidence[0].subjectId = 'other'; }) },
+    { label: 'corrects-out-of-bundle-warning', bundle: clone((b) => { b.data.evidence[0].correctsEvidenceId = 'ghost'; }) },
+    { label: 'unconsolidated-unknown-warning', bundle: clone((b) => { b.data.unconsolidatedEventIds = ['ghost']; }) },
+  ].map((c) => ({ label: c.label, bundle: c.bundle, expected: validateBundle(c.bundle) }));
+
+  return { bundle: good, validate: { note: 'expected 由 TS validateBundle 现算(en);Python validate 逐字对拍。', cases } };
+}
+
 /** 生成全部共享资产(纯计算,async 仅因 embed)。返回 { path → object }。 */
 export async function buildSharedAssets() {
   const he = parityHashEmbedder();
@@ -300,6 +366,7 @@ export async function buildSharedAssets() {
     'parity/echoed-id.json': parityEchoedId(),
     'parity/schema.json': buildSchema(),
     'parity/fts.json': buildFtsGolden(),
+    ...(() => { const bf = buildBundleFixtures(); return { 'parity/bundle.json': bf.bundle, 'parity/bundle-validate.json': bf.validate }; })(),
   };
 }
 
