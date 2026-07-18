@@ -15,6 +15,54 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { buildSharedAssets, stableStringify, SHARED } from '../../scripts/gen-shared-assets.mjs';
 
+/**
+ * 唯一破例逐字比对的资产:`parity/decay.json`。
+ *
+ * 为什么:decayFactor 走 `Math.pow(0.5, x)`,而 IEEE754 **不要求 pow 正确舍入**
+ *   (`Math.sqrt` 要求、`pow` 不要求),V8 实现跨版本可变 —— 实测同一表达式
+ *   `0.5 ** 0.5` 在 Node 24 得 `0.7071067811865476`、CI 的 Node 22 得 `...475`,差 1 ULP。
+ *   逐字比对 JSON 文本会把这 1 ULP 判成"漂移",于是 CI 的
+ *   「触达 (Node 22.18+ · better-sqlite3)」job 自 shared/ 引入(72e5677)起【连红 20 次提交】,
+ *   而本地 Node 24 门禁全绿——红了整个 Python 移植 Phase 1+2 都没被发现,并卡住了 0.6.0 发版。
+ * Python 侧早就为同一现象定了口径(py/tests/test_parity_decay.py:28:
+ *   `got == want or isclose(rel_tol=1e-15, abs_tol=1e-18)`)。这里跟齐,两边同一把尺子。
+ *
+ * 守门力度不减:键集/结构/字符串/整数一律严格相等(effectiveConfidence 是整数,
+ *   parity 杀手①「Math.round 半值向上 vs Python banker's round」必须逐位钉住),
+ *   只有【非整数的浮点】才吃 1e-15 相对容差。改了 TS 源却忘刷新 shared/ 照样红。
+ */
+const FLOAT_TOLERANT = new Set(['parity/decay.json']);
+
+function assertEqualTolerant(a: unknown, b: unknown, path: string): void {
+  if (typeof a === 'number' && typeof b === 'number') {
+    if (Object.is(a, b)) return;
+    // 整数(含 effectiveConfidence 的输出)必须逐位相等,不吃容差。
+    assert.ok(
+      !Number.isInteger(a) && !Number.isInteger(b),
+      `${path}: 整数不一致 ${a} ≠ ${b}(整数不吃浮点容差)`,
+    );
+    const tol = Math.max(1e-15 * Math.max(Math.abs(a), Math.abs(b)), 1e-18);
+    assert.ok(Math.abs(a - b) <= tol, `${path}: 浮点超出 1e-15 相对容差 ${a} ≠ ${b}`);
+    return;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    assert.ok(Array.isArray(a) && Array.isArray(b), `${path}: 一侧不是数组`);
+    assert.equal(a.length, b.length, `${path}: 数组长度不一致`);
+    a.forEach((_, i) => assertEqualTolerant(a[i], b[i], `${path}[${i}]`));
+    return;
+  }
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    const ka = Object.keys(a as object).sort();
+    const kb = Object.keys(b as object).sort();
+    assert.deepEqual(ka, kb, `${path}: 键集不一致`);
+    for (const k of ka) {
+      assertEqualTolerant((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], `${path}.${k}`);
+    }
+    return;
+  }
+  assert.equal(a, b, `${path}: 值不一致`);
+}
+
 test('shared-assets:committed 与 TS 源逐字一致(漂移守门)', async () => {
   const assets = await buildSharedAssets();
   for (const [rel, obj] of Object.entries(assets) as [string, unknown][]) {
@@ -22,7 +70,13 @@ test('shared-assets:committed 与 TS 源逐字一致(漂移守门)', async () =>
     assert.ok(existsSync(p), `缺少 shared/${rel},请运行 \`npm run shared:update\``);
     const committed = readFileSync(p, 'utf8');
     const fresh = stableStringify(obj);
-    assert.equal(committed, fresh, `shared/${rel} 与 TS 源不一致,请运行 \`npm run shared:update\` 刷新`);
+    if (committed === fresh) continue;
+    // 唯有 decay.json 允许 1 ULP 级的浮点差(见上方说明);其余一律逐字。
+    assert.ok(
+      FLOAT_TOLERANT.has(rel),
+      `shared/${rel} 与 TS 源不一致,请运行 \`npm run shared:update\` 刷新`,
+    );
+    assertEqualTolerant(JSON.parse(committed), JSON.parse(fresh), `shared/${rel}`);
   }
 });
 
