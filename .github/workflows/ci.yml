@@ -187,6 +187,19 @@ jobs:
       - name: LlamaIndex Adapter Build
         run: npm run build -w @memoweft/adapter-llamaindex
 
+      # Mastra 适配器（0.1.0·processor 型进程内适配器，D-0038）：同上靠 Core dist、自带 build。
+      #   SDK @mastra/core 是 peer + dev（宿主自带 Mastra；implements Processor 只需类型，processInput/
+      #   processOutputResult 直接调、不启真实 Agent）；typecheck/test 只需类型 + 不打模型，npm ci 常规拉取即可。
+      #   peer memoweft ^0.5 || ^0.6：recordAssistantReply（0.6 面）运行时能力探测，dev 软链 0.6 dist 编译。
+      - name: Mastra Adapter Typecheck
+        run: npm run typecheck -w @memoweft/adapter-mastra
+
+      - name: Mastra Adapter Test
+        run: npm test -w @memoweft/adapter-mastra
+
+      - name: Mastra Adapter Build
+        run: npm run build -w @memoweft/adapter-mastra
+
       # docs 里【未标 snippet:skip】的 ts 围栏逐个冒烟跑(无 key、内存库)。放在所有 workspace build
       #   之后:vercel recipe 的验证片段 import '@memoweft/adapter-ai-sdk',需 adapter 的 dist 也 build 好(§18.3)。
       - name: Docs — runnable snippets

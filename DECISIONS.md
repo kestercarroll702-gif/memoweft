@@ -718,3 +718,27 @@ fact-vs-belief +1),是 D-0019/D-0035 判过的**单跑方差特征**。**判据(
 
 **附:FTS 缺口调查结论(2026-07-18·已对抗验证·记档不修)**
 live 库 cognition=42 而 cognition_fts=17 的缺口已查清:2026-07-17 记忆恢复脚本在 memoweft/ 目录运行 → `process.loadEnvFile()` 自动装载 `.env` 的 `DLA_EMBED_*` → createCore 选 VectorRetriever(绕开 FTS)→ 嵌入端点未起 → 向量写入失败被吞进 `indexError`、恢复脚本未打印 ⇒ 双重静默,恢复批 25 条未进关键词索引。**会自愈**:下一轮 `updateProfile` 的 `indexAll` 增量 diff 一次性补插(weftmate 点「立即整理」即时触发;纯启动不触发)。**非技术债,不修**。衍生加固候选已记 ROADMAP Next(indexError 可见性 / ENV_KEYS 清 `DLA_*` 旧名 / 离线脚本必须打印 indexError)。
+
+## D-0038 新增适配器 `@memoweft/adapter-mastra`(Mastra Processor 面·1.2 第①个)
+
+日期:2026-07-18 / 状态:已采纳(人类批准形态岔口;实现已落·门禁全绿)
+背景(动机):D-0037 下一轮 1.2「适配器规模化」打头。生态侦察(2026-07-18·联网实测)定第一个新目标 = **Mastra**(@mastra/core v1.51、~115 万周下载、TS-first 增长最猛):是唯一「高流量 + TS 同族 + 双向钩子与 memoweft 三面 API 一一对应 + repo 尚无覆盖」的净新增目标。既有 6 适配器覆盖 ai-sdk / mcp / claude-agent-sdk / openai-agents / langchain / llamaindex——ROADMAP Next 旧候选(OpenAI Agents/LangChain/LlamaIndex)已全部落地,故 1.2 需定**新**候选。
+
+**接缝(从 @mastra/core@1.51.0 的 `.d.ts` 实测钉死,非文档臆测)**:
+- 接口 `Processor { readonly id; processInput?; processOutputResult? }`(`dist/processors/index.d.ts`),纯接口、无需继承 BaseProcessor。
+- **读缝** `processInput({ messages, systemMessages, state })`:可返回 `{ messages, systemMessages }` 改 **system 通道**(`ProcessInputResultWithSystemMessages`)。
+- **写缝** `processOutputResult({ result, state })`:`result.text`(AI 回复)、`result.steps[].toolResults[].payload.{ result, toolCallId, args }`。
+- `MastraDBMessage { id, role, threadId?, content:{ parts:[{type:'text',text}] } }`——消息自带稳定 `id`(天然 originId)、`threadId`(天然 conversationId)。
+- 注册:`new Agent({ inputProcessors:[p], outputProcessors:[p] })`,同一实例进两路。type:module 纯 ESM、peer 仅 zod。
+
+决定(形态):
+- **读走 system 通道**(比 ai-sdk 塞 user 消息更贴 knowledgeBlock 原意,且物理不碰 user 消息 → 用户原话零污染)。措辞照搬 Core 中性 knowledgeBlock;隐私硬约束不变(provenance/id/score 只经 onRecall、绝不进注入)。
+- **捕获-落库分离(经 processor `state` 跨方法递)**:processInput 捕获【注入前】用户原话 + originId + conversationId 塞进 `state`;processOutputResult 读回落库。**这不只是方便,是 0.6 preceding_ai_context 语义的要求**——须「先有上一轮 AI 在 session 里,再 ingest 本轮 user」,故落库放模型答完后;此刻 session 里正是上一轮 AI 回复,随后 `recordAssistantReply(本轮 AI)` 供下一轮捕获。**state 万一未跨阶段带过来**,processOutputResult 从自己的 messages 兜底取(注入不碰 messages,兜底同样拿到干净原话)——对「state 是否跨阶段共享」这一不确定点的防御。
+- 工具结果只取 `payload.result`/`toolCallId`,**绝不取 `payload.args`(调用入参)/`toolName`**、`result.text` 只经 recordAssistantReply 进上下文窗口——铁律 3a by-construction。
+- **peer `memoweft ^0.5.0 || ^0.6.0` + 能力探测**(人类拍板):`recordAssistantReply` 是 0.6 面,`typeof core.recordAssistantReply === 'function'` 探测——0.6 宿主启用会话上下文线,0.5 宿主降级为基础摄入+召回,均不报错、不卡发布。**首个跨 0.5/0.6 双 peer 的适配器**(其余 6 个都是 `^0.5.0`)。
+- peer `@mastra/core ^1.51.0`(发版快、窄下界,Processor 是公开面相对稳)。
+
+破坏性:**无——纯新增包 `packages/adapter-mastra/`**,只消费 Core 门面(recall/ingestUserMessage/ingestToolResult/recordAssistantReply),**不触 core api-freeze**(`api:check` 一致·已验)。
+影响面:新包 11 文件(package/两 tsconfig/src 4[processor+index+degrade+knowledgeBlock,后二逐字对齐 ai-sdk]/契约测试+golden en/zh/README en+zh/examples)。degrade/knowledgeBlock 照搬件复用。ci.yml +3 步 guardrails;CHANGELOG 同步;root package-lock(+@mastra/core devDep)。
+gate(2026-07-18 实跑):**adapter typecheck 干净 · 契约测试 11/11 绿(AD-1…9,ad5/ad9 声明 N/A、复跑锁 golden)· build 出 dist · 核心 api:check 一致**。
+分级(诚实):`state` 跨 processInput→processOutputResult 是否共享,未启真实 Mastra Agent 端到端验证(离线契约测试驱动 state 手递主路径)——已加 messages 兜底防御;真实端到端待打磨阶段 dogfood 或宿主接入时坐实。
