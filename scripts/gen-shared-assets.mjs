@@ -37,6 +37,8 @@ import { distill } from '../src/distillation/distill.ts';
 import { consolidate } from '../src/consolidation/consolidate.ts';
 import { attribute } from '../src/attribution/attribute.ts';
 import { aggregateTrends } from '../src/background/trends.ts';
+import { proposeAsk } from '../src/asking/proposeAsk.ts';
+import { revisitConflicts } from '../src/asking/revisitConflicts.ts';
 import { validateBundle } from '../src/portable/validateBundle.ts';
 import { BUNDLE_FORMAT, BUNDLE_SCHEMA_VERSION } from '../src/portable/model.ts';
 
@@ -98,7 +100,8 @@ function buildConfigConstants() {
     },
     // attribution 全字段(P2-7 纳入:原只有 hypothesisCap,windowHours/maxPhenomenaPerRun/maxCausesPerHypothesis/minPhenomenonSupport 是归因规则门,跨语言须同源)
     attribution: c.attribution,
-    asking: { confidenceBand: c.asking.confidenceBand, askableStatuses: c.asking.askableStatuses },
+    // asking 全字段(P2-8 纳入:原缺 maxAsks——候选 slice 依赖它,跨语言须同源)
+    asking: c.asking,
     // CARRIER_RANK 未从 deriveFormedBy.ts 导出(内部件),此处照抄并由 formed-by parity 夹具间接钉死其效果。
     carrierRank: { confirmed: 0, observed: 1, stated: 2 }, // deriveFormedBy.ts:62
     minIdPrefix: MIN_ID_PREFIX, // echoedId.ts:17
@@ -698,6 +701,98 @@ async function parityTrends() {
   };
 }
 
+// ── parity 夹具:asking(proposeAsk / revisitConflicts;模板路径 vs LLM 措辞路径)——P2-8 ──
+async function parityAsking() {
+  const T = '2026-01-01T00:00:00.000Z';
+  const mkCog = (id, content, contentType, credStatus, confidence) => ({
+    id, subjectId: 'owner', content, contentType, formedBy: 'inferred', confidence, credStatus,
+    scope: null, validAt: null, invalidAt: null, askedAt: null, archivedAt: null, mutedAt: null, createdAt: T, updatedAt: T,
+  });
+  const dumpProposal = (p) => ({
+    cognitionId: p.cognitionId, kind: p.kind, hypothesis: p.hypothesis, question: p.question,
+    evidenceSummaries: p.evidence.map((e) => e.summary),
+    contradictSummaries: p.contradictEvidence ? p.contradictEvidence.map((e) => e.summary) : null,
+    confidence: p.confidence, credStatus: p.credStatus,
+  });
+  const stubOf = (reply) => {
+    let n = 0;
+    const seen = [];
+    return {
+      seen,
+      llm: {
+        get callCount() {
+          return n;
+        },
+        tier: 'cloud',
+        async chat(m) {
+          seen.push(m);
+          n++;
+          return reply;
+        },
+      },
+    };
+  };
+  const setupAsk = (cfg) => {
+    const st = openStores(':memory:', cfg, () => new Date(T));
+    const put = (sourceKind, rawContent, extra = {}) =>
+      st.evidenceStore.put({ subjectId: 'owner', sourceKind, hostId: 'local', occurredAt: T, rawContent, ...extra });
+    const e1 = put('spoken', '我最近老熬夜');
+    const e2 = put('observed', '凌晨3点还在打游戏', { allowCloudRead: true }); // observed 优先亮出来
+    st.cognitionStore.insert(mkCog('cog-hypo', '可能是熬夜导致没睡好', 'hypothesis', 'candidate', 240), [
+      { evidenceId: e1.id, relation: 'support' },
+      { evidenceId: e2.id, relation: 'support' },
+    ]);
+    return st;
+  };
+  const setupConflict = (cfg) => {
+    const st = openStores(':memory:', cfg, () => new Date(T));
+    const put = (rawContent) => st.evidenceStore.put({ subjectId: 'owner', sourceKind: 'spoken', hostId: 'local', occurredAt: T, rawContent });
+    const e3 = put('我喜欢早睡');
+    const e4 = put('昨晚熬到3点');
+    st.cognitionStore.insert(mkCog('cog-conflict', '喜欢早睡', 'preference', 'conflicted', 600), [
+      { evidenceId: e3.id, relation: 'support' },
+      { evidenceId: e4.id, relation: 'contradict' },
+    ]);
+    return st;
+  };
+  const build = async (lang) => {
+    const cfg = { ...config, language: lang };
+    const clock = () => new Date(T);
+    let s = setupAsk(cfg);
+    const tplAsk = await proposeAsk('owner', { cognitionStore: s.cognitionStore, evidenceStore: s.evidenceStore, config: cfg, clock });
+    const tplAskedAt = s.cognitionStore.get('cog-hypo').askedAt; // markAsked 默认 true
+    s.close();
+
+    s = setupAsk(cfg);
+    const st1 = stubOf('  你最近是不是熬夜比较多?  '); // 带首尾空白验 trim
+    const llmAsk = await proposeAsk('owner', { cognitionStore: s.cognitionStore, evidenceStore: s.evidenceStore, llm: st1.llm, config: cfg, clock });
+    const llmAskMessages = st1.seen[0];
+    s.close();
+
+    s = setupConflict(cfg);
+    const tplRev = await revisitConflicts('owner', { cognitionStore: s.cognitionStore, evidenceStore: s.evidenceStore, config: cfg, clock });
+    s.close();
+
+    s = setupConflict(cfg);
+    const st2 = stubOf('  你现在到底是早睡还是熬夜?  ');
+    const llmRev = await revisitConflicts('owner', { cognitionStore: s.cognitionStore, evidenceStore: s.evidenceStore, llm: st2.llm, config: cfg, clock });
+    const llmRevMessages = st2.seen[0];
+    s.close();
+
+    return {
+      proposeAskTemplate: { proposals: tplAsk.proposals.map(dumpProposal), llmCalls: tplAsk.llmCalls, askedAt: tplAskedAt },
+      proposeAskLlm: { messages: llmAskMessages, proposals: llmAsk.proposals.map(dumpProposal), llmCalls: llmAsk.llmCalls },
+      revisitTemplate: { proposals: tplRev.proposals.map(dumpProposal), llmCalls: tplRev.llmCalls },
+      revisitLlm: { messages: llmRevMessages, proposals: llmRev.proposals.map(dumpProposal), llmCalls: llmRev.llmCalls },
+    };
+  };
+  return {
+    note: 'asking:候选筛选(hypothesis/askedAt null/askableStatuses/confidenceBand)+ observed 优先 + 模板 vs LLM 措辞(trim/空回落)+ 两面证据 + askedAt 去重写',
+    zh: await build('zh'),
+    en: await build('en'),
+  };
+}
+
 // ── parity 夹具:SQLite schema(从 openStores 真建库 dump 权威结构;供 Python 建同构表对拍) ──
 //   dump 逐表列结构(pragma_table_info,驱动无关 → node:sqlite/better-sqlite3 一致)+ user_version。
 function buildSchema() {
@@ -830,6 +925,7 @@ export async function buildSharedAssets() {
   const consolidateFx = await parityConsolidate();
   const attributeFx = await parityAttribute();
   const trendsFx = await parityTrends();
+  const askingFx = await parityAsking();
 
   return {
     'config-constants.json': buildConfigConstants(),
@@ -855,6 +951,7 @@ export async function buildSharedAssets() {
     'parity/consolidate.json': consolidateFx,
     'parity/attribute.json': attributeFx,
     'parity/trends.json': trendsFx,
+    'parity/asking.json': askingFx,
     'parity/schema.json': buildSchema(),
     'parity/fts.json': buildFtsGolden(),
     ...(() => { const bf = buildBundleFixtures(); return { 'parity/bundle.json': bf.bundle, 'parity/bundle-validate.json': bf.validate }; })(),

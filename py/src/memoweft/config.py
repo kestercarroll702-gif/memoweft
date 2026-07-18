@@ -34,6 +34,21 @@ class Consolidation:
 
 
 @dataclass(frozen=True, slots=True)
+class ConfidenceBand:
+    min: int
+    max: int
+
+
+@dataclass(frozen=True, slots=True)
+class Asking:
+    """M5 主动询问策略(config.ts:126-130);全字段 P2-8 纳入 shared(原缺 max_asks)。"""
+
+    max_asks: int
+    confidence_band: ConfidenceBand
+    askable_statuses: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Attribution:
     """M4 归因规则门(config.ts:119-125);全字段 P2-7 纳入 shared(原只有 hypothesis_cap)。"""
 
@@ -78,6 +93,7 @@ class Config:
     trend_window_days: int
     trend_min_count: int
     attribution: Attribution
+    asking: Asking
     min_effective_confidence: int
     carrier_rank: Mapping[str, int]
     min_id_prefix: int
@@ -116,6 +132,11 @@ def _load() -> Config:
             max_phenomena_per_run=c["attribution"]["maxPhenomenaPerRun"],
             max_causes_per_hypothesis=c["attribution"]["maxCausesPerHypothesis"],
             min_phenomenon_support=c["attribution"]["minPhenomenonSupport"],
+        ),
+        asking=Asking(
+            max_asks=c["asking"]["maxAsks"],
+            confidence_band=ConfidenceBand(min=c["asking"]["confidenceBand"]["min"], max=c["asking"]["confidenceBand"]["max"]),
+            askable_statuses=tuple(c["asking"]["askableStatuses"]),
         ),
         min_effective_confidence=c["retrieval"]["minEffectiveConfidence"],
         carrier_rank=dict(c["carrierRank"]),

@@ -8,7 +8,8 @@
     "confidenceBand": {
       "max": 400,
       "min": 100
-    }
+    },
+    "maxAsks": 1
   },
   "attribution": {
     "hypothesisCap": 250,
