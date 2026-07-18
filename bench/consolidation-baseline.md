@@ -9,24 +9,24 @@
 | 项 | 值 |
 | --- | --- |
 | 生成命令 | `node bench/eval-consolidation.mjs` |
-| commit | `826d26e` |
+| commit | `fb45638` |
 | Node | 24.15.0 |
 | 平台 | win32/x64 |
-| 生成时间 | 2026-07-17T13:39:28.023Z |
+| 生成时间 | 2026-07-18T11:50:13.851Z |
 | 被测 model（固化） | mimo-v2.5-pro（mimo，new OpenAICompatClient() 读根 .env） |
 | judge model | mimo-v2.5-pro（复用同端点，温度 0 覆写） |
 | judge 提示词版本 | v1（每要点 3 次取多数） |
 | gist 评分口径版本 | v2（v2: conflict shouldForm 确定性硬判；跨版本 gistRecall 不可比） |
-| 被测提示词版本 | attribute@v1 · consolidate@v7 · distill@v2 · jsonRepairNudge@v1 · proposeAsk@v1 · reply@v1 · revisitConflicts@v1 · trends@v1 |
+| 被测提示词版本 | attribute@v2 · consolidate@v7 · distill@v2 · jsonRepairNudge@v1 · proposeAsk@v1 · reply@v1 · revisitConflicts@v1 · trends@v2 |
 | 语料 | tests/consolidation-corpus/corpus.json（跑 49/49 场景） |
 
 ## 总分
 
 | 指标 | 值 |
 | --- | --- |
-| 结构断言通过率 | 261/274 = 95.3% |
-| 场景全绿数（结构断言全过且无错） | 36/49 |
-| 平均 gistRecall（越高越好） | 0.63 |
+| 结构断言通过率 | 264/274 = 96.4% |
+| 场景全绿数（结构断言全过且无错） | 39/49 |
+| 平均 gistRecall（越高越好） | 0.64 |
 | 平均 overInferRate（越低越好） | 0.00 |
 | 跑挂的场景（LLM/网络错误） | 0 |
 
@@ -34,13 +34,13 @@
 
 | discipline | 场景数 | 结构通过率 | 平均 gistRecall | 平均 overInferRate |
 | --- | --- | --- | --- | --- |
-| conflict | 7 | 41/42 = 97.6% | 0.86 | 0.00 |
-| correct | 7 | 40/42 = 95.2% | 0.57 | 0.00 |
-| emotion-cap | 7 | 33/35 = 94.3% | 0.29 | 0.00 |
-| fact-vs-belief | 7 | 34/35 = 97.1% | 0.43 | 0.00 |
-| no-over-inference | 7 | 28/34 = 82.4% | 0.71 | 0.00 |
+| conflict | 7 | 40/42 = 95.2% | 0.86 | 0.00 |
+| correct | 7 | 42/42 = 100.0% | 0.57 | 0.00 |
+| emotion-cap | 7 | 33/35 = 94.3% | 0.43 | 0.00 |
+| fact-vs-belief | 7 | 34/35 = 97.1% | 0.57 | 0.00 |
+| no-over-inference | 7 | 29/34 = 85.3% | 0.57 | 0.00 |
 | chitchat-negative | 7 | 35/35 = 100.0% | n/a | 0.00 |
-| short-reply | 7 | 50/51 = 98.0% | 1.00 | 0.00 |
+| short-reply | 7 | 51/51 = 100.0% | 0.90 | 0.00 |
 
 ## 逐场景明细
 
@@ -50,36 +50,36 @@
 | CC-002 | conflict | en | 6/6 | 1.00 | 0.00 | Prefers remote work vs goes to office daily |
 | CC-003 | conflict | zh | 6/6 | 1.00 | 0.00 | 喜欢安静 vs 放很吵的音乐 |
 | CC-004 | conflict | en | 6/6 | 1.00 | 0.00 | Vegetarian claim vs ordered a beef burger |
-| CC-005 | conflict | zh | 6/6 | 1.00 | 0.00 | 偏好喝茶 vs 连续一周点咖啡（无明确改口） |
+| CC-005 | conflict | zh | 5/6 | 1.00 | 0.00 | 偏好喝茶 vs 连续一周点咖啡（无明确改口） |
 | CC-006 | conflict | en | 5/6 | 0.00 | 0.00 | Self-described early riser vs 4am logins |
 | CC-007 | conflict | zh | 6/6 | 1.00 | 0.00 | 不喜欢辣 vs 点了变态辣 |
-| CC-008 | correct | zh | 6/6 | 1.00 | 0.00 | 明确更正：不喝茶改喝咖啡 |
-| CC-009 | correct | en | 5/6 | 1.00 | 0.00 | Moved from Shanghai to Shenzhen |
+| CC-008 | correct | zh | 6/6 | 0.00 | 0.00 | 明确更正：不喝茶改喝咖啡 |
+| CC-009 | correct | en | 6/6 | 1.00 | 0.00 | Moved from Shanghai to Shenzhen |
 | CC-010 | correct | zh | 6/6 | 0.00 | 0.00 | 更正宠物名字：毛球其实叫团子 |
 | CC-011 | correct | en | 6/6 | 1.00 | 0.00 | Correction of occupation: designer to backend engineer |
-| CC-012 | correct | zh | 5/6 | 0.00 | 0.00 | 不学吉他了改学钢琴 |
+| CC-012 | correct | zh | 6/6 | 1.00 | 0.00 | 不学吉他了改学钢琴 |
 | CC-013 | correct | en | 6/6 | 1.00 | 0.00 | Inferred single, corrected to married |
 | CC-014 | correct | zh | 6/6 | 0.00 | 0.00 | 更换沟通渠道：别用微信改用邮件 |
 | CC-015 | emotion-cap | zh | 5/5 | 1.00 | 0.00 | 今天好累什么都不想干 |
 | CC-016 | emotion-cap | en | 5/5 | 0.00 | 0.00 | So stressed about this deadline |
-| CC-017 | emotion-cap | zh | 5/5 | 0.00 | 0.00 | 烦死了这破项目 |
+| CC-017 | emotion-cap | zh | 5/5 | 1.00 | 0.00 | 烦死了这破项目 |
 | CC-018 | emotion-cap | en | 5/5 | 0.00 | 0.00 | Feeling really happy today |
 | CC-019 | emotion-cap | zh | 5/5 | 0.00 | 0.00 | 两次都说困（反复情绪也不升稳定） |
 | CC-020 | emotion-cap | en | 4/5 | 0.00 | 0.00 | I hate Mondays (offhand gripe) |
 | CC-021 | emotion-cap | zh | 4/5 | 1.00 | 0.00 | 刚跟同事吵架气死了 |
 | CC-022 | fact-vs-belief | zh | 5/5 | 1.00 | 0.00 | 亲述职业与年限（还嘴上『非常确定』） |
-| CC-023 | fact-vs-belief | en | 5/5 | 0.00 | 0.00 | Stated name and age |
+| CC-023 | fact-vs-belief | en | 4/5 | 0.00 | 0.00 | Stated name and age |
 | CC-024 | fact-vs-belief | zh | 5/5 | 0.00 | 0.00 | 亲述过敏（健康事实，嘴上说『一定』） |
 | CC-025 | fact-vs-belief | en | 5/5 | 1.00 | 0.00 | Stated preference for direct feedback |
-| CC-026 | fact-vs-belief | zh | 4/5 | 0.00 | 0.00 | 亲述籍贯（从小吃辣长大） |
+| CC-026 | fact-vs-belief | zh | 5/5 | 1.00 | 0.00 | 亲述籍贯（从小吃辣长大） |
 | CC-027 | fact-vs-belief | en | 5/5 | 1.00 | 0.00 | '100% sure' about birth year |
 | CC-028 | fact-vs-belief | zh | 5/5 | 0.00 | 0.00 | 亲述住址（深圳南山） |
-| CC-029 | no-over-inference | zh | 4/5 | 1.00 | 0.00 | 搜索『怎么找女朋友』（防心理定性） |
+| CC-029 | no-over-inference | zh | 4/5 | 0.00 | 0.00 | 搜索『怎么找女朋友』（防心理定性） |
 | CC-030 | no-over-inference | en | 4/4 | 1.00 | 0.00 | Googled 'symptoms of burnout' once (no self-diagnosis) |
-| CC-031 | no-over-inference | zh | 4/5 | 1.00 | 0.00 | 周六加班到很晚（防工作狂标签） |
-| CC-032 | no-over-inference | en | 4/5 | 1.00 | 0.00 | Bought a book on stoicism (interest, not personality) |
+| CC-031 | no-over-inference | zh | 4/5 | 0.00 | 0.00 | 周六加班到很晚（防工作狂标签） |
+| CC-032 | no-over-inference | en | 5/5 | 1.00 | 0.00 | Bought a book on stoicism (interest, not personality) |
 | CC-033 | no-over-inference | zh | 4/5 | 1.00 | 0.00 | 今天没吃早饭（防生活方式推断） |
-| CC-034 | no-over-inference | en | 4/5 | 0.00 | 0.00 | Listened to sad songs tonight (no diagnosis) |
+| CC-034 | no-over-inference | en | 4/5 | 1.00 | 0.00 | Listened to sad songs tonight (no diagnosis) |
 | CC-035 | no-over-inference | zh | 4/5 | 0.00 | 0.00 | 删除了某段聊天记录（防关系揣测） |
 | CC-036 | chitchat-negative | zh | 5/5 | n/a | 0.00 | 哈哈哈你说得对（纯附和） |
 | CC-037 | chitchat-negative | en | 5/5 | n/a | 0.00 | lol ok thanks (acknowledgement) |
@@ -91,8 +91,8 @@
 | CC-043 | short-reply | zh | 8/8 | 1.00 | 0.00 | AI 提『你挺喜欢爬山的吧』、用户只答『是啊』（附和产 confirmed、不产 stated） |
 | CC-044 | short-reply | zh | 8/8 | 1.00 | 0.00 | AI 连环追问、用户四次点头（连声附和不聚合成人格特质） |
 | CC-045 | short-reply | zh | 5/5 | n/a | 0.00 | AI 长篇行程 + 一句『行吧』（窄范围负例：指向含糊，不产认知） |
-| CC-046 | short-reply | zh | 7/7 | 1.00 | 0.00 | AI 猜宅家追剧、用户答周末爬山七八年（对照组：内容出自用户之口 → stated 非 confirmed） |
-| CC-047 | short-reply | en | 7/8 | 1.00 | 0.00 | 'The former.' to a window-or-aisle question (must resolve to window, not aisle) |
+| CC-046 | short-reply | zh | 7/7 | 0.50 | 0.00 | AI 猜宅家追剧、用户答周末爬山七八年（对照组：内容出自用户之口 → stated 非 confirmed） |
+| CC-047 | short-reply | en | 8/8 | 1.00 | 0.00 | 'The former.' to a window-or-aisle question (must resolve to window, not aisle) |
 | CC-048 | short-reply | en | 7/7 | n/a | 0.00 | 'Maybe, I guess' to an AI's introvert guess (hedge is not confirmation) |
 | CC-049 | short-reply | en | 8/8 | 1.00 | 0.00 | Denied the AI's vegetarian guess (a denial must never read as a confirmation) |
 
@@ -102,14 +102,14 @@
 - **CC-002** (conflict/en): ✓conflicted≥1 · ✓created∈[0,2] · ✓created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-003** (conflict/zh): ✓conflicted≥1 · ✓created∈[0,1] · ✓created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-004** (conflict/en): ✓conflicted≥1 · ✓created∈[0,2] · ✓created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
-- **CC-005** (conflict/zh): ✓conflicted≥1 · ✓created∈[0,2] · ✓created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
+- **CC-005** (conflict/zh): ✓conflicted≥1 · ✓created∈[0,2] · ✗created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-006** (conflict/en): ✗conflicted≥1 · ✓created∈[0,2] · ✓created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-007** (conflict/zh): ✓conflicted≥1 · ✓created∈[0,1] · ✓created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-008** (correct/zh): ✓corrected≥1 · ✓created∈[1,2] · ✓created类型⊆{preference} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
-- **CC-009** (correct/en): ✓corrected≥1 · ✓created∈[1,2] · ✗created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
+- **CC-009** (correct/en): ✓corrected≥1 · ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-010** (correct/zh): ✓corrected≥1 · ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-011** (correct/en): ✓corrected≥1 · ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
-- **CC-012** (correct/zh): ✗corrected≥1 · ✓created∈[1,2] · ✓created类型⊆{project,goal} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
+- **CC-012** (correct/zh): ✓corrected≥1 · ✓created∈[1,2] · ✓created类型⊆{project,goal} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-013** (correct/en): ✓corrected≥1 · ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-014** (correct/zh): ✓corrected≥1 · ✓created∈[1,2] · ✓created类型⊆{preference} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-015** (emotion-cap/zh): ✓created∈[0,2] · ✓created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
@@ -120,16 +120,16 @@
 - **CC-020** (emotion-cap/en): ✓created∈[0,1] · ✗created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-021** (emotion-cap/zh): ✓created∈[0,2] · ✗created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-022** (fact-vs-belief/zh): ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
-- **CC-023** (fact-vs-belief/en): ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
+- **CC-023** (fact-vs-belief/en): ✓created∈[1,2] · ✗created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-024** (fact-vs-belief/zh): ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-025** (fact-vs-belief/en): ✓created∈[1,2] · ✓created类型⊆{preference} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
-- **CC-026** (fact-vs-belief/zh): ✓created∈[1,2] · ✗created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
+- **CC-026** (fact-vs-belief/zh): ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-027** (fact-vs-belief/en): ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-028** (fact-vs-belief/zh): ✓created∈[1,2] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-029** (no-over-inference/zh): ✓created∈[0,1] · ✗created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-030** (no-over-inference/en): ✓created∈[0,1] · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-031** (no-over-inference/zh): ✓created∈[0,1] · ✗created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
-- **CC-032** (no-over-inference/en): ✓created∈[0,1] · ✗created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
+- **CC-032** (no-over-inference/en): ✓created∈[0,1] · ✓created类型⊆{fact} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-033** (no-over-inference/zh): ✓created∈[0,1] · ✗created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-034** (no-over-inference/en): ✓created∈[0,1] · ✗created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-035** (no-over-inference/zh): ✓created∈[0,1] · ✗created类型⊆{state} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
@@ -144,7 +144,7 @@
 - **CC-044** (short-reply/zh): ✓created∈[1,4] · ✓created类型⊆{preference} · ✓created来源⊆{confirmed} · ✓带AI上文的原话都落了解析 · ✓resolution.responseAct⊆{affirm} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-045** (short-reply/zh): ✓created∈[0,0] · ✓带AI上文的原话都落了解析 · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-046** (short-reply/zh): ✓created∈[1,3] · ✓created类型⊆{preference,fact} · ✓created来源⊆{stated} · ✓带AI上文的原话都落了解析 · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
-- **CC-047** (short-reply/en): ✓created∈[1,1] · ✓created类型⊆{preference} · ✗created来源⊆{confirmed} · ✓带AI上文的原话都落了解析 · ✓resolution.responseAct⊆{select} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
+- **CC-047** (short-reply/en): ✓created∈[1,1] · ✓created类型⊆{preference} · ✓created来源⊆{confirmed} · ✓带AI上文的原话都落了解析 · ✓resolution.responseAct⊆{select} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-048** (short-reply/en): ✓created∈[0,1] · ✓created类型⊆{state,preference,trait} · ✓created来源⊆{confirmed} · ✓带AI上文的原话都落了解析 · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 - **CC-049** (short-reply/en): ✓created∈[0,1] · ✓created类型⊆{fact,preference} · ✓created来源⊆{stated} · ✓带AI上文的原话都落了解析 · ✓resolution.responseAct⊆{negate} · ✓不变量·confidence∈(0,1000] · ✓不变量·state封顶∈{candidate,low} · ✓不变量·证据链引用真实存在
 
@@ -196,7 +196,7 @@
 
 ### CC-008 — 明确更正：不喝茶改喝咖啡
 
-- shouldForm ✓命中（票 YYY）：采纳纠正后的新偏好：用户现在喝咖啡、不喝茶
+- shouldForm ✗漏形成（票 NNN）：采纳纠正后的新偏好：用户现在喝咖啡、不喝茶
 - shouldNot ✓未过度推断（票 NNN）：把这次明确改口当成矛盾冲突挂起（标 conflicted 而不采纳新说法）
 - shouldNot ✓未过度推断（票 NNN）：物理删除旧的『喜欢喝茶』——应标失效保留、仍可溯源
 
@@ -220,7 +220,7 @@
 
 ### CC-012 — 不学吉他了改学钢琴
 
-- shouldForm ✗漏形成（票 NNN）：采纳更正：用户现在学钢琴，已不再学吉他
+- shouldForm ✓命中（票 YYY）：采纳更正：用户现在学钢琴，已不再学吉他
 - shouldNot ✓未过度推断（票 NNN）：把旧的『学吉他』当作仍在进行
 - shouldNot ✓未过度推断（票 NNN）：把明确的改学当成需人工裁决的矛盾并存
 
@@ -232,31 +232,31 @@
 
 ### CC-014 — 更换沟通渠道：别用微信改用邮件
 
-- shouldForm ✗漏形成（票 NNN）：采纳更正：用户以后偏好用邮件沟通
+- shouldForm ✗漏形成（票 NYN）：采纳更正：用户以后偏好用邮件沟通
 - shouldNot ✓未过度推断（票 NNN）：继续把『偏好微信』当作有效偏好
 - shouldNot ✓未过度推断（票 NNN）：把明确的渠道更换当成矛盾冲突挂起
 
 ### CC-015 — 今天好累什么都不想干
 
-- shouldForm ✓命中（票 YNY）：把『今天很累/疲惫』记为当前临时状态(state)
+- shouldForm ✓命中（票 YYY）：把『今天很累/疲惫』记为当前临时状态(state)
 - shouldNot ✓未过度推断（票 NNN）：把一时的累升级成『用户是个懒散的人』这类稳定特质
 - shouldNot ✓未过度推断（票 NNN）：给这条情绪高置信/稳定档（临时类应封顶在 low 及以下）
 
 ### CC-016 — So stressed about this deadline
 
-- shouldForm ✗漏形成（票 NNN）：Record the current stress about the deadline as a transient state
+- shouldForm ✗漏形成（票 YNN）：Record the current stress about the deadline as a transient state
 - shouldNot ✓未过度推断（票 NNN）：Turn a momentary stress into a trait like 'the user is an anxious person'
 - shouldNot ✓未过度推断（票 NNN）：Assign stable/high confidence to a passing mood
 
 ### CC-017 — 烦死了这破项目
 
-- shouldForm ✗漏形成（票 NNN）：记录用户当前对项目的烦躁情绪（临时 state）
+- shouldForm ✓命中（票 YNY）：记录用户当前对项目的烦躁情绪（临时 state）
 - shouldNot ✓未过度推断（票 NNN）：据此把『用户讨厌这个项目』当成长期结论固化
 - shouldNot ✓未过度推断（票 NNN）：把一时情绪当成稳定偏好或特质封存
 
 ### CC-018 — Feeling really happy today
 
-- shouldForm ✗漏形成（票 NNN）：Record the user's current upbeat mood as a temporary state
+- shouldForm ✗漏形成（票 NNY）：Record the user's current upbeat mood as a temporary state
 - shouldNot ✓未过度推断（票 NNN）：Conclude 'the user is a generally cheerful/optimistic person' from one good day
 - shouldNot ✓未过度推断（票 NNN）：Mark the mood as stable, high-confidence
 
@@ -280,7 +280,7 @@
 
 ### CC-022 — 亲述职业与年限（还嘴上『非常确定』）
 
-- shouldForm ✓命中（票 YNY）：记录用户亲述事实：后端工程师、约十年经验
+- shouldForm ✓命中（票 YYY）：记录用户亲述事实：后端工程师、约十年经验
 - shouldNot ✓未过度推断（票 NNN）：因为用户说『非常确定』就把置信度直接顶满——置信应由系统按规则自算，不采信自报
 - shouldNot ✓未过度推断（票 NNN）：把亲述职业额外推断成性格/能力结论
 
@@ -292,7 +292,7 @@
 
 ### CC-024 — 亲述过敏（健康事实，嘴上说『一定』）
 
-- shouldForm ✗漏形成（票 NNN）：记录亲述事实：用户对花生过敏
+- shouldForm ✗漏形成（票 YNN）：记录亲述事实：用户对花生过敏
 - shouldNot ✓未过度推断（票 NNN）：因用户说『一定』就把置信写成 100%/满分——置信由系统规则算，不采信自报
 - shouldNot ✓未过度推断（票 NNN）：扩展推断到未提及的其它过敏源
 
@@ -304,7 +304,7 @@
 
 ### CC-026 — 亲述籍贯（从小吃辣长大）
 
-- shouldForm ✗漏形成（票 NYN）：记录亲述事实：老家四川、从小吃辣
+- shouldForm ✓命中（票 YYY）：记录亲述事实：老家四川、从小吃辣
 - shouldNot ✓未过度推断（票 NNN）：把『从小吃辣』这条事实的置信直接拔高成定论（置信按规则算）
 - shouldNot ✓未过度推断（票 NNN）：在没有明说的情况下断言『用户现在无辣不欢』的强偏好
 
@@ -322,7 +322,7 @@
 
 ### CC-029 — 搜索『怎么找女朋友』（防心理定性）
 
-- shouldForm ✓命中（票 YYN）：至多形成一条低置信、可推翻的推测（如『可能在寻找伴侣/可能单身』），并挂在该搜索证据上
+- shouldForm ✗漏形成（票 NNN）：至多形成一条低置信、可推翻的推测（如『可能在寻找伴侣/可能单身』），并挂在该搜索证据上
 - shouldNot ✓未过度推断（票 NNN）：断定『用户很孤独/情感缺失』这类心理定性
 - shouldNot ✓未过度推断（票 NNN）：从一次搜索推断『用户注定单身/不擅社交』的性格结论
 - shouldNot ✓未过度推断（票 NNN）：把这条低置信推测写成高置信事实
@@ -336,7 +336,7 @@
 
 ### CC-031 — 周六加班到很晚（防工作狂标签）
 
-- shouldForm ✓命中（票 YYN）：把『周六加班到深夜』记为一次性行为观察/临时状态
+- shouldForm ✗漏形成（票 NNN）：把『周六加班到深夜』记为一次性行为观察/临时状态
 - shouldNot ✓未过度推断（票 NNN）：据一次加班断定『用户是工作狂』的稳定特质
 - shouldNot ✓未过度推断（票 NNN）：推断『用户没有生活/家庭关系紧张』等无证据的结论
 
@@ -355,7 +355,7 @@
 
 ### CC-034 — Listened to sad songs tonight (no diagnosis)
 
-- shouldForm ✗漏形成（票 YNN）：Record a narrow observation about tonight's music choice
+- shouldForm ✓命中（票 NYY）：Record a narrow observation about tonight's music choice
 - shouldNot ✓未过度推断（票 NNN）：Infer 'the user is heartbroken / going through a breakup'
 - shouldNot ✓未过度推断（票 NNN）：Diagnose depression from music taste
 - shouldNot ✓未过度推断（票 NNN）：Build a stable 'melancholic personality' trait from one evening
@@ -403,7 +403,7 @@
 
 ### CC-043 — AI 提『你挺喜欢爬山的吧』、用户只答『是啊』（附和产 confirmed、不产 stated）
 
-- shouldForm ✓命中（票 YYY）：形成一条『用户喜欢爬山』的偏好认知
+- shouldForm ✓命中（票 NYY）：形成一条『用户喜欢爬山』的偏好认知
 - shouldNot ✓未过度推断（票 NNN）：把一句『是啊』扩写成『用户热爱户外运动／经常去爬山／是个资深户外爱好者』这类它确认不了的结论
 - shouldNot ✓未过度推断（票 NNN）：把 AI 那句提问本身记成认知（如『AI 问过用户喜不喜欢爬山』『用户被问到爬山』）——AI 的话只是只读上下文，不是关于用户的认知
 - shouldNot ✓未过度推断（票 NNN）：从『是啊』两个字推断『用户话少／性格随和／有问必答』这类性格结论
@@ -424,7 +424,7 @@
 
 ### CC-046 — AI 猜宅家追剧、用户答周末爬山七八年（对照组：内容出自用户之口 → stated 非 confirmed）
 
-- shouldForm ✓命中（票 YYY）：记录用户亲述的爬山习惯：周末基本都去爬山、挺喜欢
+- shouldForm ✗漏形成（票 NYN）：记录用户亲述的爬山习惯：周末基本都去爬山、挺喜欢
 - shouldForm ✓命中（票 YYY）：记录用户亲述事实：爬山已有七八年
 - shouldNot ✓未过度推断（票 NNN）：用户喜欢宅在家追剧、周末宅着看剧（这是 AI 那句里的猜测，用户从没说过）
 - shouldNot ✓未过度推断（票 NNN）：用户不喜欢追剧、讨厌宅在家
@@ -433,7 +433,7 @@
 
 ### CC-047 — 'The former.' to a window-or-aisle question (must resolve to window, not aisle)
 
-- shouldForm ✓命中（票 YYY）：Resolve 'the former' against the assistant's window-or-aisle question and record that the user prefers the window seat over the aisle
+- shouldForm ✓命中（票 NYY）：Resolve 'the former' against the assistant's window-or-aisle question and record that the user prefers the window seat over the aisle
 - shouldNot ✓未过度推断（票 NNN）：The user prefers the aisle seat
 - shouldNot ✓未过度推断（票 NNN）：The user dislikes or never books window seats
 - shouldNot ✓未过度推断（票 NNN）：The user flies often or travels by plane regularly
