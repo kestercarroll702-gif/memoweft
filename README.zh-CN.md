@@ -52,6 +52,12 @@ Done. (in-memory database — nothing written to disk)
 
 [阅读四幕演示说明](https://github.com/memoweft/memoweft/blob/main/docs/demo-script.zh-CN.md) · [查看离线演示源码](https://github.com/memoweft/memoweft/blob/main/examples/no-key-demo.ts)
 
+### WeftMate 的实际产品体验
+
+[WeftMate](https://www.weftmate.com/) 是一款桌面产品，使用 MemoWeft 把对话线索整理为可见、可由用户修改的画像。MemoWeft 提供可移植的记忆层；产品体验仍留在 Core 之外。
+
+![WeftMate 画像界面，展示可供用户查看和修改的、由对话线索形成的画像信息](https://raw.githubusercontent.com/memoweft/memoweft/main/assets/weftmate-memory-demo.png)
+
 同一组行为还由离线回归和 API 表面检查覆盖。CI 在 Node 24 上运行完整门禁，在 Node 22 上做 Core 兼容测试，并在 Node 20 上做已构建包的 SQLite smoke test。详见[实验与复现协议](https://github.com/memoweft/memoweft/blob/main/BENCHMARKS.md)。
 
 ## 为什么是 MemoWeft
