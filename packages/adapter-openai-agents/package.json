@@ -51,7 +51,7 @@
     "memoweft": "^0.6.0"
   },
   "devDependencies": {
-    "@openai/agents": "^0.13",
+    "@openai/agents": "^0.13.5",
     "memoweft": "*"
   }
 }

@@ -47,11 +47,11 @@
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "peerDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.207",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.215",
     "memoweft": "^0.5.1 || ^0.6.0"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.207",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.215",
     "memoweft": "*"
   }
 }

@@ -57,7 +57,7 @@
     }
   },
   "devDependencies": {
-    "@langchain/core": "^1.2.2",
+    "@langchain/core": "^1.2.3",
     "langchain": "^1.5.3",
     "memoweft": "*"
   }
