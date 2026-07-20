@@ -56,6 +56,8 @@ export interface MemoWeftConfig {
     /** 临时类内容（如 state）：置信封顶、永不进"稳定/有限"（分型时间策略）。 */
     transientTypes: string[];
     transientCap: number;
+    /** 含糊自述封顶：用户主动说、但话说得含糊（assertion_strength=weak）时的把握度上限。 */
+    hedgeCap: number;
   };
   /** 归因：从现象和时间窗证据推导可解释、可推翻的假设。 */
   attribution: {
@@ -120,6 +122,7 @@ export const config: MemoWeftConfig = {
     credThresholds: { stable: 750, limited: 500, low: 300 },
     transientTypes: ['state'],
     transientCap: 300,
+    hedgeCap: 280, // 含糊自述封顶，取值对齐 confirmed 底分 280：主动含糊自述不该比"点头认一个已钉死的命题"更有把握；自然封顶 280+支持满200=480<limited500 → 顶天"低置信"，且落进 asking.confidenceBand[100,400] → 会被主动澄清而不是被当成事实用
   },
   attribution: {
     windowHours: 24, // 现象（如"昨晚没睡好"）回看 24h，能捞到"凌晨 3:30 玩游戏"

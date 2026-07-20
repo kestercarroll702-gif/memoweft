@@ -14,7 +14,11 @@ import type { Cognition, EvidenceLink, EvidenceRelation } from '../cognition/mod
 import type { Evidence } from '../evidence/model.ts';
 import type { EventWithEvidence } from '../event/model.ts';
 import type { Retriever } from '../retrieval/retriever.ts';
-import { computeConfidence, deriveCredStatus } from '../consolidation/confidence.ts';
+import {
+  computeConfidence,
+  deriveCredStatus,
+  isHedgedStated,
+} from '../consolidation/confidence.ts';
 import { effectiveConfidence } from '../background/decay.ts';
 import { systemClock, type Clock } from '../clock.ts';
 
@@ -259,6 +263,35 @@ export function createMemoryManagementAPI(
     return out;
   }
 
+  /**
+   * 重算期的 hedged 判据（含糊自述封顶；与 consolidate 的 `resolveHedged` 同一语义）。
+   *
+   * **为什么这三个重算点都得算**：hedged **不落库**，每次都从支持证据链重新派生。一条含糊自述
+   * 封顶在 280，只要这里漏算，用户在记忆管理页删掉一条无关证据 / 在确认式 UI 上点一下「对」/
+   * 合并两条认知，把握度就静默反弹回 600+——一个肯定动作抹掉了「这话说得含糊」这个事实。
+   *
+   * **为什么不与 consolidate 共用一份实现**：那边的重算点执行时，本轮 LLM 产的解析还没落库
+   * （落库循环在写循环之后），必须做「库优先 + 内存兜底」的混合读；这里的证据全是【既有落库证据】，
+   * 解析早在表里，纯查表即可。另外这里的 `semanticResolutionStore` 来自 StoreBundle（**非可选**），
+   * 不存在 consolidate 那边的缺席退化——两侧能力本就不对等，硬合并只会把弱侧的退化传染给强侧。
+   *
+   * ⚠ 不变式：传进来的 `links` 必须与算 `supportCount` 用的是同一份链快照（改完链之后取的那一份）。
+   */
+  function hedgedOf(cog: Cognition, links: readonly EvidenceLink[]): boolean {
+    // 非 stated 恒 false（`isHedgedStated` 同判）——提前挡掉，省一次查表。
+    if (cog.formedBy !== 'stated') return false;
+    const supportIds = links.filter((l) => l.relation === 'support').map((l) => l.evidenceId);
+    if (supportIds.length === 0) return false;
+    // 一次批量查（走 ix_semres_evidence），不逐条 ofEvidence；查不到的按「解析不出不臆造惩罚」当 null。
+    const byId = new Map(
+      semanticResolutionStore.forEvidenceIds(supportIds).map((r) => [r.evidenceId, r] as const),
+    );
+    return isHedgedStated(
+      cog.formedBy,
+      supportIds.map((id) => byId.get(id) ?? null),
+    );
+  }
+
   return {
     invalidateCognition({ cognitionId, reason }) {
       return transaction(() => {
@@ -330,12 +363,18 @@ export function createMemoryManagementAPI(
           const links = cognitionStore.sourcesOf(cogId);
           const supportCount = links.filter((l) => l.relation === 'support').length;
           const contradictCount = links.filter((l) => l.relation === 'contradict').length;
+          // 接线点 6/8 · removeEvidenceSafely。hedged 按【剩余】链重派生：与置信度重算同口径。
+          //   **必须接**：用户只是删掉一条无关证据，若 hedged 蒸发，这条含糊自述会从 280
+          //   反弹回 600——删证据反而让系统更笃定。
+          //   顺序依赖（勿调换）：上面的 `semanticResolutionStore.removeByEvidenceIds` 在本循环【之前】
+          //   执行，所以被删证据的解析已同步消失，此处回查看到的正是删后视图。
           let confidence = computeConfidence(
             {
               contentType: cog.contentType,
               formedBy: cog.formedBy,
               supportCount,
               contradictCount,
+              hedged: hedgedOf(cog, links),
             },
             cfg,
           );
@@ -422,12 +461,18 @@ export function createMemoryManagementAPI(
         const links = cognitionStore.sourcesOf(cognitionId);
         const supportCount = links.filter((l) => l.relation === 'support').length;
         const contradictCount = links.filter((l) => l.relation === 'contradict').length;
+        // 接线点 7/8 · reinforceCognition。**必须接**：本路径是确认式 UI 的主入口——
+        //   用户点一下「对」补一条证据，若 hedged 蒸发，认知立刻从 280 涨到 640。
+        //   「他点头确认了」不等于「他当初说得不含糊」：补证据只该加支持分，
+        //   不该把含糊自述的封顶一起取消。
+        //   links 取自 addEvidence 之后（含本次新挂的那条），与 supportCount 同一份快照。
         let confidence = computeConfidence(
           {
             contentType: cog.contentType,
             formedBy: cog.formedBy,
             supportCount,
             contradictCount,
+            hedged: hedgedOf(cog, links),
           },
           cfg,
         );
@@ -544,12 +589,18 @@ export function createMemoryManagementAPI(
         const links = cognitionStore.sourcesOf(targetId);
         const supportCount = links.filter((l) => l.relation === 'support').length;
         const contradictCount = links.filter((l) => l.relation === 'contradict').length;
+        // 接线点 8/8 · mergeCognition。hedged 按【合并后的完整 support 集】重新派生
+        //   （links 已是搬链之后的视图，与 supportCount 同源）。
+        //   **必须接**，且判定天然双向：两条含糊认知合并 → 仍无 explicit → 继续封顶 280；
+        //   source 带来一条 explicit 的主动陈述 → 「没有 explicit」不再成立 → 封顶自动解除。
+        //   合并只是把证据搬到一起，判据永远重新从证据算，不继承任何一侧的旧结论。
         let confidence = computeConfidence(
           {
             contentType: target.contentType,
             formedBy: target.formedBy,
             supportCount,
             contradictCount,
+            hedged: hedgedOf(target, links),
           },
           cfg,
         );
