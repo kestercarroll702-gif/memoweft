@@ -31,6 +31,9 @@ class Consolidation:
     cred_thresholds: CredThresholds
     transient_types: tuple[ContentType, ...]
     transient_cap: int
+    #: 含糊自述封顶(280,与 confirmed 底分对齐):自然封顶 480<limited 500,
+    #: 且落进 asking.confidence_band[100,400] → 会被主动澄清,而不是拿着 600 装确定。
+    hedge_cap: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +124,7 @@ def _load() -> Config:
             cred_thresholds=CredThresholds(**{k: cons["credThresholds"][k] for k in ("stable", "limited", "low")}),
             transient_types=tuple(cons["transientTypes"]),
             transient_cap=cons["transientCap"],
+            hedge_cap=cons["hedgeCap"],
         ),
         half_life_days=dict(c["background"]["halfLifeDays"]),
         expire_after_days=dict(c["background"]["expireAfterDays"]),

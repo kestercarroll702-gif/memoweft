@@ -17,6 +17,8 @@ def test_confidence_bit_exact() -> None:
                 formed_by=i["formedBy"],
                 support_count=i["supportCount"],
                 contradict_count=i["contradictCount"],
+                # 用 .get 而非 i["hedged"]：夹具省略该键 = 不封顶（既有调用点行为不变），新旧夹具都能跑。
+                hedged=i.get("hedged", False),
             )
         )
         assert got == case["expected"], f"computeConfidence 分叉 @ {i}: got {got}, want {case['expected']}"

@@ -53,15 +53,19 @@ function deriveOne(e: CarrierInput): CarrierFormedBy {
   // 派生表第 3 行：用户自己说出来的内容 → stated。
   if (r.propositionOrigin === 'user_stated') return 'stated';
 
-  // assistant_proposed：命题是 AI 提的、载体不是用户 → 至多 confirmed（表第 4/5/6 行：affirm / weak / select）。
+  // assistant_proposed：命题是 AI 提的、载体不是用户 → 至多 confirmed（表第 4/5/6 行：affirm / select）。
+  //   （旧注释在这里把 weak 与 affirm / select 并列，是**串维了**：`ResponseAct` 联合类型里根本没有
+  //     weak，它是 `assertion_strength` 的取值。「话说得含不含糊」与「谁的话」正交，由 confidence 层的
+  //     hedged 处理——见 confidence.ts 的 `isHedgedStated` / `hedgeCap`；本函数自始至终不读它。）
   //   唯一例外是 negate：用户否认 AI 的猜测时，被断言的是
   //   那个【否定命题】，而那是用户自己的明确表达 → stated。
   if (r.responseAct === 'negate') return 'stated';
 
   // 其余 response_act（affirm / select / elaborate / ask / none / other / null）在 assistant_proposed 下
   //   一律 confirmed —— 保守：命题既然是 AI 提的，载体就不是用户，绝不可升到 stated。
-  //   （表只明确议定了 affirm / weak / select / negate；elaborate / ask / none / other 属表未覆盖的组合，
-  //     按「assistant_proposed ⇒ 载体不是用户」这条上位原则收敛，不另立规则。）
+  //   （表只明确议定了 affirm / select / negate；elaborate / ask / none / other 属表未覆盖的组合，
+  //     按「assistant_proposed ⇒ 载体不是用户」这条上位原则收敛，不另立规则。
+  //     表里同栏出现的 weak 属 assertion_strength 维、不是 response_act，故不在本清单内，见上。）
   return 'confirmed';
 }
 

@@ -22,7 +22,7 @@ import type {
   AssertionStrength,
 } from '../interaction/model.ts';
 import type { LLMClient, ChatMessage } from '../llm/client.ts';
-import { computeConfidence, deriveCredStatus } from './confidence.ts';
+import { computeConfidence, deriveCredStatus, isHedgedStated } from './confidence.ts';
 import { deriveFormedBy } from './deriveFormedBy.ts';
 import { filterReadableByTier } from '../evidence/privacy.ts';
 import { sourceLabel, aiContextSuffix } from '../evidence/sourceLabel.ts';
@@ -39,10 +39,13 @@ export interface ConsolidateDeps {
   evidenceStore: EvidenceStore;
   cognitionStore: CognitionStore;
   /** 语义解析 store（**可选**）：接了则把每条证据的语义解析落 semantic_resolution 表。
-   *  不接它也不影响 formedBy 派生 —— `deriveFormedBy` 使用本次 LLM 产的解析
-   *  （内存里的 `resolutionOf`）、**不读表**，所以本依赖始终可选，接了只是多一份可追溯的落库。
-   *  （这也是为什么没有把它改成必需：唯一要读历史解析的场景本是 reinforce 的升级路，
-   *   当前规则取消升级路，改为并存新认知。） */
+   *  **载体维派生仍不读表** —— `deriveFormedBy` 用的是本次 LLM 产的解析（内存里的 `resolutionOf`）。
+   *  但 **hedged（含糊自述封顶）的重算期派生要读表**：reinforce/conflict 按【全链】重算把握度，
+   *  链上多是既往轮次的历史证据，它们的解析只存在于表里（见下方 `resolveHedged`）。
+   *  不接它 ⇒ 历史证据那部分查不出解析，按「解析不出就不臆造惩罚」退化成不封顶：
+   *  方向保守（可能少封顶，绝不会凭空封顶），但重算期的封顶会静默失真——**生产接线务必接上**。
+   *  （原注释以「唯一要读历史解析的场景是 reinforce 的升级路、而升级路已取消」论证本依赖恒可选；
+   *   该理由自 hedged 接入起不再成立，故一并订正，不留骗后人的契约说明。） */
   semanticResolutionStore?: SemanticResolutionStore;
   llm: LLMClient;
   /** 事务器（可选）：接了共享连接就传它，把下方多步写（new/correct/conflict/reinforce + markConsolidated）
@@ -460,6 +463,46 @@ export async function consolidate(
     return deriveFormedBy(inputs) ?? 'inferred';
   };
 
+  /**
+   * 算一条认知的 hedged（含糊自述封顶的判据；public contract）。
+   *
+   * 与载体维【正交】：载体维答「谁的话」（`resolveFormedBy`，本函数完全不参与它的计算），
+   * hedged 答「这话说得含不含糊」。用户主动说的含糊断言（「我可能不太会做饭」）连命题边界
+   * 都没定，此前与「我是素食者」同拿 stated 底分 600；而点头认 AI 猜测的含糊只有 confirmed 280
+   * ——保守性倒置。封顶动作本身在 `computeConfidence` 里（min(hedgeCap)），这里只出判据。
+   *
+   * **为什么是「库优先、内存兜底」而不是反过来**：文末的解析落库循环对「库里已有解析」的证据
+   * **跳过写入**（幂等），所以**库里那份才是会活下来的那份**。若让内存赢，就会出现：本轮按内存
+   * 那份（马上要被丢弃的）算出 600，而此后每一次重算读到库里那份旧的算出 280 —— 同一条认知在
+   * 600/280 之间**永久分叉**。可达路径：同一条证据挂在两个事件上而其中一个尚未消化；
+   * importBundle 还原未消化事件时库里已有该证据的解析。故：库里有就以库为准，内存只补库里还没有的
+   * （= 本轮新证据，它们的解析此刻确实还没落库——落库循环在四个写循环之后）。
+   *
+   * **store 缺席时的退化边界**（`semanticResolutionStore` 是可选依赖）：历史证据查不出解析，
+   * 按「解析不出不臆造惩罚」当作没有该维 ⇒ 可能少封顶，绝不会凭空封顶。本轮证据的 hedged
+   * 仍然准确（走内存那半边），静默失效面被压到只剩历史证据部分。
+   *
+   * ⚠ **不变式（漏了必错）**：`supportIds` 恒等于同一调用点传给 `supportCount` 的那一个集合。
+   * reinforce 重算传【全链】，并存新认知传【本轮 add】——两处 support 集合定义本就不同（见并存路
+   * 的论证）。若在并存路误用全链，链上旧的附和证据会让「没有 explicit」不成立，封顶永不触发。
+   */
+  const resolveHedged = (formedBy: FormedBy, supportIds: readonly string[]): boolean => {
+    // 非 stated / 空支持集恒 false（`isHedgedStated` 同判）——提前挡掉，省下重算期那次查表。
+    if (formedBy !== 'stated' || supportIds.length === 0) return false;
+    /** 回查只需这两维：`isHedgedStated` 不看 sourceKind/precedingAiContext（那是载体维才要的），
+     *  所以重算期不必碰 evidenceStore/carrierOf——这正是本方案能落地的结构原因。 */
+    const stored = new Map<
+      string,
+      { propositionOrigin: PropositionOrigin | null; assertionStrength: AssertionStrength | null }
+    >();
+    // 一次批量查（走 ix_semres_evidence），不逐条 ofEvidence。
+    for (const r of deps.semanticResolutionStore?.forEvidenceIds([...supportIds]) ?? [])
+      stored.set(r.evidenceId, r);
+    // 库优先、内存兜底（理由见上：落库幂等 ⇒ 库里那份才是活下来的那份）。
+    const view = supportIds.map((id) => stored.get(id) ?? resolutionOf.get(id) ?? null);
+    return isHedgedStated(formedBy, view);
+  };
+
   // 事务化保证写路径一致性：new/correct/conflict/reinforce 与 markConsolidated
   // 要么全部提交、要么全部回滚，避免部分画像写入或事件被重复处理。
   // 只包这段【同步】写：LLM 已在上面 await 完，此闭包内不含任何 await（见 store/openStores.ts 的告诫）。
@@ -483,8 +526,16 @@ export async function consolidate(
       if (support.length === 0) continue; // 无可溯源原话 → 跳过（不落无溯源认知，证据完整性规则）
       if (p.typeFallback) typeFallback[p.typeFallback]++;
       const formedBy = resolveFormedBy(p.modelSaysInferred, support); // 载体维由代码从证据算，不听模型
+      // 接线点 1/8 · new（形成期）：`resolutionOf` 就地可用，零查表成本。
+      //   **这里必须接**：新建的含糊自述若不封顶，缺口就原封不动地留在最主要的入库路径上。
       const confidence = computeConfidence(
-        { contentType: p.contentType, formedBy, supportCount: support.length, contradictCount: 0 },
+        {
+          contentType: p.contentType,
+          formedBy,
+          supportCount: support.length,
+          contradictCount: 0,
+          hedged: resolveHedged(formedBy, support), // 集合恒同 supportCount 用的那一个（support）
+        },
         deps.config,
       );
       created.push(
@@ -515,7 +566,10 @@ export async function consolidate(
           add.map((id) => ({ evidenceId: id, relation: 'support' as const })),
         );
       const links = deps.cognitionStore.sourcesOf(cog.id);
-      const supportCount = links.filter((l) => l.relation === 'support').length;
+      // supportIds 与 supportCount 同源导出：hedged 的 support 集合必须与算 supportCount 的那一个
+      //   完全相同（见 resolveHedged 的不变式），从结构上杜绝两者漂移。
+      const supportIds = links.filter((l) => l.relation === 'support').map((l) => l.evidenceId);
+      const supportCount = supportIds.length;
       const contradictCount = links.filter((l) => l.relation === 'contradict').length;
       // v0.6：**取消 confirmed→stated 的就地升级**。
       //   旧实现会在这里改写来源标签，触发条件是 ① LLM 自报 formed_by='stated'，且 ② 引用原话中有 spoken。
@@ -523,8 +577,18 @@ export async function consolidate(
       //   此外，就地改写来源标签与「冲突只暴露、不裁决」的契约相悖。
       //   因此 formedBy 恒继承；主动陈述通过下面的并存新认知表达。
       const formedBy = cog.formedBy;
+      // 接线点 2/8 · reinforce（重算期）：hedged **不落库**，每次都从支持证据链重新派生。
+      //   这里 formedBy 继承存量，一条已封顶 280 的含糊自述，只要用户再说一句相关的话触发 reinforce，
+      //   不接就静默反弹回 600+支持加分——即「改证据后 hedged 蒸发」。
+      //   全链里的历史证据靠 resolveHedged 回表补齐。
       const confidence = computeConfidence(
-        { contentType: cog.contentType, formedBy, supportCount, contradictCount },
+        {
+          contentType: cog.contentType,
+          formedBy,
+          supportCount,
+          contradictCount,
+          hedged: resolveHedged(formedBy, supportIds),
+        },
         deps.config,
       );
       deps.cognitionStore.update(cog.id, {
@@ -558,6 +622,12 @@ export async function consolidate(
             formedBy: 'stated',
             supportCount: add.length,
             contradictCount: 0,
+            // 接线点 3/8 · 并存新 stated（形成期）。**必须接，且必须用 `add`**：
+            //   本路径是保守性倒置最刺眼的一条——用户点头认了 AI 的猜测（旧 confirmed 280）之后
+            //   自己含糊复述一句，并存的新认知就拿满 600。
+            //   support 集合与上面的 supportCount 同为 `add`（不是全链）：全链会混进旧的附和证据，
+            //   让「没有 explicit」这一条不成立，并存路的封顶永不触发（见 resolveHedged 的不变式）。
+            hedged: resolveHedged('stated', add),
           },
           deps.config,
         );
@@ -586,8 +656,16 @@ export async function consolidate(
       if (p.typeFallback) typeFallback[p.typeFallback]++; // 同 new 路：correct 也会落一条新认知
       deps.cognitionStore.update(old.id, { invalidAt: now }); // 标失效、保留可溯源
       const formedBy = resolveFormedBy(p.modelSaysInferred, support); // 同 new 路，载体维由代码算
+      // 接线点 4/8 · correct（形成期，同 new 路）。**必须接**：否则用户用一句含糊的话纠正旧认知时，
+      //   新生认知拿 600，而被标失效的旧认知可能只有 280——「纠正」反而抬高了系统对他的把握度。
       const confidence = computeConfidence(
-        { contentType: p.contentType, formedBy, supportCount: support.length, contradictCount: 0 },
+        {
+          contentType: p.contentType,
+          formedBy,
+          supportCount: support.length,
+          contradictCount: 0,
+          hedged: resolveHedged(formedBy, support), // 集合恒同 supportCount 用的那一个（support）
+        },
         deps.config,
       );
       created.push(
@@ -625,10 +703,22 @@ export async function consolidate(
       //   credStatus 不再写死：deriveCredStatus 在 contradictCount>0 时恒返回 'conflicted'
       //   （confidence.ts:43），交给它推导既保住「冲突只暴露、不消解」的语义，又不留旧置信值撒谎。
       const links = deps.cognitionStore.sourcesOf(cog.id);
-      const supportCount = links.filter((l) => l.relation === 'support').length;
+      const supportIds = links.filter((l) => l.relation === 'support').map((l) => l.evidenceId);
+      const supportCount = supportIds.length;
       const contradictCount = links.filter((l) => l.relation === 'contradict').length;
+      // 接线点 5/8 · conflict（重算期），理由同 reinforce 分支（hedged 不落库，每次重新派生）。
+      //   本路径的特殊性：本轮新增证据挂的是 contradict，**support 集合全是历史证据** ⇒ 混合读会
+      //   整个落到表上，`semanticResolutionStore` 没接时这里退化最明显（见 resolveHedged 的退化边界）。
+      //   漏接的后果反直觉：一条已封顶 280 的含糊认知被反驳一次，重算得 600−120=480 而非
+      //   min(480,280)=280——**被反驳之后置信度反而暴涨**。
       const confidence = computeConfidence(
-        { contentType: cog.contentType, formedBy: cog.formedBy, supportCount, contradictCount },
+        {
+          contentType: cog.contentType,
+          formedBy: cog.formedBy,
+          supportCount,
+          contradictCount,
+          hedged: resolveHedged(cog.formedBy, supportIds),
+        },
         deps.config,
       );
       deps.cognitionStore.update(cog.id, {

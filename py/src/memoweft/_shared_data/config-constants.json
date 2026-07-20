@@ -55,6 +55,7 @@
       "low": 300,
       "stable": 750
     },
+    "hedgeCap": 280,
     "minConfidence": 50,
     "supportCap": 5,
     "supportStep": 40,
