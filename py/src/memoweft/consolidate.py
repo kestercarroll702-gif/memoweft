@@ -12,11 +12,12 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from collections.abc import Sequence
 from typing import Any, Optional, cast
 
 from ._jsstr import js_trim, utf16_length
 from .config import CONFIG, Config, resolve_lang
-from .confidence import compute_confidence, derive_cred_status
+from .confidence import compute_confidence, derive_cred_status, is_hedged_stated
 from .formed_by import derive_formed_by
 from .echoed_id import resolve_echoed_id
 from .llm.client import ChatMessage, LLMClient
@@ -39,6 +40,7 @@ from .types import (
     ConfidenceInputs,
     EvidenceLink,
     FormedBy,
+    HedgeInput,
     Lang,
     PromptAct,
     PropositionOrigin,
@@ -345,6 +347,46 @@ def consolidate(
             )
         return derive_formed_by(inputs) or "inferred"
 
+    def resolve_hedged(formed_by: FormedBy, support_ids: Sequence[str]) -> bool:
+        """算一条认知的 hedged(含糊自述封顶的判据)。与 consolidate.ts 的 resolveHedged 逐位一致。
+
+        与载体维【正交】:载体维答"谁的话",hedged 答"这话说得含不含糊"。封顶动作本身在
+        compute_confidence 里(min(hedge_cap)),这里只出判据。
+
+        **为什么是「库优先、内存兜底」而不是反过来**:文末的解析落库循环对"库里已有解析"的证据
+        跳过写入(幂等),所以【库里那份才是会活下来的那份】。若让内存赢,就会出现:本轮按内存
+        那份(马上要被丢弃的)算出 600,而此后每一次重算读到库里那份旧的算出 280 —— 同一条认知
+        在 600/280 之间【永久分叉】。故:库里有就以库为准,内存只补库里还没有的(= 本轮新证据,
+        它们的解析此刻确实还没落库 —— 落库循环在四个写循环之后)。
+
+        semantic_resolution_store 未注入时只退化【历史证据】那一半(本轮证据仍准确),
+        退化方向是 hedged=False(不封顶),与 is_hedged_stated 的"解析不出不臆造惩罚"同向 ——
+        宁可少封,不可错封。
+
+        不变式:support_ids 恒等于同一调用点传给 support_count 的那一个集合。
+        """
+        # 非 stated / 空支持集恒 False(is_hedged_stated 同判)——提前挡掉,省下重算期那次查表。
+        if formed_by != "stated" or len(support_ids) == 0:
+            return False
+        stored: dict[str, HedgeInput] = {}
+        if semantic_resolution_store is not None:
+            for sr in semantic_resolution_store.for_evidence_ids(list(support_ids)):  # 一次批量查,无 N+1
+                stored[sr.evidence_id] = HedgeInput(
+                    proposition_origin=sr.proposition_origin, assertion_strength=sr.assertion_strength
+                )
+        view: list[Optional[HedgeInput]] = []
+        for id_ in support_ids:
+            hit = stored.get(id_)
+            if hit is None:
+                r = resolution_of.get(id_)  # 库里没有 → 回落本轮内存解析
+                hit = (
+                    HedgeInput(proposition_origin=r.proposition_origin, assertion_strength=r.assertion_strength)
+                    if r is not None
+                    else None
+                )
+            view.append(hit)
+        return is_hedged_stated(formed_by, view)
+
     def mutate() -> _Mutation:
         created: list[Cognition] = []
         reinforced = 0
@@ -364,8 +406,12 @@ def consolidate(
             if type_fallback is not None:  # 计量：只统计实际落库的兜底（与 TS 侧同口径）
                 setattr(fallback, type_fallback, getattr(fallback, type_fallback) + 1)
             formed_by = resolve_formed_by(model_says_inferred, support)
+            # 接线点 1/5 · new(形成期):resolution_of 就地可用。不接则新建的含糊自述原样拿 600。
             confidence = compute_confidence(
-                ConfidenceInputs(content_type=content_type, formed_by=formed_by, support_count=len(support), contradict_count=0), cfg
+                ConfidenceInputs(
+                    content_type=content_type, formed_by=formed_by, support_count=len(support), contradict_count=0,
+                    hedged=resolve_hedged(formed_by, support),  # 集合恒同 support_count 用的那一个
+                ), cfg
             )
             created.append(
                 cognition_store.put(
@@ -391,11 +437,18 @@ def consolidate(
             if add:
                 cognition_store.add_evidence(cog.id, [EvidenceLink(evidence_id=i, relation="support") for i in add])
             links = cognition_store.sources_of(cog.id)
-            support_count = sum(1 for l in links if l.relation == "support")
+            # support_ids 与 support_count 同源导出：hedged 的集合必须与算 support_count 的完全相同。
+            support_ids = [l.evidence_id for l in links if l.relation == "support"]
+            support_count = len(support_ids)
             contradict_count = sum(1 for l in links if l.relation == "contradict")
             formed_by = cog.formed_by  # 恒继承（取消就地升级）
+            # 接线点 2/5 · reinforce(重算期):hedged 不落库、每次从链重派生。不接则用户再说一句
+            #   相关的话触发 reinforce，封顶静默蒸发、从 280 反弹回 600+支持加分。
             confidence = compute_confidence(
-                ConfidenceInputs(content_type=cog.content_type, formed_by=formed_by, support_count=support_count, contradict_count=contradict_count), cfg
+                ConfidenceInputs(
+                    content_type=cog.content_type, formed_by=formed_by, support_count=support_count,
+                    contradict_count=contradict_count, hedged=resolve_hedged(formed_by, support_ids),
+                ), cfg
             )
             cognition_store.update(
                 cog.id, CognitionPatch(confidence=confidence, cred_status=derive_cred_status(confidence, contradict_count, cog.content_type, cfg, support_count))
@@ -403,8 +456,14 @@ def consolidate(
             reinforced += 1
             # 并存新 stated 认知:旧 confirmed + 本次新增(add)载体维派生成 stated → 并存一条(用 add 非 cited)。
             if cog.formed_by == "confirmed" and len(add) > 0 and resolve_formed_by(False, add) == "stated":
+                # 接线点 3/5 · 并存新 stated(形成期)。**必须用 add 而非全链**:全链会混进旧的附和
+                #   证据，让"没有 explicit"不成立，并存路的封顶永不触发。这是保守性倒置最刺眼的
+                #   一条路径——用户点头认了 AI 猜测(旧 confirmed 280)后自己含糊复述，新认知拿满 600。
                 up_conf = compute_confidence(
-                    ConfidenceInputs(content_type=cog.content_type, formed_by="stated", support_count=len(add), contradict_count=0), cfg
+                    ConfidenceInputs(
+                        content_type=cog.content_type, formed_by="stated", support_count=len(add),
+                        contradict_count=0, hedged=resolve_hedged("stated", add),
+                    ), cfg
                 )
                 created.append(
                     cognition_store.put(
@@ -431,8 +490,13 @@ def consolidate(
                 setattr(fallback, type_fallback, getattr(fallback, type_fallback) + 1)
             cognition_store.update(old.id, CognitionPatch(invalid_at=now_iso))  # 标失效、保留可溯源
             formed_by = resolve_formed_by(model_says_inferred, support)
+            # 接线点 4/5 · correct(形成期，同 new 路)。不接则用户用一句含糊的话纠正旧认知时，
+            #   新生认知拿 600，而被标失效的旧认知可能只有 280——"纠正"反而抬高了把握度。
             confidence = compute_confidence(
-                ConfidenceInputs(content_type=content_type, formed_by=formed_by, support_count=len(support), contradict_count=0), cfg
+                ConfidenceInputs(
+                    content_type=content_type, formed_by=formed_by, support_count=len(support), contradict_count=0,
+                    hedged=resolve_hedged(formed_by, support),
+                ), cfg
             )
             created.append(
                 cognition_store.put(
@@ -464,12 +528,17 @@ def consolidate(
             #   cred_status 不再写死，交 derive_cred_status 推导：既保住"冲突只暴露、不消解"，
             #   又能在支撑占优时落到中间态 contested，且不留旧置信值撒谎。
             links = cognition_store.sources_of(cog.id)
-            support_count = sum(1 for l in links if l.relation == "support")
+            support_ids = [l.evidence_id for l in links if l.relation == "support"]
+            support_count = len(support_ids)
             contradict_count = sum(1 for l in links if l.relation == "contradict")
+            # 接线点 5/5 · conflict(重算期)。本轮新增证据挂 contradict，**support 集合全是历史证据**
+            #   ⇒ 混合读整个落到表上。漏接的后果反直觉：一条已封顶 280 的含糊认知被反驳一次，
+            #   重算得 600−120=480 而非 min(480,280)=280——被反驳之后置信度反而暴涨。
             confidence = compute_confidence(
                 ConfidenceInputs(
                     content_type=cog.content_type, formed_by=cog.formed_by,
                     support_count=support_count, contradict_count=contradict_count,
+                    hedged=resolve_hedged(cog.formed_by, support_ids),
                 ), cfg
             )
             cognition_store.update(

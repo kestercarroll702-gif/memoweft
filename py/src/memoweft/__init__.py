@@ -7,7 +7,7 @@ but do not yet form a feature-complete public Python SDK.
 from __future__ import annotations
 
 from .config import CONFIG, Config
-from .confidence import compute_confidence, derive_cred_status, is_transient
+from .confidence import compute_confidence, derive_cred_status, is_hedged_stated, is_transient
 from .decay import decay_factor, effective_confidence, half_life_of
 from .echoed_id import MIN_ID_PREFIX, resolve_echoed_id
 from .formed_by import derive_formed_by
@@ -19,6 +19,7 @@ from .types import (
     ContentType,
     CredStatus,
     FormedBy,
+    HedgeInput,
     PropositionOrigin,
     Resolution,
     ResponseAct,
@@ -30,6 +31,7 @@ __all__ = [
     "Config",
     "compute_confidence",
     "derive_cred_status",
+    "is_hedged_stated",
     "is_transient",
     "decay_factor",
     "effective_confidence",
@@ -47,6 +49,7 @@ __all__ = [
     "ContentType",
     "CredStatus",
     "FormedBy",
+    "HedgeInput",
     "PropositionOrigin",
     "Resolution",
     "ResponseAct",
