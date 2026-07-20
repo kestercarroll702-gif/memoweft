@@ -6,8 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- `core.explainCognition({ cognitionId })` returns one cognition together with its full provenance chain, addressed by id rather than by similarity. `recall({ explain: true })` only attaches provenance to whatever a query happens to retrieve, so asking why a _specific_ remembered item is held — what a confirmation prompt or a memory-management page needs — was not expressible. Provenance shape, authorization flags, and dangling-link handling are identical to `recall({ explain: true })`; both paths now share one enrichment routine. Reads only, writes no audit entry, returns `null` for an unknown id or a subject mismatch. Cognitions that are invalidated, archived, or muted are still explained, with their state reported — recall gating would make the API return `null` in precisely the case a user is most likely to ask about.
+- A `contested` credibility status for cognitions that carry opposing evidence but remain supported by a majority of their evidence. Previously any single piece of opposing evidence produced `conflicted`, so a cognition with six supporting and one opposing item was indistinguishable from one split evenly. Confidence already reflected the difference; the status flattened it, and the periodic review flow kept surfacing well-supported cognitions to the user. `deriveCredStatus` takes an optional `supportCount`: `contested` when support outnumbers opposition, `conflicted` otherwise. Omitting it preserves the previous conservative behavior, since a caller that does not know the support count cannot assume support prevails. The threshold is deliberately a count comparison rather than a confidence cutoff — support scoring caps at 200, so a `stated` cognition with six supporting and one opposing item reaches only 680 and can never clear the 750 `stable` threshold.
+- `MemoryGraphStats.contestedCount`, counted separately from `conflictedCount` so the two are not conflated. `onlyConflicts` returns both, because these cognitions were `conflicted` before this change and would otherwise vanish from that view.
+- `core.memory.reinforceCognition({ cognitionId, evidenceId, relation, reason })` attaches an existing piece of evidence to a cognition and recomputes its confidence and credibility status in the same transaction. Until now every path that altered a provenance chain ran inside the library, leaving a host no way to record that a user had just confirmed or rejected a remembered item — which is what a confirmation prompt is for. `relation` defaults to `support` and accepts `contradict`, so a rejection lands as counter-evidence rather than as a deletion. Re-attaching the same evidence and relation is idempotent: no link, no recompute, no audit entry, so repeated clicks cannot inflate confidence. The call refuses an unknown cognition or evidence, a subject mismatch, and cognitions that are invalidated or archived, whose confidence is a historical snapshot. It deliberately does not ingest new evidence; that remains the job of the ingest paths, so no second write path bypasses perception.
+
 ### Changed
 
+- Consolidating a conflict in the Python package now recomputes confidence from the resulting evidence chain, matching the TypeScript path. The Python port previously only wrote the credibility status, so `contradictPenalty` never took effect there and a refuted cognition kept the confidence it had with no opposition at all.
 - Simplified the public repository surface, documentation, contribution flow, and release presentation.
 - Prepared unreleased `@memoweft/adapter-ai-sdk` and `@memoweft/mcp-server` `0.2.0` packages for Core `^0.5.1 || ^0.6.0`; documented the published `0.1.0` / Core `0.5.1` installation pair and the MCP tool and registry contracts.
 
@@ -16,7 +24,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - Interaction context and semantic resolution records for context-dependent replies such as “yes”, “no”, and “the latter”.
-- Code-derived formation modes for user-stated, user-confirmed, observed, ruled, and inferred cognitions.
+- Code-derived formation modes for user-stated, user-confirmed, observed, and ruled cognitions. `inferred` remains model-reported by design: it encodes distance from the utterance rather than who carried it, and the risks are asymmetric — overstating a confirmed cognition as stated inflates confidence, whereas self-reporting "I inferred this" only under-reports.
 - Conversation-context support in the OpenAI Agents and LangChain integrations.
 - A Mastra processor integration and LangChain v1 middleware.
 - A Python parity package covering confidence, formation mode, decay, storage, FTS, and portable-bundle interoperability.
