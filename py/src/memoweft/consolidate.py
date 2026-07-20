@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional, cast
 
 from ._jsstr import js_trim, utf16_length
@@ -50,11 +50,34 @@ from .types import (
 _logger = logging.getLogger("memoweft.consolidate")
 
 _VALID_TYPES = ("fact", "preference", "goal", "project", "state", "trait")
+# ContentType 里合法、但 consolidate 不收的两值：只能由 attribute / trends 内部产生。
+# 模型仍可能吐出它们（现有画像以 `- [id] (content_type) content` 回灌 prompt，标签它看得见），
+# 故单列一因与拼写错误区分。与 TS 侧 OUT_OF_SCOPE_TYPES 对齐。
+_OUT_OF_SCOPE_TYPES = ("hypothesis", "trend")
 _VALID_FORMED = ("stated", "observed", "ruled", "confirmed", "inferred")
 _VALID_RESPONSE_ACT = ("affirm", "negate", "select", "elaborate", "ask", "none", "other")
 _VALID_PROMPT_ACT = ("propose", "ask", "state", "none", "other")
 _VALID_ORIGIN = ("user_stated", "assistant_proposed")
 _VALID_STRENGTH = ("explicit", "weak", "none")
+
+
+@dataclass(slots=True)
+class ContentTypeFallback:
+    """写路径仪表（计量契约 · 只观测，不改变行为）：content_type 落 fact 兜底的次数，按触发因分。
+
+    与 TS 侧 ConsolidateResult.contentTypeFallback 对齐。三者严重度不同，混计就判断不了该不该动语义：
+      missing      模型没给该字段；
+      invalid      给了但不在 _VALID_TYPES 六值内（拼错 / 幻觉值）；
+      out_of_scope 给了 hypothesis / trend —— 这两值在 ContentType 里合法，只是 consolidate 不收。
+                   这是唯一的【语义降级】：本应受 hypothesis_cap 与 2 天半衰期约束、
+                   且应进 propose_ask 求证队列的推测，被兜成 fact（永不衰减、永不自动失效）并退出该队列。
+
+    只统计【实际落库】的兜底，故该计数可直接读作「库里有多少条认知的类型是靠兜底定的」。
+    """
+
+    missing: int = 0
+    invalid: int = 0
+    out_of_scope: int = 0
 
 
 @dataclass(slots=True)
@@ -67,6 +90,7 @@ class ConsolidateResult:
     llm_calls: int
     profile_size: int
     prompt_chars: int
+    content_type_fallback: ContentTypeFallback = field(default_factory=ContentTypeFallback)
 
 
 @dataclass(slots=True)
@@ -98,6 +122,8 @@ class _Mutation:
     reinforced: int
     corrected: int
     conflicted: int
+    # 计量随事务一同带出：放闭包外的话事务回滚时计数不回滚，会虚高（与 TS 侧同口径）。
+    type_fallback: "ContentTypeFallback"
 
 
 def _cited_ids(c: dict[str, Any]) -> list[str]:
@@ -139,8 +165,24 @@ def _resolve_evidence_id(
     return hit
 
 
-def _pick_cognition(c: dict[str, Any]) -> Optional[tuple[str, ContentType, bool]]:
-    """从兼容字段中提取认知；缺少类型时使用 fact，无内容时返回 None。"""
+def _classify_type_fallback(raw: Any) -> Optional[str]:
+    """判定本条 content_type 走没走兜底、因为什么。纯函数，不改变任何行为。
+
+    返回 ContentTypeFallback 的字段名（missing / invalid / out_of_scope），类型合法时返回 None。
+    与 TS 侧 classifyTypeFallback 对齐。
+    """
+    if raw is None or raw == "":
+        return "missing"
+    if raw in _VALID_TYPES:
+        return None
+    return "out_of_scope" if raw in _OUT_OF_SCOPE_TYPES else "invalid"
+
+
+def _pick_cognition(c: dict[str, Any]) -> Optional[tuple[str, ContentType, bool, Optional[str]]]:
+    """从兼容字段中提取认知；缺少类型时使用 fact，无内容时返回 None。
+
+    第 4 个返回值是计量用的兜底原因（不改变行为），见 ContentTypeFallback。
+    """
     raw = c.get("content")
     if raw is None:
         raw = c.get("new_content")
@@ -150,11 +192,12 @@ def _pick_cognition(c: dict[str, Any]) -> Optional[tuple[str, ContentType, bool]
     if not content:
         return None
     ct_raw = c.get("content_type")
+    type_fallback = _classify_type_fallback(ct_raw)
     content_type: ContentType = cast(ContentType, ct_raw) if ct_raw in _VALID_TYPES else "fact"
     fb_raw = c.get("formed_by")
     declared = fb_raw if fb_raw in _VALID_FORMED else None
     model_says_inferred = declared is None or declared == "inferred"
-    return content, content_type, model_says_inferred
+    return content, content_type, model_says_inferred, type_fallback
 
 
 def _build_messages(
@@ -307,16 +350,19 @@ def consolidate(
         reinforced = 0
         corrected = 0
         conflicted = 0
+        fallback = ContentTypeFallback()
 
         # new
         for c in out.get("new") or []:
             p = _pick_cognition(c)
             if p is None:
                 continue
-            content, content_type, model_says_inferred = p
+            content, content_type, model_says_inferred, type_fallback = p
             support = pick_support(_cited_ids(c))
             if len(support) == 0:
                 continue
+            if type_fallback is not None:  # 计量：只统计实际落库的兜底（与 TS 侧同口径）
+                setattr(fallback, type_fallback, getattr(fallback, type_fallback) + 1)
             formed_by = resolve_formed_by(model_says_inferred, support)
             confidence = compute_confidence(
                 ConfidenceInputs(content_type=content_type, formed_by=formed_by, support_count=len(support), contradict_count=0), cfg
@@ -377,10 +423,12 @@ def consolidate(
             p = _pick_cognition(c)
             if old is None or old.invalid_at or p is None:
                 continue
-            content, content_type, model_says_inferred = p
+            content, content_type, model_says_inferred, type_fallback = p
             support = pick_support(_cited_ids(c))
             if len(support) == 0:
                 continue
+            if type_fallback is not None:  # 同 new 路：correct 也会落一条新认知
+                setattr(fallback, type_fallback, getattr(fallback, type_fallback) + 1)
             cognition_store.update(old.id, CognitionPatch(invalid_at=now_iso))  # 标失效、保留可溯源
             formed_by = resolve_formed_by(model_says_inferred, support)
             confidence = compute_confidence(
@@ -447,7 +495,9 @@ def consolidate(
                     )
                 )
         event_store.mark_consolidated([e.id for e in new_events])
-        return _Mutation(created=created, reinforced=reinforced, corrected=corrected, conflicted=conflicted)
+        return _Mutation(
+            created=created, reinforced=reinforced, corrected=corrected, conflicted=conflicted, type_fallback=fallback
+        )
 
     run_tx: Transaction = transaction if transaction is not None else noop_transaction
     mutation = cast(_Mutation, run_tx(mutate))
@@ -455,4 +505,5 @@ def consolidate(
     return ConsolidateResult(
         created=mutation.created, reinforced=mutation.reinforced, corrected=mutation.corrected, conflicted=mutation.conflicted,
         processed_events=len(new_events), llm_calls=llm_calls, profile_size=len(existing), prompt_chars=prompt_chars,
+        content_type_fallback=mutation.type_fallback,
     )

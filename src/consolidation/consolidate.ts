@@ -67,6 +67,18 @@ export interface ConsolidateResult {
   /** 写路径仪表（计量契约 · 只观测，不改变行为）：本轮 buildMessages 产物全部 content 的字符数之和（prompt 多大）。
    *  0 = consolidate 未执行（无新事件早退）。供集成测试记录 prompt 规模。 */
   promptChars: number;
+  /** 写路径仪表（计量契约 · 只观测，不改变行为）：`content_type` 落 `fact` 兜底的次数，按触发因分。
+   *
+   *  为什么要分因：三者严重度不同，混计就判断不了该不该动语义。
+   *  - `missing`    模型没给该字段；
+   *  - `invalid`    给了但不在 `VALID_TYPES` 六值内（拼错 / 幻觉值）；
+   *  - `outOfScope` 给了 `hypothesis` / `trend` —— 这两值在 `ContentType`（cognition/model.ts）里
+   *    **合法**，只是 consolidate 不收。这是三者里唯一的【语义降级】：本应受
+   *    `attribution.hypothesisCap`(250) 与 2 天半衰期约束、且应进 proposeAsk 求证队列的推测，
+   *    被兜成 `fact`（永不衰减、永不自动失效、不受 transientCap 封顶）并永久退出该队列。
+   *
+   *  兜底行为本身**未改动**，本字段只是让它不再无声。全 0 = 本轮模型给的类型都合法（或未执行）。 */
+  contentTypeFallback: { missing: number; invalid: number; outOfScope: number };
 }
 
 /** 候选认知的原始形状（字段名容错：content / new_content / cognition 都接）。 */
@@ -150,6 +162,18 @@ function resolveEvidenceId(
 }
 
 const VALID_TYPES = ['fact', 'preference', 'goal', 'project', 'state', 'trait'];
+/** `ContentType` 里合法、但 consolidate 不收的两值：只能由 attribute / trends 内部产生。
+ *  模型仍可能吐出它们（现有画像以 `- [id] (contentType) content` 回灌 prompt，标签它看得见），
+ *  故单列一因与拼写错误区分。 */
+const OUT_OF_SCOPE_TYPES = ['hypothesis', 'trend'];
+type TypeFallbackReason = 'missing' | 'invalid' | 'outOfScope';
+
+/** 判定本条 content_type 走没走兜底、因为什么。纯函数，不改变任何行为。 */
+function classifyTypeFallback(raw: string | undefined): TypeFallbackReason | null {
+  if (raw === undefined || raw === null || raw === '') return 'missing';
+  if (VALID_TYPES.includes(raw)) return null;
+  return OUT_OF_SCOPE_TYPES.includes(raw) ? 'outOfScope' : 'invalid';
+}
 const VALID_FORMED = ['stated', 'observed', 'ruled', 'confirmed', 'inferred'];
 // 语义解析枚举（current public contract）：落库前收敛，非法值落 null（与 model.ts 的 `... | null` 一致）。
 const VALID_RESPONSE_ACT = ['affirm', 'negate', 'select', 'elaborate', 'ask', 'none', 'other'];
@@ -164,11 +188,16 @@ const VALID_STRENGTH = ['explicit', 'weak', 'none'];
  * 谁的话）由 `deriveFormedBy` 从支持证据算、**模型说了不算**；模型只保留「这条是不是我推断出来的」
  * 这一维（推断距离），即 `modelSaysInferred` —— 那是往低了报、无骗人动机的一维，且只有它知道。
  */
-function pickCognition(
-  c: RawCog,
-): { content: string; contentType: ContentType; modelSaysInferred: boolean } | null {
+function pickCognition(c: RawCog): {
+  content: string;
+  contentType: ContentType;
+  modelSaysInferred: boolean;
+  /** 计量用（不改变行为）：本条走没走 content_type 兜底、因为什么。null = 类型合法。见 ConsolidateResult.contentTypeFallback。 */
+  typeFallback: TypeFallbackReason | null;
+} | null {
   const content = (c.content ?? c.new_content ?? c.cognition ?? '').trim();
   if (!content) return null;
+  const typeFallback = classifyTypeFallback(c.content_type);
   const contentType = (
     VALID_TYPES.includes(c.content_type ?? '') ? c.content_type : 'fact'
   ) as ContentType;
@@ -178,7 +207,12 @@ function pickCognition(
   //   不默认高置信亲述，保持该约束的语义。
   //   ⇒ 只有模型【明确填了合法值且不是 inferred】，才认为它主张「这条是从原话直接得到的」，进而走载体维。
   const declared = VALID_FORMED.includes(c.formed_by ?? '') ? c.formed_by : null;
-  return { content, contentType, modelSaysInferred: declared === null || declared === 'inferred' };
+  return {
+    content,
+    contentType,
+    modelSaysInferred: declared === null || declared === 'inferred',
+    typeFallback,
+  };
 }
 
 /** 提供给 LLM 的事件视图：事件摘要 + 其下逐条原话（带证据 id 供引用）。 */
@@ -249,6 +283,7 @@ export async function consolidate(
     llmCalls: 0,
     profileSize: 0,
     promptChars: 0,
+    contentTypeFallback: { missing: 0, invalid: 0, outOfScope: 0 },
   };
   if (newEvents.length === 0) return empty;
 
@@ -436,6 +471,9 @@ export async function consolidate(
     let reinforced = 0;
     let corrected = 0;
     let conflicted = 0;
+    /** 计量（不改变行为）：只统计【实际落库】的兜底 —— 没落库的候选不构成危害，
+     *  这样该计数可直接读作「库里有多少条认知的类型是靠兜底定的」。 */
+    const typeFallback = { missing: 0, invalid: 0, outOfScope: 0 };
 
     // new
     for (const c of out.new ?? []) {
@@ -443,6 +481,7 @@ export async function consolidate(
       if (!p) continue;
       const support = pickSupport(citedIds(c));
       if (support.length === 0) continue; // 无可溯源原话 → 跳过（不落无溯源认知，证据完整性规则）
+      if (p.typeFallback) typeFallback[p.typeFallback]++;
       const formedBy = resolveFormedBy(p.modelSaysInferred, support); // 载体维由代码从证据算，不听模型
       const confidence = computeConfidence(
         { contentType: p.contentType, formedBy, supportCount: support.length, contradictCount: 0 },
@@ -544,6 +583,7 @@ export async function consolidate(
       if (!old || old.invalidAt || !p) continue;
       const support = pickSupport(citedIds(c));
       if (support.length === 0) continue; // 纠正后的新认知也要可溯源，否则跳过（不动旧的）
+      if (p.typeFallback) typeFallback[p.typeFallback]++; // 同 new 路：correct 也会落一条新认知
       deps.cognitionStore.update(old.id, { invalidAt: now }); // 标失效、保留可溯源
       const formedBy = resolveFormedBy(p.modelSaysInferred, support); // 同 new 路，载体维由代码算
       const confidence = computeConfidence(
@@ -624,15 +664,17 @@ export async function consolidate(
       });
     }
     deps.eventStore.markConsolidated(newEvents.map((e) => e.id));
-    return { created, reinforced, corrected, conflicted };
+    return { created, reinforced, corrected, conflicted, typeFallback };
   });
 
   // 写路径仪表：profileSize = 本轮注入 prompt 的 active 认知条数（existing 就是拼进 prompt 的那份画像）。
+  const { typeFallback, ...counts } = mutation;
   return {
-    ...mutation,
+    ...counts,
     processedEvents: newEvents.length,
     llmCalls,
     profileSize: existing.length,
     promptChars,
+    contentTypeFallback: typeFallback,
   };
 }
