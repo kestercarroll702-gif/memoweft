@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { EventEmitter } from 'node:events';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,8 @@ import {
   clientInputRejection,
   encodeDotenvEntries,
   isTrustedLoopbackAuthority,
+  MAX_REQUEST_BODY_BYTES,
+  readJson,
   requestRejection,
   setOwnPath,
 } from './serverSecurity.mjs';
@@ -75,6 +78,46 @@ test('maps deliberate client-input failures to a fixed safe 400 response', () =>
     message: '请求 JSON 无效。',
   });
   assert.equal(clientInputRejection(new Error('internal path and stack detail')), null);
+});
+
+/** A minimal IncomingMessage stand-in: emits chunks and offers a no-op resume() for draining. */
+function fakeRequest(headers = {}) {
+  const req = new EventEmitter();
+  req.headers = headers;
+  req.resume = () => {};
+  return req;
+}
+
+test('readJson parses a normal JSON body', async () => {
+  const req = fakeRequest();
+  const parsed = readJson(req);
+  req.emit('data', Buffer.from('{"a":1}'));
+  req.emit('end');
+  assert.deepEqual(await parsed, { a: 1 });
+});
+
+test('readJson rejects a declared Content-Length over the cap before reading the body', async () => {
+  const req = fakeRequest({ 'content-length': String(MAX_REQUEST_BODY_BYTES + 1) });
+  await assert.rejects(readJson(req), (e) => e instanceof ClientInputError && e.statusCode === 413);
+});
+
+test('readJson drains and rejects an oversized stream with no truthful Content-Length', async () => {
+  const req = fakeRequest();
+  const parsed = readJson(req);
+  req.emit('data', Buffer.alloc(MAX_REQUEST_BODY_BYTES + 1));
+  await assert.rejects(parsed, (e) => e instanceof ClientInputError && e.statusCode === 413);
+});
+
+test('readJson maps invalid JSON to a fixed safe 400 without exposing parser internals', async () => {
+  const req = fakeRequest();
+  const parsed = readJson(req);
+  req.emit('data', Buffer.from('{ not json'));
+  req.emit('end');
+  await assert.rejects(
+    parsed,
+    (e) =>
+      e instanceof ClientInputError && e.statusCode === 400 && e.message === '请求 JSON 无效。',
+  );
 });
 
 test('dotenv encoding survives Node loadEnvFile without exposing or retaining configuration values', async () => {
