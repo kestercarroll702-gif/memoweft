@@ -38,9 +38,9 @@ import { exportBundle, importBundle } from '../src/portable/index.ts';
 import { resetTestbenchSubject } from './factoryReset.mjs';
 import { portableDeps } from './portableDeps.mjs';
 import {
-  ClientInputError,
   clientInputRejection,
   encodeDotenvEntries,
+  readJson,
   requestRejection,
   setOwnPath,
 } from './serverSecurity.mjs';
@@ -270,29 +270,6 @@ async function triggerProfileUpdate() {
     // LLM 网络错误不会终止服务；runProfileUpdate 已记录错误。
     console.error('后台更新画像失败（已兜底，不崩服务）：', e instanceof Error ? e.message : e);
   }
-}
-
-function readJson(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => {
-      try {
-        const body = Buffer.concat(chunks).toString('utf8');
-        // 字符集护栏：非法 UTF-8 字节解码后必出现 U+FFFD(�) → 拒收，防乱码入库。
-        // 请求体显式按 UTF-8 解码，避免不同命令行环境造成乱码写入证据库。
-        //   浏览器 fetch 恒为 UTF-8 不受影响；命令行注入请用 UTF-8 编码的请求体。）
-        if (body.includes('�')) {
-          reject(new ClientInputError('请求体不是合法 UTF-8。'));
-          return;
-        }
-        resolve(body ? JSON.parse(body) : {});
-      } catch {
-        reject(new ClientInputError('请求 JSON 无效。'));
-      }
-    });
-    req.on('error', reject);
-  });
 }
 
 function sendJson(res, code, data) {

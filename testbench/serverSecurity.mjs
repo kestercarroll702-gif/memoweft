@@ -1,16 +1,73 @@
 const DANGEROUS_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor']);
 
+/**
+ * Hard ceiling for a request body, mirroring the reference Host, enforced before parsing so an
+ * unbounded body cannot exhaust process memory. The testbench binds loopback only; this is defense
+ * in depth for a local diagnostic tool whose security baseline is deliberately simpler than the Host
+ * (no CSRF token or Content-Type gate) — cross-site writes are already blocked by the loopback Host
+ * check plus the same-origin Origin check in requestRejection.
+ */
+export const MAX_REQUEST_BODY_BYTES = 5 * 1024 * 1024;
+
 /** A deliberate client-input failure whose response never exposes parser internals. */
 export class ClientInputError extends Error {
-  constructor(message) {
+  constructor(message, statusCode = 400) {
     super(message);
     this.name = 'ClientInputError';
-    this.statusCode = 400;
+    this.statusCode = statusCode;
   }
 }
 
 export function clientInputRejection(error) {
-  return error instanceof ClientInputError ? { statusCode: 400, message: error.message } : null;
+  return error instanceof ClientInputError
+    ? { statusCode: error.statusCode, message: error.message }
+    : null;
+}
+
+/**
+ * Read a JSON request body with a hard size ceiling enforced before parsing. A declared
+ * Content-Length over the cap is rejected immediately; an oversized stream (missing or lying
+ * Content-Length) is drained rather than buffered, so an unbounded body cannot exhaust memory.
+ * Invalid UTF-8 or JSON maps to a fixed safe 4xx that never exposes parser internals.
+ */
+export function readJson(req) {
+  return new Promise((resolve, reject) => {
+    const declared = Number(req.headers?.['content-length']);
+    if (Number.isFinite(declared) && declared > MAX_REQUEST_BODY_BYTES) {
+      req.resume();
+      reject(new ClientInputError(`请求体过大（上限 ${MAX_REQUEST_BODY_BYTES} 字节）。`, 413));
+      return;
+    }
+    const chunks = [];
+    let total = 0;
+    let rejected = false;
+    req.on('data', (chunk) => {
+      if (rejected) return;
+      total += chunk.length;
+      if (total > MAX_REQUEST_BODY_BYTES) {
+        rejected = true;
+        req.resume();
+        reject(new ClientInputError(`请求体过大（上限 ${MAX_REQUEST_BODY_BYTES} 字节）。`, 413));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (rejected) return;
+      try {
+        const body = Buffer.concat(chunks).toString('utf8');
+        // 字符集护栏：非法 UTF-8 字节解码后必出现 U+FFFD → 拒收，防乱码入库（浏览器 fetch 恒 UTF-8）。
+        if (body.includes('�')) {
+          reject(new ClientInputError('请求体不是合法 UTF-8。'));
+          return;
+        }
+        resolve(body ? JSON.parse(body) : {});
+      } catch {
+        reject(new ClientInputError('请求 JSON 无效。'));
+      }
+    });
+    req.on('error', reject);
+  });
 }
 
 function headerValue(headers, name) {
