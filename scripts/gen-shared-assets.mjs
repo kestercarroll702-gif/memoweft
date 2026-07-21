@@ -101,6 +101,7 @@ function buildConfigConstants() {
       credThresholds: c.consolidation.credThresholds,
       transientTypes: c.consolidation.transientTypes,
       transientCap: c.consolidation.transientCap,
+      hedgeCap: c.consolidation.hedgeCap, // 含糊自述封顶(与 confirmed 底分 280 对齐)——confidence.ts 里与 transientCap 同为 min
     },
     background: {
       halfLifeDays: c.background.halfLifeDays,
@@ -147,16 +148,23 @@ function buildPrompts() {
 // ── parity 夹具:computeConfidence(全组合) ──
 function parityConfidence() {
   const cases = [];
-  for (const formedBy of FORMED_BY)
-    for (const contentType of CONTENT_TYPES)
-      for (let supportCount = 0; supportCount <= 7; supportCount++)
-        for (let contradictCount = 0; contradictCount <= 3; contradictCount++) {
-          const input = { formedBy, contentType, supportCount, contradictCount };
-          cases.push({ input, expected: computeConfidence(input) });
-        }
+  // hedged 放【最外层】：前 1280 条与加维前逐条同序、字节不动(cases 顺序即写入顺序,stableStringify 只排对象键)。
+  for (const hedged of [false, true])
+    for (const formedBy of FORMED_BY)
+      for (const contentType of CONTENT_TYPES)
+        for (let supportCount = 0; supportCount <= 7; supportCount++)
+          for (let contradictCount = 0; contradictCount <= 3; contradictCount++) {
+            // hedged=false 时【不写该键】：既钉住「省略 hedged = 不封顶」的兼容契约(既有调用点行为不变),
+            // 又让加维成为纯追加。全 formedBy × 全 contentType 都覆盖 hedged=true,
+            // 才能钉住 hedgeCap 与 transientCap 两个 min 的可组合性(如 state×hedged 应落 280 而非 300)。
+            const input = hedged
+              ? { formedBy, contentType, supportCount, contradictCount, hedged: true }
+              : { formedBy, contentType, supportCount, contradictCount };
+            cases.push({ input, expected: computeConfidence(input) });
+          }
   return {
     fn: 'computeConfidence',
-    note: 'formedBy×contentType×support(0..7)×contradict(0..3) 全组合',
+    note: 'formedBy×contentType×support(0..7)×contradict(0..3)×hedged(省略/true) 全组合;省略 hedged = 不封顶',
     cases,
   };
 }
@@ -1752,6 +1760,43 @@ function buildBundleFixtures() {
       label: 'unconsolidated-unknown-warning',
       bundle: clone((b) => {
         b.data.unconsolidatedEventIds = ['ghost'];
+      }),
+    },
+    // 字段值校验（越界枚举 / 非法 confidence）—— 导入路径唯一守门，跨语言必须逐字段一致。
+    {
+      label: 'invalid-content-type',
+      bundle: clone((b) => {
+        b.data.cognitions[0].contentType = 'locaton';
+      }),
+    },
+    {
+      label: 'invalid-formed-by',
+      bundle: clone((b) => {
+        b.data.cognitions[0].formedBy = 'bogus';
+      }),
+    },
+    {
+      label: 'invalid-cred-status',
+      bundle: clone((b) => {
+        b.data.cognitions[0].credStatus = 'superb';
+      }),
+    },
+    {
+      label: 'confidence-string',
+      bundle: clone((b) => {
+        b.data.cognitions[0].confidence = 'abc';
+      }),
+    },
+    {
+      label: 'confidence-out-of-range',
+      bundle: clone((b) => {
+        b.data.cognitions[0].confidence = 1001;
+      }),
+    },
+    {
+      label: 'hypothesis-content-type-ok',
+      bundle: clone((b) => {
+        b.data.cognitions[0].contentType = 'hypothesis';
       }),
     },
   ].map((c) => ({ label: c.label, bundle: c.bundle, expected: validateBundle(c.bundle) }));

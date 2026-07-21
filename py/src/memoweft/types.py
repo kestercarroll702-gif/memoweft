@@ -27,6 +27,10 @@ class ConfidenceInputs:
     formed_by: FormedBy
     support_count: int
     contradict_count: int
+    #: 这话说得含不含糊(对应 TS 的 `hedged?: boolean`)。与 formed_by【正交】:
+    #: 载体维答"谁的话"(derive_formed_by 不读 assertion_strength),本字段答"这话说得含不含糊"。
+    #: 默认 False ⇒ 既有调用点(attribute/trends 等)行为逐位不变;夹具里省略该键即此义。
+    hedged: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +39,21 @@ class Resolution:
 
     response_act: Optional[ResponseAct]
     proposition_origin: Optional[PropositionOrigin]
+
+
+@dataclass(frozen=True, slots=True)
+class HedgeInput:
+    """is_hedged_stated 的单条支持证据输入(只读这两维)。
+
+    刻意【不】复用 Resolution:那是载体维(derive_formed_by)的输入,要的是 response_act;
+    这里要的是 assertion_strength。两者维度不同,合成一个大结构会把
+    "载体维不看 assertion_strength" 这条边界糊掉 —— 而这正是本次改动的立足点。
+    也不需要 source_kind / preceding_ai_context:含糊与否与"谁在说"无关,
+    这也是重算期能回查库、而"重算期重新派生 formed_by"办不到的结构原因。
+    """
+
+    proposition_origin: Optional[PropositionOrigin]
+    assertion_strength: Optional[AssertionStrength]
 
 
 @dataclass(frozen=True, slots=True)

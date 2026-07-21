@@ -105,7 +105,9 @@ export {
 export {
   computeConfidence,
   deriveCredStatus,
+  isHedgedStated,
   type ConfidenceInputs,
+  type HedgeInput,
 } from './consolidation/confidence.ts';
 
 // 归因（可解释假设）+ 带证据的主动询问
